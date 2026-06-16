@@ -1,0 +1,1171 @@
+openapi: 3.1.0
+info:
+  title: Looma & Zervi Shared API Contract
+  description: |
+    共享契约，定义 Looma（Python 服务端）与 Zervi（Rust 客户端）之间的所有接口与类型。
+    设计原则：本地优先、远程委托、向量空间互通、隐私友好。
+
+    档位说明：
+    - free（免费体验版）：通过 /v1/ask 单入口体验核心能力，配额受限
+    - pro（专业版）：全接口开放，独立预签名上传，私有部署可选
+    - enterprise（企业版）：自建私有云，API 开放，专属配额，数据物理隔离
+
+    终端生态说明：
+    - Zervi（Rust 客户端）：桌面端 / 树莓派，本地优先
+    - 移动端（小程序 / 微信生态）：手机为主载体，调 Looma API
+    - 职位数据：V0 阶段使用 mock 数据适配移动端开发调试，V1+ 接入真实 API（BOSS 直聘等）
+  version: "1.1.0"
+  contact:
+    name: Looma Project
+servers:
+  - url: http://localhost:8010
+    description: Looma 本地开发服务器
+  - url: https://looma-api.fly.dev
+    description: Looma 生产服务器（远期）
+tags:
+  - name: ask
+    description: 免费体验单入口（商业推广/引流用，独立权限控制）
+  - name: rag
+    description: RAG 检索问答
+  - name: upload
+    description: 预签名上传（隐私隔离，按档位分配权限）
+  - name: documents
+    description: 文档导入与管理
+  - name: reports
+    description: 报告生成
+  - name: resume
+    description: 简历解析
+  - name: jobs
+    description: 职位匹配（V0 mock 数据适配移动端，V1+ 接入真实 API）
+  - name: auth
+    description: 认证与配额
+  - name: system
+    description: 系统接口
+
+paths:
+  /v1/ask:
+    post:
+      tags: [ask]
+      summary: 免费体验入口（意图解析后自动分发）
+      description: |
+        免费体验版单入口，用于商业推广和产品引流。
+        LLM 解析意图后自动分发到对应能力端口，用户无需了解具体接口。
+        支持 SSE 流式响应（Accept: text/event-stream）。
+
+        权限控制：
+        - free 档位：默认开放，配额受限（每日 10 次），context_scope 仅允许 public
+        - pro 档位：配额提升，context_scope 允许 private/both
+        - enterprise 档位：无限配额，context_scope 无限制
+
+        能力边界：
+        - free 档位：仅 RAG 问答、诗词检索、MBTI 测评（轻量能力）
+        - pro+ 档位：开放简历解析、职位匹配、征信分析、报告生成（重量能力）
+
+        注意：专业用户应直接使用专用接口（/v1/rag/query 等），/v1/ask 的意图解析会消耗额外 Token。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AskRequest"
+      responses:
+        "200":
+          description: 成功（流式或非流式）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AskResponse"
+            text/event-stream:
+              schema:
+                type: string
+              description: SSE 流式事件，格式 data: {JSON}\n\n
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/rag/query:
+    post:
+      tags: [rag]
+      summary: RAG 问答（支持本地/远程/混合检索）
+      description: |
+        指定检索来源：local（仅本地索引）、remote（仅远程公共索引）、hybrid（先本地再远程融合）。
+        向量空间统一 768d，跨端检索无需转换。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RagQueryRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RagQueryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/upload/presign:
+    post:
+      tags: [upload]
+      summary: 申请预签名上传 URL
+      description: |
+        隐私隔离的文件上传机制。客户端先申请预签名 URL，再直接上传到对象存储，
+        避免大文件经服务端中转，原始文件不经过 Looma API 层。
+
+        档位权限：
+        - free：每日 5 个签名，文件上限 10MB，存储有效期 24h，仅 private scope
+        - pro：每日 50 个签名，文件上限 100MB，存储有效期 30d，private + public scope
+        - enterprise：无限制，文件上限 1GB，存储有效期永久，full scope，支持自建存储后端
+
+        签名归属：签名与 user_id 绑定，上传的文件自动归属该用户，不可跨用户访问。
+        隐私边界：private 文件存储在用户专属路径，public 文件存储在公共索引路径（需审核）。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresignRequest"
+      responses:
+        "200":
+          description: 返回预签名 URL 和上传凭证
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "403":
+          description: 当前档位无此 scope 权限
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/upload/confirm:
+    post:
+      tags: [upload]
+      summary: 确认上传完成，触发分块 + 向量化
+      description: |
+        文件上传到对象存储后，调用此接口确认。
+        服务端验证文件存在 → 拉取文件 → 解析 → 分块 → embedding → 写入 pgvector。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadConfirmRequest"
+      responses:
+        "202":
+          description: 已接受，异步处理中
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentImportResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: 文件不存在或签名已过期
+
+  /v1/documents/import:
+    post:
+      tags: [documents]
+      summary: 文档直传导入（小文件专用，< 10MB）
+      description: |
+        小文件直传路径，绕过预签名流程，适合 Zervi 本地处理场景。
+        文件经服务端中转，触发：解析 → 分块 → embedding → 写入 pgvector。
+        支持 scope=private（仅本地）/ public（上传到远程公共索引，需 Pro+ 档位）。
+        大文件请使用 /v1/upload/presign + /v1/upload/confirm 流程。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                scope:
+                  type: string
+                  enum: [private, public]
+                  default: private
+                  description: private=仅本地索引；public=上传到远程（需 Pro 档位）
+                chunk_size:
+                  type: integer
+                  default: 500
+                chunk_overlap:
+                  type: integer
+                  default: 50
+              required: [file]
+      responses:
+        "202":
+          description: 已接受，异步处理中
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentImportResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          description: 文件过大
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/documents:
+    get:
+      tags: [documents]
+      summary: 文档列表
+      parameters:
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [private, public]
+          description: 查询范围；不传则返回当前用户可见的全部
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DocumentMeta"
+                  total:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/documents/{doc_id}:
+    delete:
+      tags: [documents]
+      summary: 删除文档（同时删除向量索引）
+      parameters:
+        - name: doc_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [private, public]
+          description: 指定删除本地还是远程的文档
+      responses:
+        "204":
+          description: 删除成功
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: 文档不存在
+
+  /v1/reports/generate:
+    post:
+      tags: [reports]
+      summary: 生成报告（日/周/月）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportGenerateRequest"
+      responses:
+        "202":
+          description: 已接受，异步生成中
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  report_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending, processing, completed, failed]
+                  estimated_seconds:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/reports:
+    get:
+      tags: [reports]
+      summary: 报告列表
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ReportMeta"
+
+  /v1/reports/{report_id}:
+    get:
+      tags: [reports]
+      summary: 获取报告内容
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportDetail"
+        "404":
+          description: 报告不存在或未完成
+
+  /v1/resume/parse:
+    post:
+      tags: [resume]
+      summary: 简历解析（结构化输出）
+      description: 使用 PydanticAI 解析简历，输出 ResumeAnalysis schema
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF/Word 简历文件
+              required: [file]
+      responses:
+        "200":
+          description: 解析成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResumeAnalysis"
+        "400":
+          description: 无法解析的简历格式
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/jobs/match:
+    post:
+      tags: [jobs]
+      summary: 职位匹配（上传简历，返回匹配打分）
+      description: |
+        上传简历文本/文件，服务端匹配职位库（远程）或用户私有职位库（本地）。
+        返回多维度打分结果（"钱多事少离家近"三维）。
+
+        数据源说明：
+        - V0（当前）：mock 数据（5 条示例职位），适配移动端/小程序开发调试
+        - V1（远期）：接入真实 API（BOSS 直聘、猎聘等门户端），需独立 provider key
+        - mock 数据会在响应头 X-Data-Source: mock 中标注，客户端可据此提示用户
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobMatchRequest"
+      responses:
+        "200":
+          description: 匹配成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobMatchResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/jobs/sources:
+    get:
+      tags: [jobs]
+      summary: 获取职位来源列表（V0 mock，V1+ 接入真实 API）
+      description: |
+        V0：返回 mock 数据摘要，适配移动端/小程序开发调试。
+        V1+：接入 BOSS 直聘、猎聘等门户端真实 API，需 provider key。
+        响应头 X-Data-Source: mock | live 标注数据来源。
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        title:
+                          type: string
+                        company:
+                          type: string
+                        location:
+                          type: string
+
+  /v1/auth/register:
+    post:
+      tags: [auth]
+      summary: 用户注册
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRegisterRequest"
+      responses:
+        "201":
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "409":
+          description: 邮箱已注册
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/auth/login:
+    post:
+      tags: [auth]
+      summary: 用户登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthLoginRequest"
+      responses:
+        "200":
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: 邮箱或密码错误
+
+  /v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: 刷新 Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+              required: [refresh_token]
+      responses:
+        "200":
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /v1/quota:
+    get:
+      tags: [auth]
+      summary: 查询配额使用情况
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotaResponse"
+
+  /v1/region:
+    get:
+      tags: [system]
+      summary: 获取地区与定价信息（按 IP 自动识别）
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionResponse"
+
+  /v1/health:
+    get:
+      tags: [system]
+      summary: 健康检查（Zervi 心跳上报也用此接口）
+      responses:
+        "200":
+          description: 健康
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  version:
+                    type: string
+                  uptime_seconds:
+                    type: integer
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase JWT 或 Looma 自签发 JWT
+
+  schemas:
+    # ── 通用 ──────────────────────────────────
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: 错误码（机器可读）
+        message:
+          type: string
+          description: 人类可读的错误描述
+        details:
+          type: object
+          description: 可选的结构化错误详情
+
+    ExecutionHint:
+      type: string
+      enum: [local, remote, auto]
+      description: |
+        执行位置建议：
+        - local：优先在 Zervi 本地执行（离线优先）
+        - remote：优先委托 Looma 远程执行（需要网络）
+        - auto：由服务端根据请求内容自动决定（默认）
+
+    Tier:
+      type: string
+      enum: [free, pro, enterprise]
+      description: |
+        用户档位：
+        - free（免费体验版）：通过 /v1/ask 体验核心能力，配额受限，private scope 上传受限
+        - pro（专业版）：全接口开放，预签名上传 50 次/日，私有部署可选
+        - enterprise（企业版）：自建私有云，API 开放，无限配额，数据物理隔离
+
+    TerminalType:
+      type: string
+      enum: [zervi_desktop, zervi_rpi, mobile_applet, mobile_app, web, api]
+      description: |
+        终端类型标识（请求头 X-Terminal-Type 或注册时绑定）：
+        - zervi_desktop：Zervi 桌面端（Rust 二进制）
+        - zervi_rpi：Zervi 树莓派端
+        - mobile_applet：微信小程序
+        - mobile_app：移动端原生/H5
+        - web：Web 管理面板
+        - api：直接 API 调用（开发者）
+
+    # ── /v1/upload ────────────────────────
+    PresignRequest:
+      type: object
+      required: [filename, scope]
+      properties:
+        filename:
+          type: string
+          description: 文件名（含扩展名，如 resume.pdf）
+        content_type:
+          type: string
+          description: MIME 类型（如 application/pdf），不传则从扩展名推断
+        scope:
+          type: string
+          enum: [private, public]
+          description: 上传范围；public 需 Pro+ 档位，文件经审核后进入公共索引
+        file_size:
+          type: integer
+          description: 文件大小（字节），用于预检配额限制
+          exclusiveMinimum: 0
+
+    PresignResponse:
+      type: object
+      required: [upload_url, file_key, expires_at]
+      properties:
+        upload_url:
+          type: string
+          format: uri
+          description: 预签名上传 URL（PUT 请求，有效期 15 分钟）
+        file_key:
+          type: string
+          description: 文件存储 key，确认时回传此值
+        expires_at:
+          type: string
+          format: date-time
+          description: 预签名过期时间
+        max_file_size:
+          type: integer
+          description: 最大允许文件大小（字节）
+
+    UploadConfirmRequest:
+      type: object
+      required: [file_key, scope]
+      properties:
+        file_key:
+          type: string
+          description: /v1/upload/presign 返回的 file_key
+        scope:
+          type: string
+          enum: [private, public]
+        chunk_size:
+          type: integer
+          default: 500
+        chunk_overlap:
+          type: integer
+          default: 50
+        metadata:
+          type: object
+          description: 自定义元数据（标签、分类等）
+
+    # ── /v1/ask ──────────────────────────────
+    AskRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: 用户问题
+        session_id:
+          type: string
+          format: uuid
+          description: 会话 ID，用于多轮对话上下文
+        execution_hint:
+          $ref: "#/components/schemas/ExecutionHint"
+          default: auto
+        context_scope:
+          type: string
+          enum: [private, public, both]
+          default: private
+          description: 检索范围：private=仅本地；public=仅远程公共知识；both=融合检索
+        stream:
+          type: boolean
+          default: false
+          description: 是否启用 SSE 流式响应
+
+    AskResponse:
+      type: object
+      required: [answer, intent]
+      properties:
+        answer:
+          type: string
+          description: 大模型回答（非流式时返回完整文本）
+        intent:
+          type: string
+          description: 中央大脑解析出的意图标签
+          enum: [rag, resume_parse, job_match, credit_analysis, mbti, poetry, report, unknown]
+        sources:
+          type: array
+          description: 引用来源（文档片段）
+          items:
+            type: object
+            properties:
+              doc_id:
+                type: string
+                format: uuid
+              chunk_text:
+                type: string
+              score:
+                type: number
+                format: float
+                description: 相似度得分（0-1）
+        executed_on:
+          type: string
+          enum: [local, remote, hybrid]
+          description: 实际执行位置（供 Zervi 记录）
+        session_id:
+          type: string
+          format: uuid
+        tokens_used:
+          type: integer
+          description: 本次请求消耗的 Token 数
+
+    # ── /v1/rag/query ───────────────────────
+    RagQueryRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        scope:
+          type: string
+          enum: [local, remote, hybrid]
+          default: hybrid
+          description: local=仅查本地 pgvector；remote=仅查远程；hybrid=先本地再融合
+        top_k:
+          type: integer
+          default: 5
+          minimum: 1
+          maximum: 20
+        score_threshold:
+          type: number
+          default: 0.3
+          description: 相似度阈值，低于此值的结果不返回
+        execution_hint:
+          $ref: "#/components/schemas/ExecutionHint"
+
+    RagQueryResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              chunk_id:
+                type: string
+                format: uuid
+              doc_id:
+                type: string
+                format: uuid
+              text:
+                type: string
+              score:
+                type: number
+                format: float
+              metadata:
+                type: object
+                description: 文档元数据（来源、页码等）
+              source:
+                type: string
+                enum: [local, remote]
+                description: 结果来自本地还是远程索引
+        answer:
+          type: string
+          description: 基于检索结果生成的回答（可选，由 LLM 合成）
+        executed_on:
+          type: string
+          enum: [local, remote, hybrid]
+
+    # ── /v1/documents ────────────────────────
+    DocumentMeta:
+      type: object
+      required: [id, title, status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        file_type:
+          type: string
+          enum: [pdf, docx, md, txt, html]
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        chunk_count:
+          type: integer
+          description: 分块数量
+        scope:
+          type: string
+          enum: [private, public]
+        created_at:
+          type: string
+          format: date-time
+
+    DocumentImportResponse:
+      type: object
+      required: [task_id, status]
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing]
+        estimated_seconds:
+          type: integer
+          description: 预估处理时间（秒）
+
+    # ── /v1/reports ──────────────────────────
+    ReportGenerateRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [daily, weekly, monthly]
+        scope:
+          type: string
+          enum: [private, public, both]
+          default: private
+          description: 报告范围（本地文档 / 远程知识 / 融合）
+        stream:
+          type: boolean
+          default: false
+
+    ReportMeta:
+      type: object
+      required: [id, type, status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [daily, weekly, monthly]
+        title:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        created_at:
+          type: string
+          format: date-time
+        download_url:
+          type: string
+          format: uri
+          description: 完成后可下载的 URL
+
+    ReportDetail:
+      type: object
+      required: [id, type, title, content, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [daily, weekly, monthly]
+        title:
+          type: string
+        content:
+          type: string
+          description: 报告全文（Markdown 格式）
+        created_at:
+          type: string
+          format: date-time
+
+    # ── /v1/resume ──────────────────────────
+    ResumeAnalysis:
+      type: object
+      description: PydanticAI 结构化输出 schema
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        education:
+          type: array
+          items:
+            type: object
+            properties:
+              school:
+                type: string
+              degree:
+                type: string
+              year:
+                type: string
+        experience:
+          type: array
+          items:
+            type: object
+            properties:
+              company:
+                type: string
+              role:
+                type: string
+              duration:
+                type: string
+              highlights:
+                type: array
+                items:
+                  type: string
+        skills:
+          type: array
+          items:
+            type: string
+        summary:
+          type: string
+          description: 简历摘要（LLM 生成）
+
+    # ── /v1/jobs ─────────────────────────────
+    JobMatchRequest:
+      type: object
+      required: [resume_text]
+      properties:
+        resume_text:
+          type: string
+          description: 简历全文文本（或解析后的结构化文本）
+        scope:
+          type: string
+          enum: [private, public]
+          default: public
+          description: 匹配范围：private=匹配用户上传的职位；public=匹配远程职位库
+        top_k:
+          type: integer
+          default: 10
+        include_analysis:
+          type: boolean
+          default: true
+          description: 是否返回三维度打分分析
+
+    JobMatchResponse:
+      type: object
+      required: [matches, total_evaluated]
+      properties:
+        matches:
+          type: array
+          items:
+            type: object
+            properties:
+              job_id:
+                type: string
+              title:
+                type: string
+              company:
+                type: string
+              location:
+                type: string
+              salary_range:
+                type: string
+              scores:
+                type: object
+                properties:
+                  money:
+                    type: number
+                    description: "钱多"维度得分（0-100）
+                  workload:
+                    type: number
+                    description: "事少"维度得分（0-100）
+                  proximity:
+                    type: number
+                    description: "离家近"维度得分（0-100）
+                  overall:
+                    type: number
+                    description: 综合得分（0-100）
+              reason:
+                type: string
+                description: 匹配理由（LLM 生成）
+        total_evaluated:
+          type: integer
+
+    # ── /v1/auth ─────────────────────────────
+    AuthRegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        display_name:
+          type: string
+
+    AuthLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [access_token, refresh_token, tier, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: JWT，用于后续请求鉴权
+        refresh_token:
+          type: string
+        tier:
+          $ref: "#/components/schemas/Tier"
+        expires_in:
+          type: integer
+          description: access_token 有效期（秒）
+        user_id:
+          type: string
+          format: uuid
+        terminal_types:
+          type: array
+          description: 该账户已绑定的终端类型
+          items:
+            $ref: "#/components/schemas/TerminalType"
+
+    # ── /v1/quota ───────────────────────────
+    QuotaResponse:
+      type: object
+      required: [tier, records]
+      properties:
+        tier:
+          $ref: "#/components/schemas/Tier"
+        records:
+          type: array
+          items:
+            type: object
+            properties:
+              resource:
+                type: string
+                enum: [ask, rag, resume_parse, job_match, report, presign_upload]
+              used:
+                type: integer
+              daily_limit:
+                type: integer
+                description: -1 表示无限
+              resets_at:
+                type: string
+                format: date-time
+
+    # ── /v1/region ───────────────────────────
+    RegionResponse:
+      type: object
+      required: [country, currency, pricing]
+      properties:
+        country:
+          type: string
+          enum: [CN, US, HK, OTHER]
+        currency:
+          type: string
+          enum: [CNY, USD, HKD]
+        timezone:
+          type: string
+        pricing:
+          type: object
+          properties:
+            free:
+              type: object
+              description: 免费体验版
+              properties:
+                ask_daily:
+                  type: integer
+                  description: "/v1/ask 每日限额"
+                rag_daily:
+                  type: integer
+                  description: "RAG 检索每日限额"
+                job_match_daily:
+                  type: integer
+                presign_upload_daily:
+                  type: integer
+                max_file_size_mb:
+                  type: integer
+                  description: 预签名上传文件上限（MB）
+                storage_ttl_hours:
+                  type: integer
+                  description: 文件存储有效期（小时）
+            pro:
+              type: object
+              description: 专业版
+              properties:
+                price_monthly:
+                  type: number
+                price_yearly:
+                  type: number
+                ask_daily:
+                  type: integer
+                rag_daily:
+                  type: integer
+                presign_upload_daily:
+                  type: integer
+                max_file_size_mb:
+                  type: integer
+                storage_ttl_days:
+                  type: integer
+            enterprise:
+              type: object
+              description: 企业版（自建私有云）
+              properties:
+                price_yearly:
+                  type: number
+                features:
+                  type: array
+                  items:
+                    type: string
+                  description: "如 [\"private_cloud\", \"unlimited_quota\", \"data_isolation\", \"custom_storage\"]"
+
+  responses:
+    Unauthorized:
+      description: 未认证或 Token 已过期
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: 配额超限（每日限额）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
