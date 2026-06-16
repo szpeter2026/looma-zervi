@@ -25,7 +25,7 @@ from src.core.config import get_settings
 from src.core.llm import get_llm
 from src.core.embeddings import get_embed_model
 from src.retrieval.rag_engine import seed_knowledge, reset_index
-from src.api.routes import system_router, ask_router
+from src.api.routes import system_router, ask_router, jobs_router, resume_router, auth_router, region_router, reports_router
 
 
 @asynccontextmanager
@@ -63,6 +63,11 @@ app.add_middleware(
 # 注册路由
 app.include_router(system_router)
 app.include_router(ask_router)
+app.include_router(jobs_router)
+app.include_router(resume_router)
+app.include_router(auth_router)
+app.include_router(region_router)
+app.include_router(reports_router)
 
 
 if __name__ == "__main__":

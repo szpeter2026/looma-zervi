@@ -1,10 +1,5 @@
-"""Looma agents — 能力端口（P2 实现）
+"""Looma agents — AI 能力端口（业务智能体）"""
+from src.agents.mbti_analyzer import MBTITextAnalyzer, MIN_TEXT_LENGTH
+from src.agents.mbti_career_match import get_career_match
 
-目录预留：
-- central_brain.py  意图路由
-- resume.py         简历解析
-- jobs.py           职位匹配
-- credit.py         征信分析
-- mbti.py           MBTI 测评
-- reports.py        报告生成
-"""
+__all__ = ["MBTITextAnalyzer", "MIN_TEXT_LENGTH", "get_career_match"]

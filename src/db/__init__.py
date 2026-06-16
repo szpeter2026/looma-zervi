@@ -1,1 +1,4 @@
-"""Looma db — 数据库模型与迁移（P2 实现）"""
+"""Looma db — 数据层（元数据库 + 文档管理）"""
+from src.db.manager import DBManager
+
+__all__ = ["DBManager"]

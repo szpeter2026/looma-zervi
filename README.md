@@ -4,7 +4,7 @@
 > 决策依据：`docs/决策文档_底座优先修订版.md`（仓库外，原文档在桌面）
 > 共享 API 契约：`docs/api.yaml`（Looma & Zervi Shared API Contract v1.1.0）
 
-## 当前阶段：P1 底座五步 — 已关闭（2026-06-16）
+## 当前阶段：P1 底座五步 + 业务模块迁移 — 已关闭（2026-06-16）
 
 底座优先路线实测可执行，铁证如下：
 
@@ -21,40 +21,63 @@
 | 3 | LlamaIndex + PGVectorStore | done |
 | 4 | LiteLLM (ollama/qwen2.5-coder:1.5b) | done |
 | 5 | FastAPI /v1/ask 单入口（对齐 api.yaml v1.1.0） | done |
+| 6 | 业务模块迁移（Tatha + DemoPeter 全量模块 → looma-zervi） | done |
+| 7 | Zervi Rust 客户端完整升级（P1 骨架 → 全端点 CLI） | done |
 
 ## 目录结构
 
 ```
 looma-zervi/
-├── src/                        # Looma Python 服务端（按功能层组织）
-│   ├── core/                   # AI 核心层
-│   │   ├── config.py           # 全局配置（.env 驱动）
-│   │   ├── llm.py              # LiteLLM 统一调用
-│   │   └── embeddings.py       # nomic-embed 768d 标准化
-│   ├── retrieval/              # 检索层
-│   │   ├── vector_store.py     # pgvector 统一接口
-│   │   └── rag_engine.py       # LlamaIndex RAG 引擎
-│   ├── api/                    # Web 层
-│   │   ├── app.py              # FastAPI 入口
-│   │   ├── models.py           # 请求/响应模型（对齐 api.yaml v1.1.0）
-│   │   └── routes/             # 路由模块
-│   │       ├── system.py       # /v1/health
-│   │       └── ask.py          # /v1/ask
-│   ├── agents/                 # 能力端口（P2）
-│   ├── pipeline/               # 数据管道（P2）
-│   └── db/                     # 数据层（P2）
-├── zervi/                      # Zervi Rust 客户端
+├── src/                           # Looma Python 服务端（按功能层组织）
+│   ├── core/                      # AI 核心层
+│   │   ├── config.py              # 全局配置（.env 驱动）
+│   │   ├── llm.py                 # LiteLLM 统一调用
+│   │   └── embeddings.py          # nomic-embed 768d 标准化
+│   ├── retrieval/                 # 检索层
+│   │   ├── vector_store.py        # pgvector 统一接口
+│   │   └── rag_engine.py          # LlamaIndex RAG 引擎
+│   ├── api/                       # Web 层
+│   │   ├── app.py                 # FastAPI 入口
+│   │   ├── models.py              # 请求/响应模型（对齐 api.yaml v1.1.0）
+│   │   ├── auth.py                # 认证（Supabase JWT + Stub）
+│   │   ├── quota.py               # 三档配额控制
+│   │   └── routes/                # 路由模块
+│   │       ├── system.py          # /v1/health
+│   │       ├── ask.py             # /v1/ask（中央大脑单入口）
+│   │       ├── jobs.py            # /v1/jobs/match（职位匹配）
+│   │       ├── resume.py          # /v1/resume/parse（简历解析）
+│   │       ├── auth_routes.py     # /v1/auth/*（注册/登录/配额）
+│   │       ├── region.py          # /v1/region（地区定价）
+│   │       └── reports.py         # /v1/reports（报告生成）
+│   ├── agents/                    # AI 能力端口
+│   │   ├── central_brain.py       # 中央大脑（LLM 意图解析 + 8 意图分发）
+│   │   ├── document_agents.py     # PydanticAI 文档解读（简历/征信）
+│   │   ├── mbti_analyzer.py       # MBTI 人格测评
+│   │   ├── mbti_career_match.py   # MBTI 职业匹配
+│   │   └── poetry_search.py       # 诗词向量检索（pgvector 后端）
+│   ├── pipeline/                  # 数据管道
+│   │   ├── job_match_pipeline.py # 职位匹配流水线
+│   │   ├── job_scoring.py         # LLM 多维打分（钱多事少离家近）
+│   │   ├── job_schemas.py         # 职位/匹配 Pydantic 模型
+│   │   └── report_gen.py          # 日/周/月报告生成器
+│   └── db/                        # 数据层
+│       └── manager.py             # SQLite 元数据库（文档/用户/配额）
+├── zervi/                         # Zervi Rust 客户端
 │   ├── Cargo.toml
-│   └── src/main.rs             # reqwest + clap，调 Looma API
-├── scripts/                    # 烟测脚本
-│   ├── smoke_pgvector.py       # Step 1+2
-│   ├── smoke_llamaindex.py     # Step 3
-│   └── smoke_api.py            # Step 4+5
+│   └── src/
+│       ├── main.rs                # CLI 入口（clap 子命令）
+│       ├── client.rs              # HTTP 客户端（全端点封装）
+│       └── models.rs              # 数据模型（对齐 api.yaml v1.1.0）
+├── scripts/                       # 烟测脚本
+│   ├── smoke_pgvector.py          # Step 1+2
+│   ├── smoke_llamaindex.py        # Step 3
+│   └── smoke_api.py               # Step 4+5
 ├── docs/
-│   └── api.yaml                # 共享 API 契约 v1.1.0（唯一真理源）
-├── tests/                      # 测试（P2）
-├── docker-compose.yml          # pgvector 容器
-├── .env.example                # 环境变量模板
+│   └── api.yaml                   # 共享 API 契约 v1.1.0（唯一真理源）
+├── tests/                         # 测试
+├── docker-compose.yml             # pgvector 容器
+├── .env.example                   # 环境变量模板
+├── .gitignore
 ├── requirements.txt
 └── README.md
 ```

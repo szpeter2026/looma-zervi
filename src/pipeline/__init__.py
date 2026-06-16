@@ -1,7 +1,12 @@
-"""Looma pipeline — 数据管道（P2 实现）
+"""Looma pipeline — 数据管道与业务流水线"""
+from src.pipeline.job_match_pipeline import run_job_match_pipeline
+from src.pipeline.job_scoring import score_resume_vs_job
+from src.pipeline.job_schemas import JobInfo, JobMatchScore, MatchResult
 
-目录预留：
-- doc_parser.py     MarkItDown 统一解析
-- chunker.py        智能分块
-- importer.py       文档导入
-"""
+__all__ = [
+    "run_job_match_pipeline",
+    "score_resume_vs_job",
+    "JobInfo",
+    "JobMatchScore",
+    "MatchResult",
+]
