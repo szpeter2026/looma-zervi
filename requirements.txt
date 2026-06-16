@@ -1,0 +1,9 @@
+psycopg[binary]>=3.3
+ollama>=0.6
+llama-index>=0.12
+llama-index-vector-stores-postgres>=0.5
+llama-index-embeddings-ollama>=0.5
+llama-index-llms-litellm>=0.5
+litellm>=1.50
+fastapi>=0.115
+uvicorn[standard]>=0.30
