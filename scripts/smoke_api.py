@@ -52,11 +52,11 @@ def main() -> int:
     for _k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
         env.pop(_k, None)
 
-    # 1. 启动 FastAPI 进程
+    # 1. 启动 FastAPI 进程（新入口 src.api.app）
     step(f"1. 启动 FastAPI @ 127.0.0.1:{LOOMA_PORT}")
     t0 = time.time()
     proc = subprocess.Popen(
-        [VENV_PYTHON, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(LOOMA_PORT)],
+        [VENV_PYTHON, "-m", "uvicorn", "src.api.app:app", "--host", "127.0.0.1", "--port", str(LOOMA_PORT)],
         cwd=str(PROJECT),
         env=env,
         stdout=subprocess.PIPE,
@@ -118,6 +118,8 @@ def main() -> int:
         t0 = time.time()
         payload = json.dumps({
             "query": "底座优先架构是什么？",
+            "execution_hint": "auto",
+            "context_scope": "public",
         }).encode("utf-8")
         req = _req.Request(
             f"http://127.0.0.1:{LOOMA_PORT}/v1/ask",
@@ -132,10 +134,13 @@ def main() -> int:
             "query": "底座优先架构是什么？",
             "answer_preview": ask_resp.get("answer", "")[:120],
             "source_count": len(ask_resp.get("sources", [])),
+            "intent": ask_resp.get("intent"),
+            "executed_on": ask_resp.get("executed_on"),
             "elapsed_ms": int((time.time() - t0) * 1000),
         }
         print(f"  answer: {ask_resp.get('answer', '')[:150]}...")
         print(f"  sources: {len(ask_resp.get('sources', []))} 条")
+        print(f"  intent: {ask_resp.get('intent')}, executed_on: {ask_resp.get('executed_on')}")
 
         # 4. 校验
         step("4. 校验")
@@ -146,6 +151,8 @@ def main() -> int:
         checks.append(("有回答内容", len(answer) > 10))
         checks.append(("有检索来源", len(sources) > 0))
         checks.append(("回答与问题相关", len(answer) > 30 and ("底座" in answer or "架构" in answer or "pgvector" in answer.lower())))
+        checks.append(("intent 字段存在", ask_resp.get("intent") is not None))
+        checks.append(("executed_on 字段存在", ask_resp.get("executed_on") is not None))
 
         all_pass = all(passed for _, passed in checks)
         for label, passed in checks:
