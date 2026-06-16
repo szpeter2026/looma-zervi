@@ -20,7 +20,7 @@ from typing import Literal
 
 from fastapi import Header, HTTPException
 
-Tier = Literal["free", "basic", "pro"]
+Tier = Literal["free", "pro", "enterprise"]
 
 
 @dataclass
@@ -62,7 +62,7 @@ def _verify_supabase_jwt(token: str) -> AuthContext | None:
 
         tier: Tier = "free"
         tier_raw = payload.get("tier") or (payload.get("app_metadata") or {}).get("tier")
-        if tier_raw in ("basic", "pro"):
+        if tier_raw in ("pro", "enterprise"):
             tier = tier_raw
 
         return AuthContext(user_id=str(user_id), tier=tier)

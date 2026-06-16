@@ -39,6 +39,16 @@ async def ask(req: AskRequest, auth: AuthContext = Depends(get_auth)):
     if not consume(auth.user_id, auth.tier, RESOURCE_ASK):
         raise HTTPException(status_code=429, detail={"code": "quota_exceeded", "message": "当日配额已用尽"})
 
+    # context_scope 档位校验（api.yaml v1.1.0: free 仅允许 public）
+    if auth.tier == "free" and req.context_scope.value not in ("public",):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "scope_forbidden",
+                "message": "当前免费版仅支持 context_scope=public，升级 Pro 后可访问 private 数据",
+            },
+        )
+
     t0 = time.time()
 
     # 1. 意图解析（LLM 主路径 + 规则回退）

@@ -13,7 +13,7 @@ from src.pipeline.job_scoring import score_resume_vs_job
 # 单次流水线最多对多少条职位做 LLM 打分（控制成本）
 MAX_JOBS_TO_SCORE = 20
 
-# Mock 职位数据（无外接 API 时使用）
+# Mock 职位数据（无外接 API 时使用，V0 阶段标注 X-Data-Source: mock）
 MOCK_JOBS = [
     {
         "title": "Python 后端开发工程师",
@@ -44,6 +44,66 @@ MOCK_JOBS = [
         "company": "百度",
         "location": "北京·上地",
         "description": "负责 Web 前端开发，使用 React/Vue，有 TypeScript 经验，了解 Node.js。",
+    },
+    {
+        "title": "DevOps 工程师",
+        "company": "华为",
+        "location": "深圳·龙岗",
+        "description": "负责 CI/CD 流水线维护，熟悉 Docker/Kubernetes，有 AWS/Azure 云服务经验，薪资 25-50K。",
+    },
+    {
+        "title": "产品经理",
+        "company": "网易",
+        "location": "杭州·滨江",
+        "description": "负责 B 端 SaaS 产品规划与迭代，有数据分析能力，熟悉敏捷开发流程，可远程办公。",
+    },
+    {
+        "title": "UI/UX 设计师",
+        "company": "小红书",
+        "location": "上海·黄浦",
+        "description": "负责移动端产品界面设计，熟练使用 Figma/Sketch，有用户研究经验，注重设计规范。",
+    },
+    {
+        "title": "测试开发工程师",
+        "company": "京东",
+        "location": "北京·亦庄",
+        "description": "负责自动化测试框架搭建，熟悉 Selenium/Appium，有性能测试经验，Python/Java 优先。工作强度适中，少有 996。",
+    },
+    {
+        "title": "技术文档工程师",
+        "company": "蚂蚁集团",
+        "location": "杭州·西湖",
+        "description": "负责技术文档撰写与维护，有 API 文档经验，熟悉 Markdown/OpenAPI，英语读写流利。远程友好。",
+    },
+    {
+        "title": "嵌入式软件开发工程师",
+        "company": "大疆创新",
+        "location": "深圳·南山",
+        "description": "负责无人机飞控系统开发，熟悉 C/C++/RTOS，有机器人或自动驾驶经验优先，薪资 30-60K。",
+    },
+    {
+        "title": "数据工程师",
+        "company": "快手",
+        "location": "北京·海淀",
+        "description": "负责数据仓库建设与 ETL 流程，熟悉 Spark/Flink，有海量数据处理经验。弹性工作制。",
+    },
+    {
+        "title": "安全运维工程师",
+        "company": "奇安信",
+        "location": "北京·朝阳",
+        "description": "负责企业安全体系建设，熟悉渗透测试与应急响应，有 CISSP/CISP 认证优先，无需出差。",
+    },
+    {
+        "title": "技术总监",
+        "company": "米哈游",
+        "location": "上海·徐汇",
+        "description": "负责技术团队管理与架构设计，8 年以上开发经验，3 年以上管理经验，有游戏行业背景优先。薪资面议。",
+    },
+    {
+        "title": "机器学习工程师",
+        "company": "商汤科技",
+        "location": "北京·海淀",
+        "description": "负责计算机视觉模型训练与部署，熟悉 PyTorch/TensorFlow，有顶会论文优先。提供住房补贴。",
     },
 ]
 

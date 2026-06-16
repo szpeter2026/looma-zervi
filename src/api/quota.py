@@ -18,7 +18,7 @@ RESOURCE_ASK = "ask"
 RESOURCE_RESUME_PARSE = "resume_parse"
 RESOURCE_RAG = "rag"
 
-# 各档位每日上限
+# 各档位每日上限（对齐 api.yaml v1.1.0: free / pro / enterprise）
 QUOTA_LIMITS: dict[Tier, dict[str, int]] = {
     "free": {
         RESOURCE_JOB_MATCH: 3,
@@ -26,25 +26,25 @@ QUOTA_LIMITS: dict[Tier, dict[str, int]] = {
         RESOURCE_RESUME_PARSE: 1,
         RESOURCE_RAG: 5,
     },
-    "basic": {
+    "pro": {
         RESOURCE_JOB_MATCH: 20,
         RESOURCE_ASK: 50,
         RESOURCE_RESUME_PARSE: 10,
         RESOURCE_RAG: 20,
     },
-    "pro": {
-        RESOURCE_JOB_MATCH: 9999,
-        RESOURCE_ASK: 9999,
-        RESOURCE_RESUME_PARSE: 9999,
-        RESOURCE_RAG: 9999,
+    "enterprise": {
+        RESOURCE_JOB_MATCH: 99999,
+        RESOURCE_ASK: 99999,
+        RESOURCE_RESUME_PARSE: 99999,
+        RESOURCE_RAG: 99999,
     },
 }
 
 # 各档位 top_n 上限
 TOP_N_LIMIT: dict[Tier, int] = {
     "free": 3,
-    "basic": 5,
-    "pro": 20,
+    "pro": 5,
+    "enterprise": 20,
 }
 
 # 进程内内存回退
