@@ -1,7 +1,8 @@
 """Looma retrieval — RAG 引擎（LlamaIndex）"""
 from __future__ import annotations
 
-from llama_index.core import VectorStoreIndex, Document
+from llama_index.core import Settings, VectorStoreIndex, Document
+from llama_index.embeddings.ollama import OllamaEmbedding
 from src.core.config import get_settings
 from src.retrieval.vector_store import get_vector_store
 
@@ -9,10 +10,22 @@ from src.retrieval.vector_store import get_vector_store
 _index: VectorStoreIndex | None = None
 
 
+def _ensure_settings() -> None:
+    """确保 LlamaIndex 全局 Settings 已配置 Ollama embedding（幂等）。"""
+    # 注意：Settings.embed_model 是 lazy property，直接 set 即可，不要 get（会触发 OpenAI 解析）
+    s = get_settings()
+    Settings.embed_model = OllamaEmbedding(
+        model_name=s.EMBED_MODEL,
+        base_url=s.OLLAMA_HOST,
+        ollama_additional_kwargs={"dim": s.EMBED_DIM},
+    )
+
+
 def get_index() -> VectorStoreIndex:
     """获取全局 VectorStoreIndex（懒加载）"""
     global _index
     if _index is None:
+        _ensure_settings()
         vs = get_vector_store()
         _index = VectorStoreIndex.from_vector_store(vs)
     return _index
@@ -24,6 +37,8 @@ def seed_knowledge() -> VectorStoreIndex:
 
     settings = get_settings()
     dsn = settings.PG_DSN
+
+    _ensure_settings()
 
     # 幂等：表存在就清空重建
     with _psycopg.connect(dsn, autocommit=True) as conn:
@@ -104,6 +119,8 @@ def _seed_poetry(dsn: str, settings) -> None:
     try:
         with _psycopg.connect(dsn, autocommit=True) as conn:
             with conn.cursor() as cur:
+                # 确保 schema 存在
+                cur.execute(f"CREATE SCHEMA IF NOT EXISTS {settings.SCHEMA};")
                 # 创建 poetry 表（若不存在）
                 cur.execute(f"""
                     CREATE TABLE IF NOT EXISTS {settings.SCHEMA}.poetry (
@@ -123,9 +140,12 @@ def _seed_poetry(dsn: str, settings) -> None:
                     USING hnsw (embedding vector_cosine_ops)
                     WITH (m = 16, ef_construction = 64);
                 """)
-                # 幂等：清理旧种子
-                cur.execute(f"DELETE FROM {settings.SCHEMA}.poetry WHERE title IN %s;",
-                             (tuple(p[0] for p in poems),))
+                # 幂等：清理旧种子（psycopg3 需手动展开 IN 列表）
+                placeholders = ", ".join(["%s"] * len(poems))
+                cur.execute(
+                    f"DELETE FROM {settings.SCHEMA}.poetry WHERE title IN ({placeholders});",
+                    tuple(p[0] for p in poems),
+                )
 
         # 逐个嵌入并写入（避免 Ollama 冷启动一次性全量超时）
         from src.core.embeddings import get_embed_model
