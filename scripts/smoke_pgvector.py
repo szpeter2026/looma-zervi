@@ -1,10 +1,15 @@
 """
 looma-zervi / 底座优先 P0 烟测
 ============================
-端到端验证：在 ServBay PG17 + pgvector 0.8.0 上跑通 768d 向量存取。
+端到端验证：pgvector 上跑通 768d 向量存取。
 链路：Ollama nomic-embed-text -> psycopg3 -> pgvector -> 余弦相似度
 
-输出格式：阶段 + 耗时 + 状态，让 Jason 几秒能看懂跑没跑通。
+输出格式：阶段 + 耗时 + 状态，几秒能看懂跑没跑通。
+
+前置：
+    - PG + pgvector 运行（docker-compose up -d 或本地安装）
+    - Ollama 运行，nomic-embed-text:latest 已 pull
+    - .env 配置正确（参考 .env.example）
 """
 from __future__ import annotations
 
@@ -14,21 +19,31 @@ import json
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
 import ollama
 import psycopg
 
-# ---- 全部配置在顶部，方便改 ----
-PG_DSN = "postgresql://jason:ServBay.dev@127.0.0.1:5432/postgres"
-OLLAMA_HOST = "http://127.0.0.1:11434"  # ServBay Ollama 默认监听
-EMBED_MODEL = "nomic-embed-text:latest"
-DIM = 768
+# ---- 配置全部从环境变量读取 ----
+PG_HOST = os.getenv("PG_HOST", "127.0.0.1")
+PG_PORT = os.getenv("PG_PORT", "5432")
+PG_USER = os.getenv("PG_USER", "postgres")
+PG_PASSWORD = os.getenv("PG_PASSWORD", "postgres")
+PG_DATABASE = os.getenv("PG_DATABASE", "looma")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text:latest")
+DIM = int(os.getenv("EMBED_DIM", "768"))
+
+PG_DSN = f"postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DATABASE}"
+
 SCHEMA = "smoke"
 TABLE = "docs"
 STATE_FILE = Path(__file__).resolve().parent.parent / ".smoke_state.json"
 
 # 三段测试文本：一组相关（pgvector/底座）、一组不相关（做饭）
 SAMPLES = [
-    "pgvector 已经在 ServBay 上跑通 768d 相似度检索",
+    "pgvector 已经跑通 768d 相似度检索",
     "底座优先：统一向量引擎到 pgvector，淘汰 FAISS 和 Chroma",
     "修订版路线：pgvector + nomic-embed + LlamaIndex + LiteLLM + FastAPI",
     "今天晚上做个西红柿炒蛋，配米饭",
@@ -128,10 +143,10 @@ def main() -> int:
     top_id, top_content, top_dist = results[0]
     if top_id == 1 and top_dist < 1e-6:
         verdict = "PASS"
-        print(f"  ✅ PASS  dist={top_dist:.6f}")
+        print(f"  PASS  dist={top_dist:.6f}")
     else:
         verdict = "FAIL"
-        print(f"  ❌ FAIL  expected id=1, got id={top_id} dist={top_dist}")
+        print(f"  FAIL  expected id=1, got id={top_id} dist={top_dist}")
 
     # 5. 清理
     step("5. 清理（drop schema）")
@@ -151,5 +166,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as e:
-        print(f"\n❌ EXCEPTION: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"\nEXCEPTION: {type(e).__name__}: {e}", file=sys.stderr)
         raise

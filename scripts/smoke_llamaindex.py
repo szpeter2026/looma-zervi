@@ -2,15 +2,15 @@
 smoke_llamaindex.py — LlamaIndex + pgvector 烟测
 ==============================================
 验证：
-1. LlamaIndex PGVectorStore 能连 ServBay PG17 + pgvector 0.8.0
+1. LlamaIndex PGVectorStore 能连 PG + pgvector
 2. nomic-embed-text:latest（Ollama）能正常产出 768d embedding
 3. VectorStoreIndex 构建 + 相似度查询 正常
 4. 结果与裸 psycopg 烟测（smoke_pgvector.py）排序一致
 
 前置：
-- ServBay PG 运行 @ 127.0.0.1:5432（密码 ServBay.dev）
-- ServBay Ollama 运行 @ 127.0.0.1:11434
-- llama-index、llama-index-vector-stores-postgres、llama-index-embeddings-ollama 已装
+    - PG + pgvector 运行（docker-compose up -d 或本地安装）
+    - Ollama 运行，nomic-embed-text:latest 已 pull
+    - .env 配置正确（参考 .env.example）
 """
 from __future__ import annotations
 
@@ -20,9 +20,8 @@ import sys
 import time
 from pathlib import Path
 
-# 必须在 import ollama 之前清掉代理（沙箱 / IDE 注入的 http_proxy=127.0.0.1:62081 会让 ollama-py 卡死）
-for _k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
-    os.environ.pop(_k, None)
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # LlamaIndex 核心
 from llama_index.core import Settings, VectorStoreIndex, Document
@@ -30,19 +29,26 @@ from llama_index.embeddings.ollama import OllamaEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 
-# ---- 配置 ----
-PG_DSN = "postgresql://jason:ServBay.dev@127.0.0.1:5432/postgres"
-OLLAMA_HOST = "http://127.0.0.1:11434"
-EMBED_MODEL = "nomic-embed-text:latest"
-DIM = 768
+# ---- 配置全部从环境变量读取 ----
+PG_HOST = os.getenv("PG_HOST", "127.0.0.1")
+PG_PORT = int(os.getenv("PG_PORT", "5432"))
+PG_USER = os.getenv("PG_USER", "postgres")
+PG_PASSWORD = os.getenv("PG_PASSWORD", "postgres")
+PG_DATABASE = os.getenv("PG_DATABASE", "looma")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text:latest")
+DIM = int(os.getenv("EMBED_DIM", "768"))
+
+PG_DSN = f"postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DATABASE}"
+
 SCHEMA = "smoke_lili"
 TABLE = "llama_docs"
 
-STATE_FILE = Path("/tmp/looma-zervi_smoke_llamaindex_state.json")
+STATE_FILE = Path(__file__).resolve().parent.parent / ".smoke_state_llamaindex.json"
 
 # 与 smoke_pgvector.py 相同的测试文本
 SAMPLES = [
-    "pgvector 已经在 ServBay 上跑通 768d 相似度检索",
+    "pgvector 已经跑通 768d 相似度检索",
     "底座优先：统一向量引擎到 pgvector，淘汰 FAISS 和 Chroma",
     "修订版路线：pgvector + nomic-embed + LlamaIndex + LiteLLM + FastAPI",
     "今天晚上做个西红柿炒蛋，配米饭",
@@ -63,9 +69,8 @@ def main() -> int:
     Settings.embed_model = OllamaEmbedding(
         model_name=EMBED_MODEL,
         base_url=OLLAMA_HOST,
-        ollama_additional_kwargs={"dim": DIM},  # nomic-embed 输出 768d
+        ollama_additional_kwargs={"dim": DIM},
     )
-    # 不在这里设 llm（烟测只测检索，不调 LLM 生成）
     Settings.llm = None
     state["steps"]["settings"] = {
         "embed_model": EMBED_MODEL,
@@ -80,11 +85,11 @@ def main() -> int:
     step("1. 连接 PGVectorStore（自动建 schema + 表）")
     t0 = time.time()
     vector_store = PGVectorStore.from_params(
-        host="127.0.0.1",
-        port=5432,
-        user="jason",
-        password="ServBay.dev",
-        database="postgres",
+        host=PG_HOST,
+        port=PG_PORT,
+        user=PG_USER,
+        password=PG_PASSWORD,
+        database=PG_DATABASE,
         table_name=TABLE,
         schema_name=SCHEMA,
         embed_dim=DIM,
@@ -103,10 +108,7 @@ def main() -> int:
     t0 = time.time()
     try:
         import psycopg as _psycopg
-        with _psycopg.connect(
-            "postgresql://jason:ServBay.dev@127.0.0.1:5432/postgres",
-            autocommit=True,
-        ) as conn:
+        with _psycopg.connect(PG_DSN, autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     f"TRUNCATE TABLE {SCHEMA}.{TABLE} RESTART IDENTITY;"
@@ -156,29 +158,19 @@ def main() -> int:
 
     # 5. 校验：排序应与裸 psycopg 烟测一致
     step("5. 校验：排序应与 smoke_pgvector.py 一致")
-    expected_ranks = [
-        ("pgvector 已经在 ServBay 上跑通", 1),
-        ("底座优先：统一向量引擎到 pgvector", 2),
-        ("今天晚上做个西红柿炒蛋", 3),  # 注意：实际第 3 可能是修订版路线
-    ]
-    # 宽松校验：#1 必须是 SAMPLES[0]（自己）
     top_text = results[0]["text"]
     if top_text.startswith(SAMPLES[0][:20]):
         verdict = "PASS"
-        print(f"  ✅ PASS  #1={top_text[:30]}")
+        print(f"  PASS  #1={top_text[:30]}")
     else:
         verdict = "WARN"
-        print(f"  ⚠️ WARN  #1 预期 '{SAMPLES[0][:20]}...' 实际 '{top_text[:30]}'")
+        print(f"  WARN  #1 预期 '{SAMPLES[0][:20]}...' 实际 '{top_text[:30]}'")
 
     # 6. 清理
     step("6. 清理（TRUNCATE）")
     import psycopg as _psycopg
-    with _psycopg.connect(
-        "postgresql://jason:ServBay.dev@127.0.0.1:5432/postgres",
-        autocommit=True,
-    ) as conn:
+    with _psycopg.connect(PG_DSN, autocommit=True) as conn:
         with conn.cursor() as cur:
-            # schema 是 LlamaIndex 在插入时才建的，先查再清
             cur.execute(
                 "SELECT 1 FROM information_schema.schemata WHERE schema_name = %s;",
                 (SCHEMA,),
@@ -201,5 +193,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as e:
-        print(f"\n❌ EXCEPTION: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"\nEXCEPTION: {type(e).__name__}: {e}", file=sys.stderr)
         raise

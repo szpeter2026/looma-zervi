@@ -8,8 +8,9 @@ smoke_api.py — FastAPI + LiteLLM 端到端烟测
 4. 返回的回答包含检索到的来源（source_nodes）
 
 前置：
-- app/main.py 在项目中
-- ServBay PG + Ollama 运行中
+    - PG + pgvector 运行（docker-compose up -d 或本地安装）
+    - Ollama 运行，qwen2.5-coder:1.5b + nomic-embed-text:latest 已 pull
+    - .env 配置正确（参考 .env.example）
 """
 from __future__ import annotations
 
@@ -21,9 +22,20 @@ import sys
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
 PROJECT = Path(__file__).resolve().parent.parent
-VENV_PYTHON = str(PROJECT / ".venv" / "bin" / "python")
-STATE_FILE = Path("/tmp/looma-zervi_smoke_api_state.json")
+LOOMA_PORT = int(os.getenv("LOOMA_PORT", "8010"))
+
+# 跨平台 venv python 路径
+import platform
+if platform.system() == "Windows":
+    VENV_PYTHON = str(PROJECT / ".venv" / "Scripts" / "python.exe")
+else:
+    VENV_PYTHON = str(PROJECT / ".venv" / "bin" / "python")
+
+STATE_FILE = PROJECT / ".smoke_state_api.json"
 
 
 def step(msg: str) -> None:
@@ -34,23 +46,23 @@ def main() -> int:
     state: dict = {"steps": {}, "verdict": "UNKNOWN"}
     t0_all = time.time()
 
-    # 0. 清代理（curl 需要）
+    # 0. 清代理
     step("0. 准备环境")
     env = os.environ.copy()
     for _k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
         env.pop(_k, None)
 
     # 1. 启动 FastAPI 进程
-    step("1. 启动 FastAPI @ 127.0.0.1:8010")
+    step(f"1. 启动 FastAPI @ 127.0.0.1:{LOOMA_PORT}")
     t0 = time.time()
     proc = subprocess.Popen(
-        [VENV_PYTHON, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8010"],
+        [VENV_PYTHON, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(LOOMA_PORT)],
         cwd=str(PROJECT),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    state["steps"]["start_server"] = {"pid": proc.pid, "port": 8010}
+    state["steps"]["start_server"] = {"pid": proc.pid, "port": LOOMA_PORT}
 
     # 等服务器就绪（最多 10 秒）
     ready = False
@@ -59,14 +71,14 @@ def main() -> int:
         ret = proc.poll()
         if ret is not None:
             stderr = proc.stderr.read().decode() if proc.stderr else ""
-            print(f"  ❌ 服务器启动失败 (exit={ret}): {stderr[:300]}")
+            print(f"  服务器启动失败 (exit={ret}): {stderr[:300]}")
             state["verdict"] = "FAIL"
             state["total_ms"] = int((time.time() - t0_all) * 1000)
             STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2))
             return 1
         try:
             import urllib.request
-            req = urllib.request.Request("http://127.0.0.1:8010/v1/health")
+            req = urllib.request.Request(f"http://127.0.0.1:{LOOMA_PORT}/v1/health")
             with urllib.request.urlopen(req, timeout=2) as resp:
                 if resp.status == 200:
                     ready = True
@@ -76,7 +88,7 @@ def main() -> int:
         print(f"  等待服务器就绪... ({i+1}/20)", flush=True)
 
     if not ready:
-        print("  ❌ 服务器 10 秒内未就绪")
+        print("  服务器 10 秒内未就绪")
         proc.terminate()
         state["verdict"] = "FAIL"
         state["total_ms"] = int((time.time() - t0_all) * 1000)
@@ -84,7 +96,7 @@ def main() -> int:
         return 1
 
     state["steps"]["start_server"]["elapsed_ms"] = int((time.time() - t0) * 1000)
-    print(f"  ✅ 服务器就绪，耗时 {state['steps']['start_server']['elapsed_ms']}ms")
+    print(f"  服务器就绪，耗时 {state['steps']['start_server']['elapsed_ms']}ms")
 
     try:
         # 2. 健康检查
@@ -92,7 +104,7 @@ def main() -> int:
         t0 = time.time()
         import urllib.request as _req
 
-        with _req.urlopen("http://127.0.0.1:8010/v1/health", timeout=5) as resp:
+        with _req.urlopen(f"http://127.0.0.1:{LOOMA_PORT}/v1/health", timeout=5) as resp:
             health = json.loads(resp.read())
         state["steps"]["health"] = {
             "status": health.get("status"),
@@ -108,7 +120,7 @@ def main() -> int:
             "query": "底座优先架构是什么？",
         }).encode("utf-8")
         req = _req.Request(
-            "http://127.0.0.1:8010/v1/ask",
+            f"http://127.0.0.1:{LOOMA_PORT}/v1/ask",
             data=payload,
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -131,16 +143,13 @@ def main() -> int:
         sources = ask_resp.get("sources", [])
 
         checks = []
-        # 必须有回答
         checks.append(("有回答内容", len(answer) > 10))
-        # 必须有来源
         checks.append(("有检索来源", len(sources) > 0))
-        # 回答内容与问题相关（包含关键词或 LLM 生成了合理内容）
         checks.append(("回答与问题相关", len(answer) > 30 and ("底座" in answer or "架构" in answer or "pgvector" in answer.lower())))
 
         all_pass = all(passed for _, passed in checks)
         for label, passed in checks:
-            print(f"  {'✅' if passed else '❌'} {label}")
+            print(f"  {'PASS' if passed else 'FAIL'} {label}")
 
         verdict = "PASS" if all_pass else "FAIL"
         state["verdict"] = verdict
@@ -166,5 +175,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as e:
-        print(f"\n❌ EXCEPTION: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"\nEXCEPTION: {type(e).__name__}: {e}", file=sys.stderr)
         raise

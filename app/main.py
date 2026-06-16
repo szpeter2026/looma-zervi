@@ -7,19 +7,23 @@ looma-zervi FastAPI 入口 — 底座优先 Step 4+5 最小闭环
 - LlamaIndex PGVectorStore + nomic-embed 检索 → LLM 生成回答
 
 启动：
-    cd /Users/jason/Projects/looma-zervi
-    .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8010 --reload
+    uvicorn src.api.app:app --host 127.0.0.1 --port 8010 --reload
 
 前置：
-    - ServBay PG 运行 @ 127.0.0.1:5432
-    - ServBay Ollama 运行 @ 127.0.0.1:11434
-    - qwen2.5-coder:1.5b + nomic-embed-text:latest 已 pull
+    - PG + pgvector 运行（docker-compose up -d 或本地安装）
+    - Ollama 运行，qwen2.5-coder:1.5b + nomic-embed-text:latest 已 pull
+    - .env 配置正确（参考 .env.example）
 """
 from __future__ import annotations
 
 import os
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# 加载 .env
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # 必须在 import ollama / litellm 之前清掉代理
 for _k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
@@ -34,12 +38,17 @@ from llama_index.embeddings.ollama import OllamaEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.llms.litellm import LiteLLM
 
-# ---- 配置 ----
-PG_DSN = "postgresql://jason:ServBay.dev@127.0.0.1:5432/postgres"
-OLLAMA_HOST = "http://127.0.0.1:11434"
-EMBED_MODEL = "nomic-embed-text:latest"
-LLM_MODEL = "ollama/qwen2.5-coder:1.5b"
-DIM = 768
+# ---- 配置（全部从环境变量读取）----
+PG_HOST = os.getenv("PG_HOST", "127.0.0.1")
+PG_PORT = int(os.getenv("PG_PORT", "5432"))
+PG_USER = os.getenv("PG_USER", "postgres")
+PG_PASSWORD = os.getenv("PG_PASSWORD", "postgres")
+PG_DATABASE = os.getenv("PG_DATABASE", "looma")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text:latest")
+LLM_MODEL = os.getenv("LLM_MODEL", "ollama/qwen2.5-coder:1.5b")
+DIM = int(os.getenv("EMBED_DIM", "768"))
+
 SCHEMA = "looma"
 TABLE = "knowledge"
 
@@ -60,11 +69,11 @@ def _get_vector_store() -> PGVectorStore:
     global _vector_store
     if _vector_store is None:
         _vector_store = PGVectorStore.from_params(
-            host="127.0.0.1",
-            port=5432,
-            user="jason",
-            password="ServBay.dev",
-            database="postgres",
+            host=PG_HOST,
+            port=PG_PORT,
+            user=PG_USER,
+            password=PG_PASSWORD,
+            database=PG_DATABASE,
             table_name=TABLE,
             schema_name=SCHEMA,
             embed_dim=DIM,
@@ -73,12 +82,18 @@ def _get_vector_store() -> PGVectorStore:
     return _vector_store
 
 
+def _build_dsn() -> str:
+    return f"postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DATABASE}"
+
+
 def _seed_knowledge():
     """种子知识库：写入几条常识数据，确保检索有内容可查"""
     import psycopg as _psycopg
 
+    dsn = _build_dsn()
+
     # 幂等：表存在就清空重建
-    with _psycopg.connect(PG_DSN, autocommit=True) as conn:
+    with _psycopg.connect(dsn, autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT 1 FROM information_schema.tables WHERE table_schema=%s AND table_name=%s;",
