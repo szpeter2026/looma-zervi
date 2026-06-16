@@ -1,0 +1,47 @@
+# Looma & Zervi 开发环境 Docker Compose
+# 用法：docker compose up -d
+# 停止：docker compose down
+# 数据持久化：使用 Docker named volume
+
+services:
+  pgvector:
+    image: pgvector/pgvector:pg17
+    container_name: looma-pgvector
+    restart: unless-stopped
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-postgres}
+      POSTGRES_DB: ${PG_DATABASE:-looma}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Ollama（可选，本地已安装可跳过）
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: looma-ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollamadata:/root/.ollama
+  #   # GPU 支持（需 nvidia-container-toolkit）
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       devices:
+  #   #         - driver: nvidia
+  #   #           count: 1
+  #   #           capabilities: [gpu]
+
+volumes:
+  pgdata:
+    driver: local
+  # ollamadata:
+  #   driver: local
