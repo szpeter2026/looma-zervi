@@ -1,0 +1,9 @@
+INFO:     Started server process [2332]
+INFO:     Waiting for application startup.
+14:42:30 [looma.embed] INFO: Embedding provider 已连接: ollama -> nomic-embed-text:latest
+14:42:30 [looma.llm] INFO: LLM provider 已连接: deepseek -> deepseek/deepseek-v4-pro
+14:42:30 [looma] WARNING: Ollama 连接失败: 
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+14:42:37 [looma.embed] INFO: Embedding provider 已连接: ollama -> nomic-embed-text:latest
+14:43:02 [looma] INFO: 种子知识库就绪 (schema=looma)

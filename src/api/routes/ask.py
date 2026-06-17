@@ -10,6 +10,8 @@ from collections import OrderedDict
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from src.core.config import get_settings
+
 from src.api.models import AskRequest, AskResponse, SourceNode, Intent, ExecutedOn
 from src.api.auth import AuthContext, get_auth
 from src.api.quota import consume, RESOURCE_ASK
@@ -115,15 +117,24 @@ async def ask(req: AskRequest, auth: AuthContext = Depends(get_auth)):
     # 2. 分发（线程池执行）— dispatch 内部会补充子段计时到 _timing dict
     t_dispatch = time.time()
     _timing: dict[str, int] = {}
-    result = await asyncio.to_thread(
-        dispatch,
-        intent=intent_str,
-        query=req.query,
-        context=req.model_dump(),
-        slots=slots,
-        resume_text=None,
-        _timing=_timing,
-    )
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(
+                dispatch,
+                intent=intent_str,
+                query=req.query,
+                context=req.model_dump(),
+                slots=slots,
+                resume_text=None,
+                _timing=_timing,
+            ),
+            timeout=get_settings().API_REQUEST_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail={
+            "code": "request_timeout",
+            "message": f"请求超过 {get_settings().API_REQUEST_TIMEOUT}s，上游服务无响应",
+        })
     profile_segments["dispatch"] = int((time.time() - t_dispatch) * 1000)
     # 合并 dispatch 内部子段（rag_setup / rag_query / rag_llm 等）
     profile_segments.update(_timing)

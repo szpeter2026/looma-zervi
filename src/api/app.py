@@ -38,6 +38,7 @@ PROCESS_START_TIME = time.time()
 pgvector_ready = False
 ollama_ready = False
 rag_ready = False
+llm_ready = False
 llm_provider_active: str = ""
 
 from pathlib import Path
@@ -58,7 +59,7 @@ from src.api.routes.web_panel import router as web_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """启动时配置 LlamaIndex 全局 Settings，种子知识库在后台线程执行"""
-    global pgvector_ready, ollama_ready, rag_ready
+    global pgvector_ready, ollama_ready, rag_ready, llm_ready, llm_provider_active
     settings = get_settings()
 
     # LlamaIndex 全局配置
@@ -67,13 +68,16 @@ async def lifespan(app: FastAPI):
         Settings.llm = get_llm()
         # 记录当前活跃 provider
         llm_provider_active = get_active_provider()
+        llm_ready = Settings.llm.is_available
         if llm_provider_active == "ollama":
             ollama_ready = True
             logging.getLogger("looma").info("Ollama 连接就绪")
-        else:
+        elif llm_ready:
             logging.getLogger("looma").info(f"LLM provider 已连接: {llm_provider_active}")
+        else:
+            logging.getLogger("looma").warning("LLM provider 未就绪")
     except Exception as e:
-        logging.getLogger("looma").warning(f"Ollama 连接失败: {e}")
+        logging.getLogger("looma").warning(f"LLM 初始化失败: {e}")
 
     # 后台线程执行种子知识库（不阻塞服务启动）
     def _bg_seed():

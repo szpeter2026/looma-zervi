@@ -57,6 +57,7 @@ class Settings:
     # ---- 服务 ----
     LOOMA_HOST: str = os.getenv("LOOMA_HOST", "127.0.0.1")
     LOOMA_PORT: int = int(os.getenv("LOOMA_PORT", "8010"))
+    API_REQUEST_TIMEOUT: float = float(os.getenv("API_REQUEST_TIMEOUT", "90.0"))
 
     # ---- PG 默认 schema/table ----
     SCHEMA: str = "looma"

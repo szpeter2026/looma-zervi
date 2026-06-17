@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 import urllib.request
 from typing import Optional
@@ -19,6 +20,7 @@ logger = logging.getLogger("looma.llm")
 
 # 当前活跃的 provider（供健康检查展示）
 _active_provider: str = ""
+_llm_instance: "CachedLiteLLM" | None = None
 
 
 class _FallbackLiteLLM:
@@ -55,6 +57,25 @@ class _FallbackLiteLLM:
         except Exception:
             return False
 
+    def _configure_provider_env(self, provider: str, settings) -> None:
+        if provider == "ollama":
+            os.environ["OLLAMA_HOST"] = settings.OLLAMA_HOST
+        elif provider == "openai":
+            os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+            if settings.OPENAI_BASE_URL:
+                os.environ["OPENAI_BASE_URL"] = settings.OPENAI_BASE_URL
+        elif provider == "deepseek":
+            os.environ["OPENAI_API_KEY"] = settings.DEEPSEEK_API_KEY
+            base_url = settings.DEEPSEEK_BASE_URL or "https://api.deepseek.com/v1"
+            os.environ["OPENAI_BASE_URL"] = base_url
+
+    def _normalize_model_name(self, provider: str, model_name: str) -> str:
+        if provider in ("openai", "deepseek") and "/" not in model_name:
+            return f"{provider}/{model_name}"
+        if provider == "ollama" and "/" not in model_name:
+            return f"ollama/{model_name}"
+        return model_name
+
     def _try_next_provider(self) -> bool:
         global _active_provider
         settings = get_settings()
@@ -85,11 +106,15 @@ class _FallbackLiteLLM:
                 # 未知 provider，尝试将其当作 model 标识使用
                 model_name = prov
 
+            model_name = self._normalize_model_name(prov, model_name)
+            self._configure_provider_env(prov, settings)
+
             # 尝试初始化 LLM
             try:
                 self._llm = LiteLLM(model=model_name, temperature=self._temperature)
                 self._current_provider = prov
                 self._current_model = model_name
+                self.metadata.model_name = model_name
                 logger.info(f"LLM provider 已连接: {prov} -> {model_name}")
                 # 更新全局活跃 provider
                 _active_provider = self._current_provider
@@ -235,8 +260,11 @@ class _CachedResponse:
 
 def get_llm() -> CachedLiteLLM:
     """获取全局 LLM 实例（LiteLLM 封装 + 缓存 + 多 Provider fallback）"""
-    settings = get_settings()
-    return CachedLiteLLM(model=settings.LLM_MODEL, temperature=0.3)
+    global _llm_instance
+    if _llm_instance is None:
+        settings = get_settings()
+        _llm_instance = CachedLiteLLM(model=settings.LLM_MODEL, temperature=0.3)
+    return _llm_instance
 
 
 def get_active_provider() -> str:
