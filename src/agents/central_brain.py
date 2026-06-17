@@ -11,23 +11,27 @@ from __future__ import annotations
 import json
 import random
 import re
+import time
+import logging
 from typing import Any
 
 from src.core.config import get_settings
 from src.core.llm import get_llm
+
+logger = logging.getLogger("looma.brain")
 
 # 支持的意图（与 LLM 的 system prompt 一致，便于进化）
 INTENTS = ("job_match", "resume_parse", "poetry", "credit", "mbti", "rag", "report", "unknown")
 
 # 规则回退：关键词 → 意图（仅当 LLM 未启用或失败时使用）
 INTENT_KEYWORDS = {
-    "poetry": ["诗词", "诗人", "古诗", "推荐一句", "陪伴", "安慰", "思乡", "送别", "山水", "边塞", "励志", "一句诗"],
-    "job_match": ["匹配", "职位", "找工作", "有没有适合", "岗位"],
+    "poetry": ["诗词", "诗人", "古诗", "推荐一句", "陪伴", "安慰", "思乡", "送别", "山水", "边塞", "励志", "一句诗", "唐诗", "宋词"],
+    "job_match": ["匹配", "职位", "找工作", "有没有适合", "岗位", "求职", "招聘"],
     "resume_parse": ["上传", "简历", "解析简历"],
     "credit": ["征信", "信用", "验证"],
     "mbti": ["人格", "MBTI", "测评", "性格"],
-    "report": ["报告", "日报", "周报", "月报", "统计"],
-    "rag": ["知识库", "文档", "问一下", "查一下", "检索", "资料"],
+    "report": ["报告", "日报", "周报", "月报", "生成报告"],
+    "rag": ["知识库", "文档", "问一下", "查一下", "检索", "资料", "总结", "介绍一下", "是什么", "什么是", "有哪些", "主要内容", "底座", "架构"],
 }
 
 # 诗词推荐时随机注入主题，避免「推荐一句诗」总返回同一首
@@ -51,8 +55,15 @@ def _parse_intent_llm(message: str) -> tuple[str, float, dict[str, Any]] | None:
             "你是一个意图分类器。根据用户输入，输出且仅输出一个 JSON 对象，不要其他文字。"
             "JSON 必须包含：\"intent\"（取值仅限: job_match, resume_parse, poetry, credit, mbti, rag, report, unknown），"
             "\"confidence\"（0 到 1 的浮点数），可选 \"slots\"（对象，如 {\"query\": \"...\"}）。"
-            "job_match=求职/职位匹配，resume_parse=上传或解析简历，poetry=诗词/诗人/陪伴，credit=征信/验证，"
-            "mbti=人格测评，rag=知识库/文档问答，report=报告生成，unknown=其他。"
+            "\n分类规则（严格按此判断）："
+            "\n- rag: 问知识/文档/概念/系统是什么、总结/介绍/检索知识库内容、询问有哪些功能（如「Looma是什么」「总结知识库」「介绍一下系统」）"
+            "\n- poetry: 涉及诗词/诗人/古诗/唐诗宋词/求推荐诗句"
+            "\n- job_match: 求职/职位匹配/找工作/岗位推荐"
+            "\n- resume_parse: 上传或解析简历"
+            "\n- credit: 征信/信用验证"
+            "\n- mbti: 人格测评/MBTI/性格分析"
+            "\n- report: 生成日报/周报/月报/统计报告"
+            "\n- unknown: 以上都不匹配"
         )
         llm = get_llm()
         response = llm.complete(
@@ -87,15 +98,21 @@ def _parse_intent_rules(message: str) -> str:
 def parse_intent(message: str) -> tuple[str, float, dict[str, Any]]:
     """
     解析用户消息得到意图 + 置信度 + 槽位。
-    主路径：LLM（可进化）；回退：规则（保证无 key 时也能跑）。
+    策略：规则优先（对 1.5B 小模型最可靠），LLM 仅作为增强备选。
     """
-    # 尝试 LLM 解析
+    # 1. 规则解析（可靠、快速）
+    rule_intent = _parse_intent_rules(message)
+    if rule_intent != "unknown":
+        return (rule_intent, 0.9, {})
+
+    # 2. 规则未命中时，尝试 LLM 解析
     out = _parse_intent_llm(message)
     if out is not None:
-        return out
-    # 回退规则
-    intent = _parse_intent_rules(message)
-    return (intent, 0.8 if intent != "unknown" else 0.3, {})
+        intent, confidence, slots = out
+        if intent != "unknown" and confidence >= 0.7:
+            return (intent, confidence, slots)
+
+    return ("unknown", 0.3, {})
 
 
 def dispatch(
@@ -104,6 +121,7 @@ def dispatch(
     context: dict[str, Any] | None = None,
     slots: dict[str, Any] | None = None,
     resume_text: str | None = None,
+    _timing: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """
     按意图分发到内部能力端口，返回 result 字典。
@@ -114,6 +132,7 @@ def dispatch(
         context: 可选上下文
         slots: LLM 解析出的槽位
         resume_text: 可选简历文本
+        _timing: 可选计时字典，dispatch 内部会把子段耗时（ms）写入
 
     Returns:
         包含 message、status 等字段的 result dict
@@ -121,22 +140,67 @@ def dispatch(
     slots = slots or {}
     context = context or {}
     text = query.strip() or slots.get("text") or slots.get("content") or ""
+    _timing = _timing or {}
 
     # ── RAG 问答 ──
     if intent == "rag":
         try:
             from src.retrieval.rag_engine import get_index
+            # timing: 索引准备（首次含 embedding 初始化）
+            t_setup = time.time()
             index = get_index()
-            query_engine = index.as_query_engine(similarity_top_k=3)
-            response = query_engine.query(query)
+            if index is None:
+                logger.error("RAG: get_index() returned None")
+                return {"message": "知识库未初始化", "status": "error", "error": "index_not_initialized", "slots": slots}
+            retriever = index.as_retriever(similarity_top_k=3)
+            _timing["rag_setup"] = int((time.time() - t_setup) * 1000)
+
+            # timing: 检索（embedding 向量化 + pgvector 相似搜索）
+            t_retrieve = time.time()
+            retrieved_nodes = retriever.retrieve(query)
+            _timing["rag_retrieve"] = int((time.time() - t_retrieve) * 1000)
+
+            # 构建上下文
+            context_text = "\n\n".join(
+                n.node.get_text() if hasattr(n, 'node') else str(n)
+                for n in retrieved_nodes
+            )
+
+            # timing: LLM 生成回答
+            t_llm = time.time()
+            prompt = (
+                "你是一个知识库助手。根据以下参考资料回答用户问题。"
+                "如果参考资料不足以回答问题，请如实说明。\n\n"
+                f"参考资料：\n{context_text}\n\n"
+                f"用户问题：{query}\n\n"
+                f"回答："
+            )
+            llm = get_llm()
+            response = llm.complete(prompt)
+            answer_text = str(response)
+            _timing["rag_llm"] = int((time.time() - t_llm) * 1000)
+
+            # 提取 source_nodes（保持与旧格式兼容）
+            sources = []
+            for node in retrieved_nodes:
+                sources.append({
+                    "chunk_text": (node.node.get_text() if hasattr(node, 'node') else str(node))[:200],
+                    "score": round(node.score, 4) if getattr(node, 'score', None) else None,
+                })
+            logger.info(
+                f"RAG: query={query[:50]!r}, answer_len={len(answer_text)}, sources={len(sources)} "
+                f"setup={_timing['rag_setup']}ms retrieve={_timing['rag_retrieve']}ms llm={_timing['rag_llm']}ms"
+            )
             return {
                 "message": "已检索知识库并生成回答",
                 "status": "ok",
-                "answer": str(response),
+                "answer": answer_text,
+                "_sources": sources,
                 "slots": slots,
             }
         except Exception as e:
-            return {"message": "RAG 查询失败", "status": "error", "error": str(e), "slots": slots}
+            logger.error(f"RAG 查询失败: {e}", exc_info=True)
+            return {"message": f"RAG 查询失败: {str(e)}", "status": "error", "error": str(e), "slots": slots}
 
     # ── 职位匹配 ──
     if intent == "job_match":

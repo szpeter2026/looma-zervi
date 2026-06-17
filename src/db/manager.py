@@ -238,11 +238,26 @@ class DBManager:
             row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
             return dict(row) if row else None
 
+    def list_users(self) -> list[dict]:
+        """列出所有用户"""
+        with self._conn() as conn:
+            rows = conn.execute("SELECT * FROM users ORDER BY created_at DESC").fetchall()
+            return [dict(row) for row in rows]
+
     def create_user(self, user_id: str, email: str, password_hash: str, tier: str = "free"):
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO users (id, email, password_hash, tier) VALUES (?, ?, ?, ?)",
                 (user_id, email, password_hash, tier),
+            )
+            conn.commit()
+
+    def update_user_tier(self, user_id: str, tier: str):
+        """更新用户 tier 档位"""
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE users SET tier=?, updated_at=datetime('now') WHERE id=?",
+                (tier, user_id),
             )
             conn.commit()
 

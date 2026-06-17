@@ -54,6 +54,17 @@ def auth_login(request: AuthLoginRequest):
         db = DBManager()
         user = db.get_user_by_email(request.email)
         if not user or not verify_password(request.password, user["password_hash"]):
+            # Stub 模式：任意凭据都能登录
+            if os.environ.get("AUTH_STUB", "true").lower() == "true":
+                uid = str(uuid.uuid4())
+                token = f"demo-token-{uid[:8]}"
+                return AuthResponse(
+                    access_token=token,
+                    refresh_token=f"refresh-{token}",
+                    tier=Tier.free,
+                    expires_in=3600,
+                    user_id=uid,
+                )
             raise HTTPException(status_code=401, detail={"error": "invalid_credentials", "message": "邮箱或密码错误"})
         token = f"token-{user['id'][:8]}"
         return AuthResponse(

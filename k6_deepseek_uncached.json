@@ -1,0 +1,23 @@
+{
+  "test_config": {
+    "provider": "deepseek (deepseek-v4-pro)",
+    "iterations_requested": 10,
+    "iterations_succeeded": 10,
+    "concurrency": 1,
+    "cache": "disabled (unique queries per iteration)",
+    "auth": "enterprise (token-b658c985)"
+  },
+  "duration_seconds": 29.7,
+  "http_req_duration_ms": {
+    "min": 1819.3,
+    "max": 5637.0,
+    "avg": 2971.0,
+    "med": 2767.3,
+    "p90": 3536.4,
+    "p95": 4586.7,
+    "p99": 5426.9
+  },
+  "failures": 0,
+  "success_rate_pct": 100.0,
+  "answer_length_avg": 66.0
+}

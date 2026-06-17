@@ -22,7 +22,11 @@ def get_vector_store() -> PGVectorStore:
             table_name=settings.TABLE,
             schema_name=settings.SCHEMA,
             embed_dim=settings.EMBED_DIM,
-            hnsw_kwargs={"m": 16, "ef_construction": 64},
+            hnsw_kwargs={
+                "hnsw_m": 16,
+                "hnsw_ef_construction": 64,
+                "hnsw_ef_search": 40,
+            },
         )
     return _vector_store
 

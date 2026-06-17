@@ -4,7 +4,7 @@
 > 决策依据：`docs/决策文档_底座优先修订版.md`（仓库外，原文档在桌面）
 > 共享 API 契约：`docs/api.yaml`（Looma & Zervi Shared API Contract v1.1.0）
 
-## 当前阶段：P1 底座五步 + 业务模块迁移 — 已关闭（2026-06-16）
+## 当前阶段：P1 底座五步 + 弹性优化 — 已关闭（2026-06-17）
 
 底座优先路线实测可执行，铁证如下：
 
@@ -23,6 +23,11 @@
 | 5 | FastAPI /v1/ask 单入口（对齐 api.yaml v1.1.0） | done |
 | 6 | 业务模块迁移（Tatha + DemoPeter 全量模块 → looma-zervi） | done |
 | 7 | Zervi Rust 客户端完整升级（P1 骨架 → 全端点 CLI） | done |
+| 8 | **LLM 多 Provider fallback** (ollama→deepseek→openai) | done |
+| 9 | **Embedding 多 Provider fallback** (ollama→openai→deepseek) | done |
+| 10 | **调用弹性策略**（超时/重试/熔断） | done |
+| 11 | **两层缓存**（LLM prompt 级 + 请求结果级） | done |
+| 12 | **集成 Smoke 测试** | done |
 
 ## 目录结构
 
@@ -31,8 +36,10 @@ looma-zervi/
 ├── src/                           # Looma Python 服务端（按功能层组织）
 │   ├── core/                      # AI 核心层
 │   │   ├── config.py              # 全局配置（.env 驱动）
-│   │   ├── llm.py                 # LiteLLM 统一调用
-│   │   └── embeddings.py          # nomic-embed 768d 标准化
+│   │   ├── llm.py                 # LiteLLM 统一调用（多 Provider + 缓存 + 重试/熔断）
+│   │   ├── llm_cache.py           # LLM prompt 级缓存（TTL + LRU）
+│   │   ├── embeddings.py          # Embedding 抽象（多 Provider fallback + 重试/熔断）
+│   │   └── resilience.py          # 调用弹性策略（超时/重试/熔断器）
 │   ├── retrieval/                 # 检索层
 │   │   ├── vector_store.py        # pgvector 统一接口
 │   │   └── rag_engine.py          # LlamaIndex RAG 引擎
@@ -42,8 +49,8 @@ looma-zervi/
 │   │   ├── auth.py                # 认证（Supabase JWT + Stub）
 │   │   ├── quota.py               # 三档配额控制
 │   │   └── routes/                # 路由模块
-│   │       ├── system.py          # /v1/health
-│   │       ├── ask.py             # /v1/ask（中央大脑单入口）
+│   │       ├── system.py          # /v1/health（含 provider/cache/resilience 状态）
+│   │       ├── ask.py             # /v1/ask（中央大脑单入口 + 请求级缓存）
 │   │       ├── jobs.py            # /v1/jobs/match（职位匹配）
 │   │       ├── resume.py          # /v1/resume/parse（简历解析）
 │   │       ├── auth_routes.py     # /v1/auth/*（注册/登录/配额）
@@ -63,21 +70,13 @@ looma-zervi/
 │   └── db/                        # 数据层
 │       └── manager.py             # SQLite 元数据库（文档/用户/配额）
 ├── zervi/                         # Zervi Rust 客户端
-│   ├── Cargo.toml
-│   └── src/
-│       ├── main.rs                # CLI 入口（clap 子命令）
-│       ├── client.rs              # HTTP 客户端（全端点封装）
-│       └── models.rs              # 数据模型（对齐 api.yaml v1.1.0）
 ├── scripts/                       # 烟测脚本
-│   ├── smoke_pgvector.py          # Step 1+2
-│   ├── smoke_llamaindex.py        # Step 3
-│   └── smoke_api.py               # Step 4+5
+├── tests/                         # 集成测试
+│   └── test_smoke.py              # Smoke 测试（health/ask/cache/熔断）
 ├── docs/
 │   └── api.yaml                   # 共享 API 契约 v1.1.0（唯一真理源）
-├── tests/                         # 测试
 ├── docker-compose.yml             # pgvector 容器
-├── .env.example                   # 环境变量模板
-├── .gitignore
+├── .env.example                   # 环境变量模板（含弹性策略配置）
 ├── requirements.txt
 └── README.md
 ```
@@ -123,6 +122,85 @@ python scripts/smoke_api.py
 uvicorn src.api.app:app --host 127.0.0.1 --port 8010 --reload
 ```
 
+### 6. 运行集成 Smoke 测试
+
+```bash
+# 确保服务已启动后运行
+python tests/test_smoke.py
+
+# 或使用 pytest
+python -m pytest tests/test_smoke.py -v -s
+
+# 自定义参数
+LOOMA_TEST_URL=http://127.0.0.1:8010 \
+LOOMA_TEST_TOKEN=token-b658c985 \
+python tests/test_smoke.py
+```
+
+## 多 Provider 配置
+
+### LLM Provider
+
+系统按 `LLM_PROVIDER_ORDER` 优先级依次尝试连接 LLM 服务：
+
+```env
+# 优先级：ollama > deepseek > openai
+LLM_PROVIDER_ORDER=ollama,deepseek,openai
+
+# 为每个 provider 指定 model（可选）
+OLLAMA_MODEL=qwen2.5-coder:1.5b
+DEEPSEEK_MODEL=deepseek-chat
+OPENAI_MODEL=gpt-4o-mini
+
+# API Keys（按需配置）
+DEEPSEEK_API_KEY=sk-xxx
+OPENAI_API_KEY=sk-xxx
+```
+
+### Embedding Provider
+
+独立于 LLM 的 embedding provider 优先级：
+
+```env
+EMBED_PROVIDER_ORDER=ollama,openai,deepseek
+
+OPENAI_EMBED_MODEL=text-embedding-3-small
+DEEPSEEK_EMBED_MODEL=deepseek-chat
+```
+
+### 查看当前活跃 Provider
+
+```bash
+curl http://127.0.0.1:8010/v1/health | jq '{llm_provider, embed_provider}'
+```
+
+## 调用弹性策略
+
+系统内置三层容错机制：
+
+| 策略 | 配置 | 说明 |
+|------|------|------|
+| **调用超时** | `LLM_CALL_TIMEOUT=120` / `EMBED_CALL_TIMEOUT=30` | 单次调用最大等待时间（秒） |
+| **自动重试** | `LLM_MAX_RETRIES=2` / `EMBED_MAX_RETRIES=2` | 指数退避重试（0.5s → 1s → 2s） |
+| **熔断器** | 5 次连续失败 / 30s 冷却 | 连续失败后短路保护，冷却后半开探测 |
+
+健康检查可查看当前弹性状态：
+
+```bash
+curl http://127.0.0.1:8010/v1/health | jq '.resilience'
+```
+
+## 两层缓存架构
+
+```
+请求 → 请求级缓存 (120s TTL, 64 entries)
+     → 意图解析 (LLM) → LLM prompt 级缓存 (300s TTL, 256 entries)
+     → 分发执行 → LLM 生成 → LLM prompt 级缓存
+     → 响应
+```
+
+缓存命中时响应时间 < 50ms（vs 首次 ~80s）。
+
 ## 踩坑记录
 
 | 坑 | 修法 |
@@ -133,6 +211,8 @@ uvicorn src.api.app:app --host 127.0.0.1 --port 8010 --reload
 | ollama run 退出后模型从显存卸载 | 烟测前预热，或设置 keep_alive 参数 |
 | LlamaIndex 0.14 要单独装 ollama embedder | `pip install llama-index-embeddings-ollama` |
 | Ollama 冷启动 embeddings API 30s 不响应 | 烟测前 `ollama run` 一次预热，或加 keep_alive |
+| CachedLiteLLM 缺少 metadata 导致 LlamaIndex 报错 | 添加 metadata 属性代理到内部 fallback |
+| Ollama down 时 embedding 阻断整个 RAG 链路 | Embedding 多 Provider fallback（ollama→openai→deepseek） |
 
 ## 下一步（P2 业务功能自然生长）
 

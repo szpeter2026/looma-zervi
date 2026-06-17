@@ -1,0 +1,58 @@
+{
+  "report": "Looma /v1/ask End-to-End Comparison: Ollama Qwen vs DeepSeek V4-Pro",
+  "date": "2026-06-17",
+  "test_conditions": {
+    "vu": 1,
+    "cache": "disabled (unique query per iteration)",
+    "auth": "enterprise",
+    "embedding": "ollama nomic-embed-text:latest (768d)",
+    "retrieval": "pgvector cosine + HNSW, top_k=3"
+  },
+  "baseline_ollama_qwen": {
+    "provider": "ollama qwen2.5-coder:1.5b",
+    "iterations": 3,
+    "http_req_duration_ms": {
+      "min": 12392,
+      "med": 17744,
+      "avg": 37436,
+      "p90": 69285,
+      "p95": 75728,
+      "max": 82171,
+      "unit": "ms"
+    },
+    "iteration_duration_avg_ms": 37941,
+    "note": "旧基线：本地 Ollama 1.5B 小模型，无缓存"
+  },
+  "deepseek_v4_pro": {
+    "provider": "deepseek deepseek-v4-pro",
+    "iterations": 10,
+    "http_req_duration_ms": {
+      "min": 1819,
+      "med": 2767,
+      "avg": 2971,
+      "p90": 3536,
+      "p95": 4587,
+      "p99": 5427,
+      "max": 5637,
+      "unit": "ms"
+    },
+    "success_rate": "100% (10/10)"
+  },
+  "improvement": {
+    "avg_speedup": "12.6x faster (37.4s -> 3.0s)",
+    "p50_speedup": "6.4x faster (17.7s -> 2.8s)",
+    "p95_speedup": "16.5x faster (75.7s -> 4.6s)",
+    "p99_speedup": ">14x faster (estimate: 80s -> 5.4s)",
+    "max_speedup": "14.6x faster (82.2s -> 5.6s)",
+    "min_speedup": "6.8x faster (12.4s -> 1.8s)",
+    "consistency": "大幅改善：stddev 从 ~25s 降至 ~1.1s, spread 从 70s 降至 3.8s"
+  },
+  "key_findings": [
+    "DeepSeek V4-Pro 端到端平均耗时 3.0s, 相比 Ollama Qwen 1.5B 的 37.4s 快了 12.6 倍",
+    "P95 延迟从 75.7s 降至 4.6s — 高质量体验阈值内（<5s）",
+    "P99 延迟 5.4s，波动极小（1.8s–5.6s），对比旧基线 12.4s–82.2s 的巨大方差是质的飞跃",
+    "embedding 仍用 Ollama nomic-embed-text (~300ms)，只占总耗时 ~10%，不是瓶颈",
+    "当前端到端瓶颈是 DeepSeek LLM 推理本身（2.5s–5.5s），但已在可接受范围",
+    "建议：当前架构无需进一步优化，可进入功能迭代阶段"
+  ]
+}

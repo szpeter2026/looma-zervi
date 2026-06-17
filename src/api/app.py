@@ -11,38 +11,85 @@
 from __future__ import annotations
 
 import os
+import time
+import logging
+import threading
 from contextlib import asynccontextmanager
+
+# 配置日志（在 import 其他模块之前）
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+# 抑制 llama_index 和 httpx 的调试日志
+logging.getLogger("llama_index").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # 必须在 import ollama / litellm 之前清掉代理
 for _k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
     os.environ.pop(_k, None)
 
+# 进程启动时间（供健康检查计算真实 uptime）
+PROCESS_START_TIME = time.time()
+
+# 基础设施就绪标志
+pgvector_ready = False
+ollama_ready = False
+rag_ready = False
+llm_provider_active: str = ""
+
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from llama_index.core import Settings
 from src.core.config import get_settings
-from src.core.llm import get_llm
-from src.core.embeddings import get_embed_model
+from src.core.llm import get_llm, get_active_provider
+from src.core.embeddings import get_embed_model, get_active_embed_provider
 from src.retrieval.rag_engine import seed_knowledge, reset_index
 from src.api.routes import system_router, ask_router, jobs_router, resume_router, auth_router, region_router, reports_router
+from src.api.routes.web_panel import router as web_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """启动时配置 LlamaIndex 全局 Settings + 种子知识库"""
+    """启动时配置 LlamaIndex 全局 Settings，种子知识库在后台线程执行"""
+    global pgvector_ready, ollama_ready, rag_ready
     settings = get_settings()
 
     # LlamaIndex 全局配置
-    Settings.embed_model = get_embed_model()
-    Settings.llm = get_llm()
+    try:
+        Settings.embed_model = get_embed_model()
+        Settings.llm = get_llm()
+        # 记录当前活跃 provider
+        llm_provider_active = get_active_provider()
+        if llm_provider_active == "ollama":
+            ollama_ready = True
+            logging.getLogger("looma").info("Ollama 连接就绪")
+        else:
+            logging.getLogger("looma").info(f"LLM provider 已连接: {llm_provider_active}")
+    except Exception as e:
+        logging.getLogger("looma").warning(f"Ollama 连接失败: {e}")
 
-    # 种子知识库
-    print(f"[startup] 种子知识库...", flush=True)
-    seed_knowledge()
-    print(f"[startup] 知识库就绪 (schema={settings.SCHEMA}, table={settings.TABLE})", flush=True)
+    # 后台线程执行种子知识库（不阻塞服务启动）
+    def _bg_seed():
+        global pgvector_ready, rag_ready
+        try:
+            seed_knowledge()
+            pgvector_ready = True
+            rag_ready = True
+            logging.getLogger("looma").info(f"种子知识库就绪 (schema={settings.SCHEMA})")
+        except Exception as e:
+            logging.getLogger("looma").warning(f"种子知识库初始化失败: {e}")
+
+    threading.Thread(target=_bg_seed, daemon=True).start()
+
     yield
-    print("[shutdown] 清理...", flush=True)
+    logging.getLogger("looma").info("shutdown: 清理...")
     reset_index()
 
 
@@ -60,7 +107,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
+# ---- 挂载静态文件（CSS / JS 等）----
+# __file__ = src/api/app.py → 上 3 级到项目根目录
+_static_dir = Path(__file__).resolve().parent.parent.parent / "web" / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="web_static")
+
+# ---- 注册 API 路由 ----
 app.include_router(system_router)
 app.include_router(ask_router)
 app.include_router(jobs_router)
@@ -68,6 +121,9 @@ app.include_router(resume_router)
 app.include_router(auth_router)
 app.include_router(region_router)
 app.include_router(reports_router)
+
+# ---- 注册 Web 面板路由（最后注册，避免覆盖 API）----
+app.include_router(web_router)
 
 
 if __name__ == "__main__":

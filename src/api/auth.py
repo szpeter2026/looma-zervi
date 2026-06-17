@@ -84,9 +84,29 @@ def get_bearer_token(
 
 
 def _verify_token_stub(token: str) -> AuthContext:
-    """Stub：任意非空 token 视为 free 档。"""
+    """Stub：任意非空 token 视为 free 档。但如果 token 以 'token-' 开头，尝试从 DB 查询真实 tier。"""
     safe = re.sub(r"[^a-zA-Z0-9\-]", "", token[:32]) or "anon"
-    return AuthContext(user_id=f"stub-{safe}", tier="free")
+
+    # 尝试从 DB 查询真实 tier（本地 token 格式：token-{user_id[:8]}）
+    tier: Tier = "free"
+    if token.startswith("token-"):
+        try:
+            from src.db.manager import DBManager
+            db = DBManager()
+            # token 中的 user_id 前缀不足以查询，遍历匹配（小规模种子用户场景足够）
+            users = db.list_users()
+            for u in users:
+                uid_prefix = u["id"][:8]
+                if token == f"token-{uid_prefix}":
+                    t = u.get("tier", "free")
+                    if t in ("pro", "enterprise"):
+                        tier = t
+                    safe = u["id"]
+                    break
+        except Exception:
+            pass
+
+    return AuthContext(user_id=f"stub-{safe}", tier=tier)
 
 
 def verify_token(token: str) -> AuthContext | None:

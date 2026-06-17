@@ -31,6 +31,29 @@ def get_index() -> VectorStoreIndex:
     return _index
 
 
+def _seed_user() -> None:
+    """种子用户：创建默认测试账号 admin@looma.local / admin123（enterprise 档位，99999 配额）"""
+    try:
+        from src.db.manager import DBManager
+        from src.api.auth import _hash_password
+        db = DBManager()
+        existing = db.get_user_by_email("admin@looma.local")
+        if not existing:
+            import uuid as _uuid
+            uid = str(_uuid.uuid4())
+            db.create_user(uid, "admin@looma.local", _hash_password("admin123"), tier="enterprise")
+            print(f"[startup] 种子用户已创建: admin@looma.local / admin123 (enterprise)", flush=True)
+        else:
+            # 确保已存在的种子用户也升级为 enterprise
+            if existing.get("tier", "free") != "enterprise":
+                db.update_user_tier(existing["id"], "enterprise")
+                print(f"[startup] 种子用户已升级为 enterprise: admin@looma.local", flush=True)
+            else:
+                print(f"[startup] 种子用户已存在: admin@looma.local (enterprise)", flush=True)
+    except Exception as e:
+        print(f"[startup] 种子用户创建失败: {e}", flush=True)
+
+
 def seed_knowledge() -> VectorStoreIndex:
     """种子知识库：写入几条常识数据，确保检索有内容可查"""
     import psycopg as _psycopg
@@ -39,6 +62,9 @@ def seed_knowledge() -> VectorStoreIndex:
     dsn = settings.PG_DSN
 
     _ensure_settings()
+
+    # 种子用户
+    _seed_user()
 
     # 幂等：表存在就清空重建
     with _psycopg.connect(dsn, autocommit=True) as conn:
