@@ -15,12 +15,13 @@ import time
 import base64
 import uuid
 import hashlib
+import hmac
 from dataclasses import dataclass
 from typing import Literal
 
-# 确保 uuid 已导入（get_optional_auth 使用）
-
 from fastapi import Header, HTTPException
+
+from src.core.config import get_settings
 
 Tier = Literal["guest", "free", "pro", "enterprise"]
 
@@ -38,10 +39,36 @@ def _decode_base64url(data: str) -> bytes:
     return base64.urlsafe_b64decode(data)
 
 
+def _verify_hs256_signature(token: str, secret: str) -> bool:
+    try:
+        header_b64, payload_b64, signature_b64 = token.split(".")
+        msg = f"{header_b64}.{payload_b64}".encode("utf-8")
+        expected = hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).digest()
+        actual = _decode_base64url(signature_b64)
+        return hmac.compare_digest(expected, actual)
+    except Exception:
+        return False
+
+
+def _resolve_user_from_db(user_id: str | None = None, email: str | None = None) -> dict | None:
+    try:
+        from src.db.manager import DBManager
+        db = DBManager()
+        if user_id:
+            user = db.get_user(str(user_id))
+            if user:
+                return user
+        if email:
+            return db.get_user_by_email(email)
+    except Exception:
+        pass
+    return None
+
+
 def _verify_supabase_jwt(token: str) -> AuthContext | None:
     """
     验证 Supabase 签发的 JWT token。
-    验证逻辑：解析 Header、Payload，检查 exp 过期，提取 user_id。
+    验证逻辑：解析 Header、Payload，检查 exp 过期，校验 HS256 签名，提取并统一 user_id。
     """
     try:
         parts = token.split(".")
@@ -51,7 +78,12 @@ def _verify_supabase_jwt(token: str) -> AuthContext | None:
         header = json.loads(_decode_base64url(parts[0]).decode("utf-8"))
         payload = json.loads(_decode_base64url(parts[1]).decode("utf-8"))
 
-        if header.get("alg") not in ("HS256", "RS256"):
+        alg = header.get("alg")
+        if alg != "HS256":
+            return None
+
+        secret = get_settings().SUPABASE_JWT_SECRET
+        if not secret or not _verify_hs256_signature(token, secret):
             return None
 
         exp = payload.get("exp")
@@ -59,15 +91,28 @@ def _verify_supabase_jwt(token: str) -> AuthContext | None:
             return None
 
         user_id = payload.get("sub") or payload.get("user_id")
-        if not user_id:
+        email = payload.get("email")
+        if not user_id and not email:
             return None
+
+        db_user = _resolve_user_from_db(user_id=user_id, email=email)
 
         tier: Tier = "free"
         tier_raw = payload.get("tier") or (payload.get("app_metadata") or {}).get("tier")
         if tier_raw in ("pro", "enterprise"):
             tier = tier_raw
+        elif db_user:
+            tier = db_user.get("tier", "free")
 
-        return AuthContext(user_id=str(user_id), tier=tier)
+        canonical_user_id = None
+        if db_user:
+            canonical_user_id = db_user["id"]
+        elif user_id:
+            canonical_user_id = str(user_id)
+        else:
+            canonical_user_id = str(email)
+
+        return AuthContext(user_id=canonical_user_id, tier=tier)
     except Exception:
         return None
 
