@@ -122,7 +122,68 @@ python scripts/smoke_api.py
 uvicorn src.api.app:app --host 127.0.0.1 --port 8010 --reload
 ```
 
-### 6. 运行集成 Smoke 测试
+### 6. 内测部署方案（推荐）
+
+对于云内测环境，建议使用多 worker 的 Uvicorn 运行方式，并把服务与 pgvector / Ollama / Supabase 作为独立组件部署。
+
+```bash
+# 推荐在 Linux 服务器上运行，4核及以上更佳
+uvicorn src.api.app:app \
+  --host 0.0.0.0 \
+  --port 8010 \
+  --workers 4 \
+  --timeout-keep-alive 10
+```
+
+如果你希望更接近生产部署，且已经安装 `gunicorn`：
+
+```bash
+gunicorn -k uvicorn.workers.UvicornWorker \
+  --workers 4 \
+  --threads 4 \
+  --bind 0.0.0.0:8010 \
+  src.api.app:app
+```
+
+#### 内测部署推荐配置
+
+- `AUTH_STUB=false`
+- `SUPABASE_URL=https://<your-supabase-project>.supabase.co`
+- `SUPABASE_JWT_SECRET=<your-jwt-secret>`
+- `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD`, `PG_DATABASE` 对应你的 PostgreSQL + pgvector 实例
+- `OLLAMA_HOST` 或 `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` 根据实际集群情况配置
+
+#### 资源建议
+
+- CPU：4 核以上
+- 内存：16GB 以上
+- 存储：高速 SSD，避免 pgvector 索引读取延迟
+- 网络：如果使用远程 OpenAI/DeepSeek，确保出口带宽稳定
+
+#### 运行建议
+
+- 先启动 `docker compose up -d` 启动 pgvector
+- 再启动 Uvicorn 服务
+- 最后运行并发容量测试脚本
+
+### 7. 并发容量测试
+
+```bash
+python scripts/concurrency_test.py \
+  --url http://127.0.0.1:8010/v1/ask \
+  --token token-b658c985 \
+  --concurrency 5 \
+  --requests 20
+```
+
+常见测试场景：
+
+- `--concurrency 5 --requests 20`：验证 5 个并发用户是否稳定
+- `--concurrency 10 --requests 50`：评估较高并发下的响应时间与失败率
+
+如果你希望阻塞直到服务可用，可以指定 `--ready-url http://127.0.0.1:8010/v1/health`。
+
+### 8. 运行集成 Smoke 测试
 
 ```bash
 # 确保服务已启动后运行
