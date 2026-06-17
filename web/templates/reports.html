@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}报告中心 - Looma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📈 报告中心</h1>
+    <p class="subtitle">生成和查看 AI 分析报告</p>
+</div>
+
+<div class="card">
+    <div class="card-header"><h2>📊 生成报告</h2></div>
+    <div class="card-body">
+        <div class="report-actions">
+            <button class="btn btn-primary" onclick="generateReport('daily')">
+                <span class="btn-icon">📋</span> 生成日报
+            </button>
+            <button class="btn btn-secondary" onclick="generateReport('weekly')">
+                <span class="btn-icon">📈</span> 生成周报
+            </button>
+            <button class="btn btn-secondary" onclick="generateReport('monthly')">
+                <span class="btn-icon">📅</span> 生成月报
+            </button>
+        </div>
+        <div id="report-result"></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>📜 报告列表</h2>
+        <div class="filter-bar">
+            <select id="report-type-filter" onchange="loadReports()">
+                <option value="">全部类型</option>
+                <option value="daily">日报</option>
+                <option value="weekly">周报</option>
+                <option value="monthly">月报</option>
+            </select>
+            <button class="btn btn-sm" onclick="loadReports()">🔄 刷新</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="reports-loading">加载中...</div>
+        <table class="data-table" id="reports-table" style="display:none;">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>标题</th>
+                    <th>类型</th>
+                    <th>状态</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="reports-tbody"></tbody>
+        </table>
+        <div id="reports-empty" class="empty-state" style="display:none;">
+            <p>📭 暂无报告</p>
+        </div>
+    </div>
+</div>
+
+<!-- 报告详情模态 -->
+<div class="card" id="report-detail-card" style="display:none;">
+    <div class="card-header">
+        <h2>📖 报告详情</h2>
+        <button class="btn btn-sm" onclick="document.getElementById('report-detail-card').style.display='none'">✕ 关闭</button>
+    </div>
+    <div class="card-body" id="report-detail-body"></div>
+</div>
+
+<script>
+async function generateReport(type) {
+    const resultDiv = document.getElementById('report-result');
+    resultDiv.innerHTML = '<div class="loading">⏳ 正在生成报告...</div>';
+    try {
+        const data = await apiPost('/v1/reports/generate', {
+            type: type,
+            scope: 'public'
+        });
+        resultDiv.innerHTML = `
+            <div class="report-done">
+                ✅ ${data.type || type} 报告已生成
+                ${data.id ? `<br><code>ID: ${data.id}</code>` : ''}
+            </div>`;
+        loadReports();
+    } catch(err) {
+        resultDiv.innerHTML = `<div class="error">❌ ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+async function loadReports() {
+    const type = document.getElementById('report-type-filter').value;
+    const params = new URLSearchParams();
+    if (type) params.set('type', type);
+    params.set('limit', '50');
+
+    try {
+        const reports = await apiGet('/v1/reports?' + params.toString());
+        document.getElementById('reports-loading').style.display = 'none';
+        const table = document.getElementById('reports-table');
+        const empty = document.getElementById('reports-empty');
+        const tbody = document.getElementById('reports-tbody');
+
+        if (!reports || !reports.length) {
+            table.style.display = 'none';
+            empty.style.display = 'block';
+            return;
+        }
+        table.style.display = 'table';
+        empty.style.display = 'none';
+        tbody.innerHTML = reports.map(r => `
+            <tr>
+                <td style="font-size:12px;color:#999;">${r.id}</td>
+                <td class="doc-title" onclick="viewReport('${r.id}')">${escapeHtml(r.title || r.type || '-')}</td>
+                <td><span class="badge">${r.type || '-'}</span></td>
+                <td><span class="badge badge-${r.status === 'completed' ? 'green' : 'yellow'}">${r.status || '-'}</span></td>
+                <td>${(r.created_at || '').slice(0, 10)}</td>
+                <td>
+                    <button class="btn btn-sm" onclick="viewReport('${r.id}')">📋</button>
+                </td>
+            </tr>
+        `).join('');
+    } catch(err) {
+        document.getElementById('reports-loading').textContent = '加载失败: ' + err.message;
+    }
+}
+
+async function viewReport(id) {
+    try {
+        const report = await apiGet(`/v1/reports/${id}`);
+        const card = document.getElementById('report-detail-card');
+        const body = document.getElementById('report-detail-body');
+        card.style.display = 'block';
+        body.innerHTML = `
+            <div class="doc-detail-info">
+                <p><strong>标题：</strong>${escapeHtml(report.title || '-')}</p>
+                <p><strong>类型：</strong>${report.type || '-'} | <strong>状态：</strong>${report.status || '-'}</p>
+                <p><strong>创建时间：</strong>${report.created_at || '-'}</p>
+            </div>
+            <h4>📝 报告内容</h4>
+            <div class="chunk-preview">
+                <pre>${escapeHtml(report.content || '暂无内容')}</pre>
+            </div>
+        `;
+        card.scrollIntoView({behavior: 'smooth'});
+    } catch(err) {
+        alert('加载报告失败: ' + err.message);
+    }
+}
+
+loadReports();
+</script>
+{% endblock %}

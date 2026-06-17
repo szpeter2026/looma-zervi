@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}简历解析 - Looma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📋 简历解析</h1>
+    <p class="subtitle">上传 PDF/Word 简历，AI 结构化提取关键信息</p>
+</div>
+
+<div class="card">
+    <div class="card-header"><h2>📤 上传简历</h2></div>
+    <div class="card-body">
+        <div class="import-area" id="resume-area"
+             ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+            <div class="import-icon">📄</div>
+            <p>点击选择简历文件或拖拽到此处</p>
+            <p class="import-hint">支持 .pdf / .docx 格式</p>
+            <input type="file" id="resume-input" accept=".pdf,.docx" style="display:none" onchange="handleResumeSelect(event)" />
+        </div>
+        <div id="resume-file-info" style="margin-top:12px;display:none;"></div>
+        <div class="import-actions" style="margin-top:12px;">
+            <button class="btn btn-primary" onclick="parseResume()" id="btn-parse" disabled>🔍 解析简历</button>
+        </div>
+        <div id="parse-result" style="margin-top:16px;"></div>
+    </div>
+</div>
+
+<script>
+let selectedResumeFile = null;
+const resumeArea = document.getElementById('resume-area');
+resumeArea.addEventListener('click', () => document.getElementById('resume-input').click());
+
+function handleDragOver(e) { e.preventDefault(); resumeArea.classList.add('drag-over'); }
+function handleDragLeave(e) { e.preventDefault(); resumeArea.classList.remove('drag-over'); }
+function handleDrop(e) {
+    e.preventDefault();
+    resumeArea.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files).filter(f => {
+        const ext = f.name.split('.').pop().toLowerCase();
+        return ['pdf', 'docx'].includes(ext);
+    });
+    if (files.length) selectResume(files[0]);
+}
+function handleResumeSelect(e) {
+    if (e.target.files.length) selectResume(e.target.files[0]);
+}
+function selectResume(file) {
+    selectedResumeFile = file;
+    document.getElementById('resume-file-info').style.display = 'block';
+    document.getElementById('resume-file-info').innerHTML = `
+        <div class="file-item">
+            <span class="file-name">📄 ${escapeHtml(file.name)}</span>
+            <span class="file-size">${formatSize(file.size)}</span>
+            <button class="btn btn-sm btn-danger" onclick="clearResume()">✕</button>
+        </div>`;
+    document.getElementById('btn-parse').disabled = false;
+}
+function clearResume() {
+    selectedResumeFile = null;
+    document.getElementById('resume-input').value = '';
+    document.getElementById('resume-file-info').style.display = 'none';
+    document.getElementById('btn-parse').disabled = true;
+    document.getElementById('parse-result').innerHTML = '';
+}
+
+async function parseResume() {
+    if (!selectedResumeFile) return;
+    const resultDiv = document.getElementById('parse-result');
+    resultDiv.innerHTML = '<div class="loading">⏳ 正在解析简历...</div>';
+
+    const formData = new FormData();
+    formData.append('file', selectedResumeFile);
+    const token = getToken();
+
+    try {
+        const res = await fetch('/v1/resume/parse', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + (token || 'stub') },
+            body: formData
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || err.detail || '解析失败');
+        }
+        const data = await res.json();
+        resultDiv.innerHTML = `
+            <div class="answer-box">
+                <h4>📋 解析结果</h4>
+                <table class="data-table" style="margin-top:8px;">
+                    <tr><td><strong>姓名</strong></td><td>${escapeHtml(data.name || '-')}</td></tr>
+                    <tr><td><strong>邮箱</strong></td><td>${escapeHtml(data.email || '-')}</td></tr>
+                    <tr><td><strong>电话</strong></td><td>${escapeHtml(data.phone || '-')}</td></tr>
+                </table>
+                ${data.summary ? `<div style="margin-top:12px;"><strong>📝 摘要：</strong>${escapeHtml(data.summary)}</div>` : ''}
+                ${data.skills && data.skills.length ? `
+                <div style="margin-top:12px;">
+                    <strong>🛠 技能：</strong>
+                    ${data.skills.map(s => `<span class="badge" style="margin:2px;">${escapeHtml(s)}</span>`).join(' ')}
+                </div>` : ''}
+                ${data.experience && data.experience.length ? `
+                <div style="margin-top:12px;">
+                    <strong>💼 工作经历：</strong>
+                    ${data.experience.map(e => `<div class="chunk-preview" style="margin-top:8px;">
+                        <strong>${escapeHtml(e.company || '')} - ${escapeHtml(e.title || '')}</strong>
+                        <span style="color:#64748B;font-size:12px;"> (${e.start_date || ''} ~ ${e.end_date || ''})</span>
+                        <p style="font-size:13px;color:#444;">${escapeHtml(e.description || '')}</p>
+                    </div>`).join('')}
+                </div>` : ''}
+                ${data.education && data.education.length ? `
+                <div style="margin-top:12px;">
+                    <strong>🎓 教育背景：</strong>
+                    ${data.education.map(e => `<div style="margin-top:4px;font-size:13px;">
+                        ${escapeHtml(e.school || '')} · ${escapeHtml(e.degree || '')} · ${escapeHtml(e.major || '')} (${e.start_date || ''} ~ ${e.end_date || ''})
+                    </div>`).join('')}
+                </div>` : ''}
+            </div>`;
+    } catch(err) {
+        resultDiv.innerHTML = `<div class="error">❌ ${escapeHtml(err.message)}</div>`;
+    }
+}
+</script>
+{% endblock %}

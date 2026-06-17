@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}诗词检索 - Looma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📜 诗词检索</h1>
+    <p class="subtitle">中华诗词库 — 78,656 首诗词向量检索</p>
+</div>
+
+<div class="card">
+    <div class="card-header"><h2>🔍 诗词搜索</h2></div>
+    <div class="card-body">
+        <div class="quick-query">
+            <textarea id="poetry-input" rows="2" placeholder="搜索诗词... 例如：描写春天的唐诗、李白的诗、关于月亮的词"></textarea>
+            <button class="btn btn-primary" onclick="searchPoetry()">🔍 搜索</button>
+        </div>
+        <div class="chat-options" style="margin-top:8px;">
+            <label>返回数量: <input type="number" id="poetry-topk" value="10" min="1" max="50" style="width:70px"></label>
+            <button class="btn btn-sm" onclick="quickSearch('春江花月夜')">春江花月夜</button>
+            <button class="btn btn-sm" onclick="quickSearch('静夜思')">静夜思</button>
+            <button class="btn btn-sm" onclick="quickSearch('将进酒')">将进酒</button>
+            <button class="btn btn-sm" onclick="quickSearch('水调歌头')">水调歌头</button>
+        </div>
+        <div id="poetry-result" style="margin-top:16px;"></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h2>📊 诗词库统计</h2></div>
+    <div class="card-body">
+        <div class="stats-grid" id="poetry-stats">
+            <div class="stat-card">
+                <div class="stat-icon">📜</div>
+                <div class="stat-value">78,656</div>
+                <div class="stat-label">诗词总数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🧬</div>
+                <div class="stat-value">384d</div>
+                <div class="stat-label">向量维度</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">💾</div>
+                <div class="stat-value">ChromaDB</div>
+                <div class="stat-label">存储后端</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📚</div>
+                <div class="stat-value" id="poetry-backend">-</div>
+                <div class="stat-label">当前后端</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function quickSearch(text) {
+    document.getElementById('poetry-input').value = text;
+    searchPoetry();
+}
+
+async function searchPoetry() {
+    const query = document.getElementById('poetry-input').value.trim();
+    if (!query) return;
+
+    const resultDiv = document.getElementById('poetry-result');
+    resultDiv.innerHTML = '<div class="loading">⏳ 搜索中...</div>';
+
+    try {
+        const data = await apiPost('/v1/ask', {
+            query: '搜索诗词：' + query,
+            context_scope: 'public',
+            execution_hint: 'auto'
+        });
+        resultDiv.innerHTML = `
+            <div class="answer-box">
+                <h4>📜 搜索结果 <small>(${data.tokens_used || 0}ms, intent: ${data.intent || 'unknown'})</small></h4>
+                <div class="answer-text">${escapeHtml(data.answer || '未找到相关诗词').replace(/\n/g, '<br>')}</div>
+                ${data.sources && data.sources.length ? `
+                <div class="sources">
+                    <h4>📚 相关诗词</h4>
+                    ${data.sources.map((s, i) => `
+                        <div class="source-item">
+                            <span class="source-badge">#${i+1}</span>
+                            <span class="source-score">相似度: ${s.score ? (s.score*100).toFixed(1) : 'N/A'}%</span>
+                            <p class="source-content">${escapeHtml(s.chunk_text || '')}</p>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
+            </div>`;
+    } catch(err) {
+        resultDiv.innerHTML = `<div class="error">❌ ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+// 获取后端信息
+(async function() {
+    try {
+        const data = await apiGet('/v1/health');
+        document.getElementById('poetry-backend').textContent = data.status || 'online';
+    } catch(e) {
+        document.getElementById('poetry-backend').textContent = '离线';
+    }
+})();
+</script>
+{% endblock %}

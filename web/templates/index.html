@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - Looma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📊 系统仪表盘</h1>
+    <p class="subtitle">实时监控 Looma 知识平台运行状态</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">🔄</div>
+        <div class="stat-value" id="stat-status">-</div>
+        <div class="stat-label">系统状态</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">⏱</div>
+        <div class="stat-value" id="stat-uptime">-</div>
+        <div class="stat-label">运行时间</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">📄</div>
+        <div class="stat-value" id="stat-docs">-</div>
+        <div class="stat-label">文档总数</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">💬</div>
+        <div class="stat-value" id="stat-queries">-</div>
+        <div class="stat-label">今日问答</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">📜</div>
+        <div class="stat-value" id="stat-poetry">78,656</div>
+        <div class="stat-label">诗词库</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">🔑</div>
+        <div class="stat-value" id="stat-tier">-</div>
+        <div class="stat-label">账户档位</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>🔍 快速问答</h2>
+        <span class="badge">Looma AI</span>
+    </div>
+    <div class="card-body">
+        <div class="quick-query">
+            <textarea id="quick-query-input" rows="2" placeholder="输入问题，AI 智能回答..."></textarea>
+            <button class="btn btn-primary" onclick="quickQuery()">🔍 提问</button>
+        </div>
+        <div id="quick-query-result" class="query-result" style="display:none;"></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>📊 配额使用</h2>
+        <span id="quota-refresh" class="badge" style="cursor:pointer" onclick="loadQuota()">🔄 刷新</span>
+    </div>
+    <div class="card-body">
+        <div id="quota-info" style="font-size:14px;">加载中...</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>⚡ 系统信息</h2>
+    </div>
+    <div class="card-body">
+        <div class="system-info" id="system-info">
+            <div><strong>API 版本：</strong>v1.1.0</div>
+            <div><strong>向量维度：</strong>768d (nomic-embed-text)</div>
+            <div><strong>数据库：</strong>PostgreSQL + pgvector</div>
+            <div><strong>诗词库：</strong>ChromaDB (384d 回退)</div>
+            <div><strong>AI 模型：</strong>ollama/qwen2.5-coder</div>
+        </div>
+    </div>
+</div>
+
+<script>
+function formatUptime(seconds) {
+    if (!seconds && seconds !== 0) return '-';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
+
+async function loadHealth() {
+    try {
+        const data = await apiGet('/v1/health');
+        document.getElementById('stat-status').textContent = data.status || 'ok';
+        document.getElementById('stat-status').style.color = '#10B981';
+        document.getElementById('stat-uptime').textContent = formatUptime(data.uptime_seconds);
+    } catch(e) {
+        document.getElementById('stat-status').textContent = '离线';
+        document.getElementById('stat-status').style.color = '#EF4444';
+    }
+}
+
+async function loadQuota() {
+    try {
+        const data = await apiGet('/v1/quota');
+        document.getElementById('stat-tier').textContent = data.tier || 'free';
+        document.getElementById('stat-queries').textContent = '-';
+
+        if (data.records && data.records.length > 0) {
+            document.getElementById('quota-info').innerHTML = data.records.map(r => {
+                const pct = r.daily_limit > 0 ? Math.round((r.used / r.daily_limit) * 100) : 0;
+                return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:8px 12px;background:#F8FAFC;border-radius:8px;">
+                    <div>
+                        <strong>${r.resource}</strong>
+                        <span style="color:#64748B;font-size:12px;margin-left:8px;">${r.used} / ${r.daily_limit || '∞'}</span>
+                    </div>
+                    <div style="width:120px;background:#E2E8F0;border-radius:10px;height:6px;overflow:hidden;">
+                        <div style="width:${pct}%;height:100%;background:${pct > 80 ? '#EF4444' : pct > 50 ? '#F59E0B' : '#10B981'};border-radius:10px;"></div>
+                    </div>
+                </div>`;
+            }).join('');
+        } else {
+            document.getElementById('quota-info').textContent = '暂无配额数据';
+        }
+    } catch(e) {
+        document.getElementById('quota-info').textContent = '加载配额失败: ' + e.message;
+    }
+}
+
+function quickQuery() {
+    const input = document.getElementById('quick-query-input');
+    const resultDiv = document.getElementById('quick-query-result');
+    const query = input.value.trim();
+    if (!query) return;
+
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<div class="loading">⏳ 正在思考...</div>';
+
+    apiPost('/v1/ask', {
+        query: query,
+        context_scope: 'public',
+        execution_hint: 'auto'
+    })
+    .then(data => {
+        resultDiv.innerHTML = `
+            <div class="answer-box">
+                <h4>💡 ${data.intent || '回答'} <small>(${data.tokens_used || 0}ms)</small></h4>
+                <div class="answer-text">${escapeHtml(data.answer || '').replace(/\n/g, '<br>')}</div>
+                ${data.sources && data.sources.length ? `
+                <div class="sources">
+                    <h4>📚 参考来源</h4>
+                    ${data.sources.map((s, i) => `
+                        <div class="source-item">
+                            <span class="source-badge">#${i+1}</span>
+                            <span class="source-score">相似度: ${s.score ? (s.score*100).toFixed(1) : 'N/A'}%</span>
+                            <p class="source-content">${escapeHtml(s.chunk_text || '')}</p>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
+            </div>`;
+    })
+    .catch(err => {
+        resultDiv.innerHTML = `<div class="error">❌ ${escapeHtml(err.message)}</div>`;
+    });
+}
+
+// 页面加载
+loadHealth();
+loadQuota();
+setInterval(loadHealth, 30000);
+</script>
+{% endblock %}

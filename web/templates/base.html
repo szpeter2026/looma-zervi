@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Looma 知识平台{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        /* Looma 品牌覆盖 */
+        :root {
+            --primary: #6366F1;
+            --primary-hover: #4F46E5;
+            --primary-light: #EEF2FF;
+            --bg-sidebar: #0F172A;
+        }
+        .sidebar-brand h2 { font-size: 18px; }
+        .sidebar-brand p { font-size: 12px; }
+        /* 登录页面样式 */
+        .login-container {
+            max-width: 420px;
+            margin: 80px auto;
+            padding: 40px;
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+        }
+        .login-container h1 { text-align: center; margin-bottom: 8px; font-size: 24px; }
+        .login-container .subtitle { text-align: center; margin-bottom: 28px; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: var(--text); }
+        .form-group input {
+            width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: var(--radius-sm);
+            font-size: 14px; font-family: inherit; transition: var(--transition);
+        }
+        .form-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .login-error { color: var(--danger); font-size: 13px; margin-top: 8px; text-align: center; }
+        .login-hint { text-align: center; margin-top: 16px; font-size: 13px; color: var(--text-secondary); }
+        .login-hint code { background: #F1F5F9; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        /* Token 显示区 */
+        .token-display {
+            margin-top: 16px; padding: 12px; background: #ECFDF5; border-radius: var(--radius-sm);
+            font-size: 12px; word-break: break-all; display: none;
+        }
+        /* 导航新增项 */
+        .sidebar-nav .nav-section { font-size: 11px; text-transform: uppercase; color: #64748B; padding: 12px 16px 4px; letter-spacing: 1px; }
+        /* 登出按钮 */
+        .btn-logout { background: transparent; color: #CBD5E1; border: 1px solid rgba(255,255,255,0.2); }
+        .btn-logout:hover { background: rgba(239,68,68,0.15); color: #FCA5A5; border-color: rgba(239,68,68,0.3); }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    {% if not hide_sidebar %}
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <h2>🌀 Looma</h2>
+            <p>知识平台 v0.1</p>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="/" class="{% if request.url.path == '/' %}active{% endif %}">📊 仪表盘</a></li>
+            <li><a href="/query" class="{% if request.url.path == '/query' %}active{% endif %}">💬 智能问答</a></li>
+            <li><a href="/documents" class="{% if request.url.path == '/documents' %}active{% endif %}">📄 文档管理</a></li>
+            <li><a href="/reports" class="{% if request.url.path == '/reports' %}active{% endif %}">📈 报告中心</a></li>
+            <li class="nav-section">工具</li>
+            <li><a href="/poetry" class="{% if request.url.path == '/poetry' %}active{% endif %}">📜 诗词检索</a></li>
+            <li><a href="/jobs" class="{% if request.url.path == '/jobs' %}active{% endif %}">💼 职位匹配</a></li>
+            <li><a href="/resume" class="{% if request.url.path == '/resume' %}active{% endif %}">📋 简历解析</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <span class="status-dot green"></span>
+            <span id="sidebar-status">系统运行中</span>
+        </div>
+    </nav>
+    {% endif %}
+    <main class="content" {% if hide_sidebar %}style="margin-left:0;max-width:100%;"{% endif %}>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- 全局认证状态 -->
+    <script>
+    // Token 管理（存储在 localStorage）
+    const AUTH_KEY = 'looma_token';
+    const AUTH_USER_KEY = 'looma_user';
+
+    function getToken() {
+        return localStorage.getItem(AUTH_KEY);
+    }
+    function setToken(token, user) {
+        localStorage.setItem(AUTH_KEY, token);
+        if (user) localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    }
+    function clearToken() {
+        localStorage.removeItem(AUTH_KEY);
+        localStorage.removeItem(AUTH_USER_KEY);
+    }
+    function getUser() {
+        try { return JSON.parse(localStorage.getItem(AUTH_USER_KEY) || 'null'); } catch(e) { return null; }
+    }
+    function isLoggedIn() {
+        return !!getToken();
+    }
+    function authHeaders() {
+        const token = getToken();
+        return token ? {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'} : {'Content-Type': 'application/json'};
+    }
+    function logout() {
+        clearToken();
+        window.location.href = '/login';
+    }
+
+    // 提取错误消息（处理 detail 可能是对象的情况）
+    function _extractError(err, status) {
+        const detail = typeof err.detail === 'object' ? (err.detail.message || err.detail.error || JSON.stringify(err.detail)) : err.detail;
+        return err.message || detail || ('HTTP ' + status);
+    }
+    // 全局 API 封装
+    async function apiGet(url) {
+        const res = await fetch(url, { headers: authHeaders() });
+        if (res.status === 401) { clearToken(); window.location.href = '/login'; throw new Error('未登录'); }
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(_extractError(err, res.status)); }
+        return res.json();
+    }
+    async function apiPost(url, body) {
+        const res = await fetch(url, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
+        if (res.status === 401) { clearToken(); window.location.href = '/login'; throw new Error('未登录'); }
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(_extractError(err, res.status)); }
+        return res.json();
+    }
+    async function apiDelete(url) {
+        const res = await fetch(url, { method: 'DELETE', headers: authHeaders() });
+        if (res.status === 401) { clearToken(); window.location.href = '/login'; throw new Error('未登录'); }
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(_extractError(err, res.status)); }
+        return res.json();
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
+    function formatSize(bytes) {
+        if (!bytes) return '-';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+        return (bytes/(1024*1024)).toFixed(1) + ' MB';
+    }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

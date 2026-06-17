@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}登录 - Looma{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <h1>🌀 Looma</h1>
+    <p class="subtitle">知识平台 Web 面板</p>
+
+    <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="admin@looma.local" value="admin@looma.local">
+    </div>
+    <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="login-password" placeholder="输入密码" value="admin123">
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()" style="width:100%;justify-content:center;padding:14px;">
+        🚀 登录
+    </button>
+    <div id="login-error" class="login-error"></div>
+    <div class="login-hint">
+        💡 Stub 模式已启用 — 任意凭据均可登录<br>
+        <code>admin@looma.local / admin123</code>
+    </div>
+    <div class="token-display" id="token-display"></div>
+</div>
+
+<script>
+async function doLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value.trim();
+    const errorDiv = document.getElementById('login-error');
+
+    if (!email || !password) {
+        errorDiv.textContent = '请输入邮箱和密码';
+        return;
+    }
+
+    errorDiv.textContent = '';
+    try {
+        const res = await fetch('/v1/auth/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email, password})
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            // Stub 回退：用任意 token
+            if (res.status === 501 || res.status === 404) {
+                const stubToken = btoa(email + ':' + Date.now());
+                setToken(stubToken, {email, tier: 'free'});
+                window.location.href = '/';
+                return;
+            }
+            // 处理 detail 可能是对象的情况
+            const detail = typeof err.detail === 'object' ? (err.detail.message || err.detail.error || JSON.stringify(err.detail)) : err.detail;
+            throw new Error(err.message || detail || '登录失败');
+        }
+
+        const data = await res.json();
+        setToken(data.access_token, {
+            email: email,
+            tier: data.tier || 'free',
+            user_id: data.user_id
+        });
+        window.location.href = '/';
+    } catch(err) {
+        errorDiv.textContent = err.message;
+    }
+}
+
+// 回车登录
+document.getElementById('login-password').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doLogin();
+});
+document.getElementById('login-email').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('login-password').focus();
+});
+</script>
+{% endblock %}

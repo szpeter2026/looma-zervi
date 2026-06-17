@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}智能问答 - Looma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>💬 智能问答</h1>
+    <p class="subtitle">AI 中央大脑 — 自动识别意图，分发到最佳能力端口</p>
+</div>
+
+<div class="card chat-container">
+    <div class="card-body">
+        <div class="chat-messages" id="chat-messages">
+            <div class="chat-welcome">
+                <h2>🧠 你好！我是 Looma AI 助手</h2>
+                <p>我可以帮你：RAG 知识问答、诗词检索、职位匹配、简历解析、报告生成。试试问我吧！</p>
+                <div class="quick-prompts">
+                    <button class="prompt-btn" onclick="askPrompt('请总结知识库的主要内容')">📝 RAG 问答</button>
+                    <button class="prompt-btn" onclick="askPrompt('推荐几首关于春天的唐诗')">📜 诗词检索</button>
+                    <button class="prompt-btn" onclick="askPrompt('帮我分析这份简历')">📋 简历解析</button>
+                    <button class="prompt-btn" onclick="askPrompt('生成今日日报')">📊 生成报告</button>
+                </div>
+            </div>
+        </div>
+        <div class="chat-input">
+            <textarea id="chat-input" rows="2" placeholder="输入你的问题..." onkeydown="handleChatKey(event)"></textarea>
+            <button class="btn btn-primary" onclick="sendQuery()">🚀 发送</button>
+        </div>
+        <div class="chat-options">
+            <label>执行位置:
+                <select id="exec-hint" style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;">
+                    <option value="auto">自动</option>
+                    <option value="local">本地</option>
+                    <option value="remote">远程</option>
+                </select>
+            </label>
+            <label>范围:
+                <select id="context-scope" style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;">
+                    <option value="public">公开</option>
+                    <option value="private">私有</option>
+                    <option value="both">全部</option>
+                </select>
+            </label>
+            <label><input type="checkbox" id="stream-mode" checked> 流式输出</label>
+        </div>
+    </div>
+</div>
+
+<script>
+let isProcessing = false;
+
+function handleChatKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendQuery();
+    }
+}
+
+function askPrompt(text) {
+    document.getElementById('chat-input').value = text;
+    sendQuery();
+}
+
+function sendQuery() {
+    if (isProcessing) return;
+    const input = document.getElementById('chat-input');
+    const query = input.value.trim();
+    if (!query) return;
+
+    isProcessing = true;
+    input.value = '';
+
+    const messagesDiv = document.getElementById('chat-messages');
+    const isStream = document.getElementById('stream-mode').checked;
+
+    // 移除欢迎消息
+    const welcome = messagesDiv.querySelector('.chat-welcome');
+    if (welcome) welcome.remove();
+
+    // 添加用户消息
+    messagesDiv.innerHTML += `<div class="chat-msg chat-user"><div class="msg-content">${escapeHtml(query)}</div></div>`;
+
+    // 添加 AI 占位
+    const aiMsg = document.createElement('div');
+    aiMsg.className = 'chat-msg chat-ai';
+    aiMsg.innerHTML = '<div class="msg-content"><span class="typing">⏳ 思考中...</span></div>';
+    messagesDiv.appendChild(aiMsg);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+    const execHint = document.getElementById('exec-hint').value;
+    const scope = document.getElementById('context-scope').value;
+
+    if (isStream) {
+        streamQuery(query, aiMsg, execHint, scope);
+    } else {
+        normalQuery(query, aiMsg, execHint, scope);
+    }
+}
+
+function formatSources(sources) {
+    if (!sources || !sources.length) return '';
+    return '<div class="msg-sources"><strong>参考来源：</strong>' +
+        sources.map(s => {
+            const pct = s.score ? (s.score * 100).toFixed(0) : 'N/A';
+            return `<span class="source-tag">${escapeHtml(s.chunk_text || '').slice(0,50)} (${pct}%)</span>`;
+        }).join('') +
+        '</div>';
+}
+
+function normalQuery(query, aiMsg, execHint, scope) {
+    apiPost('/v1/ask', {
+        query: query,
+        context_scope: scope,
+        execution_hint: execHint
+    })
+    .then(data => {
+        const contentDiv = aiMsg.querySelector('.msg-content');
+        let html = escapeHtml(data.answer || '').replace(/\n/g, '<br>');
+        html += `<div class="msg-meta">⏱ ${data.tokens_used || 0}ms | 🎯 ${data.intent || 'unknown'} | 📍 ${data.executed_on || 'remote'}</div>`;
+        if (data.sources && data.sources.length) {
+            html += formatSources(data.sources);
+        }
+        contentDiv.innerHTML = html;
+        isProcessing = false;
+        document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
+    })
+    .catch(err => {
+        aiMsg.querySelector('.msg-content').innerHTML = `❌ ${escapeHtml(err.message)}`;
+        isProcessing = false;
+    });
+}
+
+function streamQuery(query, aiMsg, execHint, scope) {
+    const token = getToken();
+    const body = JSON.stringify({query, context_scope: scope, execution_hint: execHint, stream: true});
+
+    fetch('/v1/ask', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + (token || 'stub'),
+            'Accept': 'text/event-stream'
+        },
+        body: body
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.message || err.detail || 'HTTP '+response.status);
+            });
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let answerText = '';
+        let metaHtml = '';
+
+        function readStream() {
+            reader.read().then(({done, value}) => {
+                if (done) {
+                    aiMsg.querySelector('.msg-content').innerHTML =
+                        metaHtml + (escapeHtml(answerText).replace(/\n/g, '<br>'));
+                    isProcessing = false;
+                    return;
+                }
+
+                const text = decoder.decode(value, {stream: true});
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.type === 'text' || data.type === 'delta') {
+                                answerText += data.content || data.answer || '';
+                                aiMsg.querySelector('.msg-content').innerHTML =
+                                    metaHtml + (escapeHtml(answerText).replace(/\n/g, '<br>'));
+                            } else if (data.type === 'meta' || data.type === 'intent') {
+                                metaHtml = `<div class="msg-meta">🎯 ${data.intent || ''} | 📍 ${data.executed_on || 'remote'}</div>`;
+                            } else if (data.type === 'error') {
+                                aiMsg.querySelector('.msg-content').innerHTML =
+                                    `❌ ${escapeHtml(data.message || data.error || '未知错误')}`;
+                                isProcessing = false;
+                                return;
+                            } else if (data.type === 'done') {
+                                aiMsg.querySelector('.msg-content').innerHTML +=
+                                    `<div class="msg-meta">✅ 完成</div>`;
+                                isProcessing = false;
+                                return;
+                            }
+                        } catch(e) { /* 跳过解析失败的行 */ }
+                    }
+                }
+                readStream();
+            }).catch(() => {
+                aiMsg.querySelector('.msg-content').innerHTML = '❌ 流式连接中断';
+                isProcessing = false;
+            });
+        }
+        readStream();
+    })
+    .catch(err => {
+        aiMsg.querySelector('.msg-content').innerHTML = `❌ ${escapeHtml(err.message)}`;
+        isProcessing = false;
+    });
+}
+
+// Enter 发送
+document.getElementById('chat-input').addEventListener('keydown', handleChatKey);
+</script>
+{% endblock %}

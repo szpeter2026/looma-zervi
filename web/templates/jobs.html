@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}职位匹配 - Looma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>💼 职位匹配</h1>
+    <p class="subtitle">上传简历，智能匹配职位 — "钱多事少离家近"三维打分</p>
+</div>
+
+<div class="card">
+    <div class="card-header"><h2>📋 简历匹配</h2></div>
+    <div class="card-body">
+        <div class="quick-query">
+            <textarea id="resume-text" rows="6" placeholder="粘贴简历文本...&#10;&#10;例如：&#10;张三，5年Python开发经验，熟悉FastAPI和PostgreSQL..."></textarea>
+        </div>
+        <div class="chat-options" style="margin-top:8px;">
+            <label>匹配数量: <input type="number" id="match-topk" value="5" min="1" max="20" style="width:70px"></label>
+            <label>范围:
+                <select id="match-scope" style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;">
+                    <option value="public">公开职位</option>
+                    <option value="private">私有职位</option>
+                </select>
+            </label>
+        </div>
+        <div class="import-actions" style="margin-top:12px;">
+            <button class="btn btn-primary" onclick="matchJobs()">🔍 智能匹配</button>
+            <button class="btn btn-secondary" onclick="loadSources()">📋 查看职位来源</button>
+        </div>
+        <div id="match-result" style="margin-top:16px;"></div>
+    </div>
+</div>
+
+<div class="card" id="sources-card" style="display:none;">
+    <div class="card-header">
+        <h2>📊 职位来源</h2>
+        <button class="btn btn-sm" onclick="document.getElementById('sources-card').style.display='none'">✕ 关闭</button>
+    </div>
+    <div class="card-body" id="sources-body"></div>
+</div>
+
+<style>
+.score-bar { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.score-bar .score-label { width: 60px; font-size: 12px; color: #64748B; }
+.score-bar .score-track { flex: 1; background: #E2E8F0; border-radius: 10px; height: 8px; overflow: hidden; }
+.score-bar .score-fill { height: 100%; border-radius: 10px; transition: width 0.5s ease; }
+.score-bar .score-val { width: 40px; font-size: 12px; font-weight: 600; text-align: right; }
+.match-item { background: #F8FAFC; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 4px solid var(--primary); }
+.match-item h4 { margin-bottom: 4px; }
+.match-item .company { color: #64748B; font-size: 13px; }
+.match-item .salary { color: #10B981; font-weight: 600; }
+.match-item .reason { margin-top: 8px; font-size: 13px; color: #64748B; }
+</style>
+
+<script>
+async function matchJobs() {
+    const resumeText = document.getElementById('resume-text').value.trim();
+    if (!resumeText) {
+        document.getElementById('match-result').innerHTML = '<div class="error">请粘贴简历文本</div>';
+        return;
+    }
+    const topK = document.getElementById('match-topk').value;
+    const scope = document.getElementById('match-scope').value;
+
+    const resultDiv = document.getElementById('match-result');
+    resultDiv.innerHTML = '<div class="loading">⏳ 正在匹配职位...</div>';
+
+    try {
+        const data = await apiPost('/v1/jobs/match', {
+            resume_text: resumeText,
+            scope: scope,
+            top_k: parseInt(topK),
+            include_analysis: true
+        });
+        resultDiv.innerHTML = `
+            <h4 style="margin-bottom:12px;">✅ 共匹配 ${data.total_evaluated || 0} 个职位</h4>
+            ${(data.matches || []).map(m => `
+                <div class="match-item">
+                    <h4>${escapeHtml(m.title || '-')} <span class="salary">${escapeHtml(m.salary_range || '')}</span></h4>
+                    <div class="company">${escapeHtml(m.company || '')} · ${escapeHtml(m.location || '')}</div>
+                    ${m.scores ? `
+                    <div style="margin-top:8px;">
+                        <div class="score-bar">
+                            <span class="score-label">💰 薪资</span>
+                            <div class="score-track"><div class="score-fill" style="width:${m.scores.money || 0}%;background:#10B981;"></div></div>
+                            <span class="score-val">${m.scores.money || 0}</span>
+                        </div>
+                        <div class="score-bar">
+                            <span class="score-label">⚡ 强度</span>
+                            <div class="score-track"><div class="score-fill" style="width:${m.scores.workload || 0}%;background:#6366F1;"></div></div>
+                            <span class="score-val">${m.scores.workload || 0}</span>
+                        </div>
+                        <div class="score-bar">
+                            <span class="score-label">📍 距离</span>
+                            <div class="score-track"><div class="score-fill" style="width:${m.scores.proximity || 0}%;background:#F59E0B;"></div></div>
+                            <span class="score-val">${m.scores.proximity || 0}</span>
+                        </div>
+                        <div class="score-bar" style="margin-top:4px;">
+                            <span class="score-label"><strong>综合</strong></span>
+                            <div class="score-track"><div class="score-fill" style="width:${m.scores.overall || 0}%;background:#EF4444;"></div></div>
+                            <span class="score-val"><strong>${m.scores.overall || 0}</strong></span>
+                        </div>
+                    </div>` : ''}
+                    ${m.reason ? `<div class="reason">💡 ${escapeHtml(m.reason)}</div>` : ''}
+                </div>
+            `).join('')}
+        `;
+    } catch(err) {
+        resultDiv.innerHTML = `<div class="error">❌ ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+async function loadSources() {
+    const card = document.getElementById('sources-card');
+    const body = document.getElementById('sources-body');
+    card.style.display = 'block';
+    try {
+        const data = await apiGet('/v1/jobs/sources');
+        body.innerHTML = (data.sources || []).map(s =>
+            `<p>📌 <strong>${escapeHtml(s.name || s)}</strong></p>`
+        ).join('') || '<p>暂无职位来源（V0 mock 数据）</p>';
+    } catch(err) {
+        body.textContent = '加载失败: ' + err.message;
+    }
+}
+</script>
+{% endblock %}
