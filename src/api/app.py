@@ -36,10 +36,11 @@ PROCESS_START_TIME = time.time()
 
 # 基础设施就绪标志
 pgvector_ready = False
-ollama_ready = False
-rag_ready = False
 llm_ready = False
+embed_ready = False
+rag_ready = False
 llm_provider_active: str = ""
+embed_provider_active: str = ""
 
 from pathlib import Path
 
@@ -59,23 +60,30 @@ from src.api.routes.web_panel import router as web_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """启动时配置 LlamaIndex 全局 Settings，种子知识库在后台线程执行"""
-    global pgvector_ready, ollama_ready, rag_ready, llm_ready, llm_provider_active
+    global pgvector_ready, llm_ready, embed_ready, rag_ready, llm_provider_active, embed_provider_active
     settings = get_settings()
 
-    # LlamaIndex 全局配置
+    # LlamaIndex 全局配置 — Embedding
     try:
         Settings.embed_model = get_embed_model()
+        embed_provider_active = get_active_embed_provider()
+        if embed_provider_active != "unavailable":
+            embed_ready = True
+            logging.getLogger("looma").info(f"Embedding provider 已连接: {embed_provider_active}")
+        else:
+            logging.getLogger("looma").warning("所有 Embedding provider 均不可用")
+    except Exception as e:
+        logging.getLogger("looma").warning(f"Embedding 初始化失败: {e}")
+
+    # LlamaIndex 全局配置 — LLM
+    try:
         Settings.llm = get_llm()
-        # 记录当前活跃 provider
         llm_provider_active = get_active_provider()
         llm_ready = Settings.llm.is_available
-        if llm_provider_active == "ollama":
-            ollama_ready = True
-            logging.getLogger("looma").info("Ollama 连接就绪")
-        elif llm_ready:
+        if llm_ready:
             logging.getLogger("looma").info(f"LLM provider 已连接: {llm_provider_active}")
         else:
-            logging.getLogger("looma").warning("LLM provider 未就绪")
+            logging.getLogger("looma").warning("所有 LLM provider 均不可用")
     except Exception as e:
         logging.getLogger("looma").warning(f"LLM 初始化失败: {e}")
 
@@ -116,6 +124,11 @@ app.add_middleware(
 _static_dir = Path(__file__).resolve().parent.parent.parent / "web" / "static"
 if _static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(_static_dir)), name="web_static")
+
+# H5 用户端静态文件
+_user_static_dir = Path(__file__).resolve().parent.parent.parent / "web" / "user" / "static"
+if _user_static_dir.exists():
+    app.mount("/user/static", StaticFiles(directory=str(_user_static_dir)), name="user_static")
 
 # ---- 注册 API 路由 ----
 app.include_router(system_router)

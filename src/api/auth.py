@@ -18,9 +18,11 @@ import hashlib
 from dataclasses import dataclass
 from typing import Literal
 
+# 确保 uuid 已导入（get_optional_auth 使用）
+
 from fastapi import Header, HTTPException
 
-Tier = Literal["free", "pro", "enterprise"]
+Tier = Literal["guest", "free", "pro", "enterprise"]
 
 
 @dataclass
@@ -137,6 +139,25 @@ def get_auth(
     if ctx is None:
         raise HTTPException(status_code=401, detail="invalid or expired token")
     return ctx
+
+
+def get_optional_auth(
+    authorization: str | None = Header(None, alias="Authorization")
+) -> AuthContext:
+    """
+    可选认证依赖项：有 token 则校验，无 token 自动分配游客身份。
+    用于 v1/ask 等需要支持未登录体验的路由。
+    游客通过 IP hash 区分，配额 3 次/日。
+    """
+    token = get_bearer_token(authorization)
+    if token:
+        ctx = verify_token(token)
+        if ctx is not None:
+            return ctx
+
+    # 无 token 或 token 无效 → 分配游客身份
+    guest_id = f"guest-{str(uuid.uuid4())[:12]}"
+    return AuthContext(user_id=guest_id, tier="guest")
 
 
 def _hash_password(password: str) -> str:

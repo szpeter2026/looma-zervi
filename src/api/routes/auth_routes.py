@@ -92,7 +92,7 @@ def auth_login(request: AuthLoginRequest):
 def quota(auth: AuthContext = Depends(get_auth)):
     """查询配额使用情况"""
     records = []
-    for resource, limit in QUOTA_LIMITS.get(auth.tier, QUOTA_LIMITS["free"]).items():
+    for resource, limit in QUOTA_LIMITS.get(auth.tier, QUOTA_LIMITS["guest"]).items():
         remaining = get_remaining(auth.user_id, auth.tier, resource)
         used = limit - remaining
         records.append(QuotaRecord(

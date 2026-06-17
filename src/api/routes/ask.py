@@ -12,9 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from src.core.config import get_settings
 
-from src.api.models import AskRequest, AskResponse, SourceNode, Intent, ExecutedOn
-from src.api.auth import AuthContext, get_auth
-from src.api.quota import consume, RESOURCE_ASK
+from src.api.models import AskRequest, AskResponse, SourceNode, Intent, ExecutedOn, UpgradeHint
+from src.api.auth import AuthContext, get_optional_auth
+from src.api.quota import consume, RESOURCE_ASK, get_remaining, build_upgrade_hint, QUOTA_LIMITS
 from src.agents.central_brain import parse_intent, dispatch
 
 logger = logging.getLogger("looma.ask")
@@ -77,19 +77,44 @@ def _intent_to_model(intent_str: str) -> Intent:
 
 
 @router.post("/v1/ask", response_model=AskResponse)
-async def ask(req: AskRequest, auth: AuthContext = Depends(get_auth)):
+async def ask(req: AskRequest, auth: AuthContext = Depends(get_optional_auth)):
     """
     单入口：用户需求由此进入，中央大脑解析意图并分发到内部端口，返回统一 JSON。
+
+    认证策略：
+    - 已登录用户：按 tier 配额扣减，超限返回 429 + upgrade 引导
+    - 未登录游客：自动分配 guest 身份，3次/日免费体验，超限返回 429 + 注册引导
     """
     # 配额检查
-    if not consume(auth.user_id, auth.tier, RESOURCE_ASK):
-        raise HTTPException(status_code=429, detail={"code": "quota_exceeded", "message": "当日配额已用尽"})
+    quota_ok = consume(auth.user_id, auth.tier, RESOURCE_ASK)
+    if not quota_ok:
+        used = QUOTA_LIMITS.get(auth.tier, QUOTA_LIMITS["guest"]).get(RESOURCE_ASK, 0)
+        remaining = get_remaining(auth.user_id, auth.tier, RESOURCE_ASK)
+        used_actual = used - remaining
+        upgrade_hint = build_upgrade_hint(auth.tier, used_actual)
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "quota_exceeded",
+                "message": "当日配额已用尽",
+                "upgrade": upgrade_hint,
+            },
+        )
 
-    if auth.tier == "free" and req.context_scope.value not in ("public",):
-        raise HTTPException(status_code=403, detail={
-            "code": "scope_forbidden",
-            "message": "当前免费版仅支持 context_scope=public",
-        })
+    # 游客和免费用户仅支持 public scope
+    if auth.tier in ("guest", "free") and req.context_scope.value not in ("public",):
+        used = QUOTA_LIMITS.get(auth.tier, QUOTA_LIMITS["guest"]).get(RESOURCE_ASK, 0)
+        remaining = get_remaining(auth.user_id, auth.tier, RESOURCE_ASK)
+        used_actual = used - remaining
+        upgrade_hint = build_upgrade_hint(auth.tier, used_actual, reason="scope_forbidden")
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "scope_forbidden",
+                "message": "当前版本仅支持 context_scope=public",
+                "upgrade": upgrade_hint,
+            },
+        )
 
     t0 = time.time()
     profile_segments: dict[str, int] = {}  # 毫秒取整
@@ -142,6 +167,15 @@ async def ask(req: AskRequest, auth: AuthContext = Depends(get_auth)):
     # 3. 提取 sources
     t_sources = time.time()
     sources_raw = result.get("_sources") or result.get("sources") or []
+
+    # poetry 意图：将 extracted 诗词信息也作为 source 暴露
+    if not sources_raw and intent_str == "poetry" and result.get("extracted"):
+        ext = result["extracted"]
+        sources_raw = [{
+            "chunk_text": f"《{ext.get('title', '')}》 {ext.get('author', '')} ({ext.get('dynasty', '')}) — {ext.get('content', '')}",
+            "score": None,
+        }]
+
     sources = [
         SourceNode(
             chunk_text=(s.get("chunk_text", "") if isinstance(s, dict) else str(s))[:200],
@@ -152,7 +186,31 @@ async def ask(req: AskRequest, auth: AuthContext = Depends(get_auth)):
     profile_segments["sources_extract"] = int((time.time() - t_sources) * 1000)
 
     elapsed = int((time.time() - t0) * 1000)
-    answer_text = result.get("answer") or result.get("message", "")
+
+    # 提取 answer：优先 result["answer"]，其次从 extracted 结构化数据构造
+    answer_text = result.get("answer") or ""
+    if not answer_text and result.get("extracted"):
+        extracted = result["extracted"]
+        if intent_str == "poetry":
+            parts = []
+            if extracted.get("title"):
+                parts.append(f"《{extracted['title']}》")
+            if extracted.get("author"):
+                parts.append(extracted["author"])
+            if extracted.get("dynasty"):
+                parts.append(f"({extracted['dynasty']})")
+            if parts:
+                answer_text = "\n".join(parts)
+            if extracted.get("content"):
+                answer_text += f"\n{extracted['content']}"
+            if extracted.get("theme"):
+                answer_text += f"\n\n主题：{extracted['theme']}"
+        elif isinstance(extracted, dict):
+            answer_text = json.dumps(extracted, ensure_ascii=False, indent=2)
+        else:
+            answer_text = str(extracted)
+    if not answer_text:
+        answer_text = result.get("message", "")
 
     # 缓存结果
     _cache_set(req.query, {

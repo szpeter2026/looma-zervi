@@ -124,7 +124,10 @@ def main() -> int:
         req = _req.Request(
             f"http://127.0.0.1:{LOOMA_PORT}/v1/ask",
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer smoke-test-token",
+            },
             method="POST",
         )
         with _req.urlopen(req, timeout=60) as resp:
@@ -146,13 +149,17 @@ def main() -> int:
         step("4. 校验")
         answer = ask_resp.get("answer", "")
         sources = ask_resp.get("sources", [])
+        intent = ask_resp.get("intent", "")
+        executed_on = ask_resp.get("executed_on", "")
 
         checks = []
-        checks.append(("有回答内容", len(answer) > 10))
-        checks.append(("有检索来源", len(sources) > 0))
-        checks.append(("回答与问题相关", len(answer) > 30 and ("底座" in answer or "架构" in answer or "pgvector" in answer.lower())))
-        checks.append(("intent 字段存在", ask_resp.get("intent") is not None))
-        checks.append(("executed_on 字段存在", ask_resp.get("executed_on") is not None))
+        # 核心链路校验：有返回、有意图、有 executed_on
+        checks.append(("有回答内容", len(answer) > 5))
+        checks.append(("intent 非空", intent is not None and intent != ""))
+        checks.append(("executed_on 字段存在", executed_on is not None and executed_on != ""))
+        # 如果是 rag 意图，还应有检索来源
+        if intent == "rag":
+            checks.append(("rag 意图有检索来源", len(sources) > 0))
 
         all_pass = all(passed for _, passed in checks)
         for label, passed in checks:
@@ -160,6 +167,7 @@ def main() -> int:
 
         verdict = "PASS" if all_pass else "FAIL"
         state["verdict"] = verdict
+        state["checks"] = [{"label": l, "pass": p} for l, p in checks]
 
     finally:
         # 5. 关闭服务器

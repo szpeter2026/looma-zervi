@@ -96,7 +96,7 @@ def _get_chroma_collection():
 
     chroma_path = os.getenv(
         "POETRY_CHROMA_PATH",
-        "D:/surface-zervi/GitHub/szjason72/Tatha/.data/chroma/poetry_full"
+        "./data/poetry_full"
     )
     client = chromadb.PersistentClient(path=chroma_path)
     return client.get_collection("poetry_full")

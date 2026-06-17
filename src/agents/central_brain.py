@@ -25,7 +25,7 @@ INTENTS = ("job_match", "resume_parse", "poetry", "credit", "mbti", "rag", "repo
 
 # 规则回退：关键词 → 意图（仅当 LLM 未启用或失败时使用）
 INTENT_KEYWORDS = {
-    "poetry": ["诗词", "诗人", "古诗", "推荐一句", "陪伴", "安慰", "思乡", "送别", "山水", "边塞", "励志", "一句诗", "唐诗", "宋词"],
+    "poetry": ["诗词", "诗人", "古诗", "推荐一句", "陪伴", "安慰", "思乡", "送别", "山水", "边塞", "励志", "一句诗", "唐诗", "宋词", "的诗", "的诗句", "词", "诗句", "绝句", "律诗", "大漠", "孤烟", "长河", "春江", "明月", "静夜"],
     "job_match": ["匹配", "职位", "找工作", "有没有适合", "岗位", "求职", "招聘"],
     "resume_parse": ["上传", "简历", "解析简历"],
     "credit": ["征信", "信用", "验证"],
@@ -273,6 +273,9 @@ def dispatch(
                             if m:
                                 resp_text = m.group(1).strip()
                         extracted = json.loads(resp_text)
+                        # LLM 可能返回 content 为数组，展平为字符串
+                        if isinstance(extracted.get("content"), list):
+                            extracted["content"] = "\n".join(extracted["content"])
                         return {"message": "已为您推荐诗词", "status": "ok", "extracted": extracted, "slots": slots}
                     except Exception:
                         best = poems[0]

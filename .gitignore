@@ -21,6 +21,7 @@ ENV/
 # ---- 烟测状态文件 ----
 .smoke_state.json
 *_smoke_*_state.json
+.smoke_state_*.json
 
 # ---- IDE ----
 .vscode/
@@ -42,3 +43,7 @@ docker-data/
 
 # ---- 日志 ----
 *.log
+
+# ---- 本地数据 & 前端用户资产（不入库）----
+data/poetry_full/
+web/user/

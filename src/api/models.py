@@ -14,6 +14,7 @@ class ExecutionHint(str, Enum):
 
 
 class Tier(str, Enum):
+    guest = "guest"
     free = "free"
     pro = "pro"
     enterprise = "enterprise"
@@ -90,6 +91,27 @@ class AskResponse(BaseModel):
     executed_on: ExecutedOn = ExecutedOn.remote
     session_id: str | None = None
     tokens_used: int = 0
+    # 转化引导：游客配额耗尽或免费用户触发升级提示
+    upgrade: "UpgradeHint | None" = None
+
+
+class UpgradeHint(BaseModel):
+    """配额不足时的升级引导信息"""
+    reason: str  # "guest_quota_exhausted" | "free_quota_exhausted" | "scope_forbidden"
+    message: str  # 面向用户的提示文案
+    daily_limit: int  # 当前档位每日上限
+    used: int  # 已使用次数
+    register_url: str | None = None  # 游客专用：注册入口
+    upgrade_tiers: list["UpgradeTierInfo"] | None = None  # 可升级档位列表
+
+
+class UpgradeTierInfo(BaseModel):
+    """可升级档位信息"""
+    tier: str  # "pro" | "enterprise"
+    name: str  # "专业版" | "企业版"
+    daily_quota: int  # 该档位每日配额
+    price_monthly: str | None = None  # "¥199/月"
+    features: list[str] = []  # 核心功能列表
 
 
 # ── /v1/rag/query ───────────────────────

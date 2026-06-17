@@ -20,89 +20,104 @@ WEB_DIR = _PROJECT_ROOT / "web"
 TEMPLATES_DIR = WEB_DIR / "templates"
 STATIC_DIR = WEB_DIR / "static"
 
+# H5 用户端模板目录
+USER_TEMPLATES_DIR = WEB_DIR / "user"
+
+
 class SilentUndefined(Undefined):
     """Jinja2 未定义变量返回空字符串，不抛异常"""
+
     def _fail_with_undefined_error(self, *args, **kwargs):
         return ""
-    __str__ = lambda self: ""
-    __iter__ = lambda self: iter([])
-    __bool__ = lambda self: False
+
+    def __str__(self) -> str:
+        return ""
+
+    def __iter__(self):
+        return iter([])
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __hash__(self) -> int:
+        return hash(None)
+
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.undefined = SilentUndefined
 
+# H5 用户端使用原生 HTML（无需 Jinja2 继承），直接读文件返回
+user_templates = Jinja2Templates(directory=str(USER_TEMPLATES_DIR))
+user_templates.env.undefined = SilentUndefined
+
 router = APIRouter(tags=["web"])
+
+
+def _render(request: Request, name: str, **extra) -> HTMLResponse:
+    """统一模板渲染：新版 Starlette 中 request 作为第一个位置参数传入。"""
+    return templates.TemplateResponse(request, name, extra)
 
 
 # ===== 页面路由 =====
 
 @router.get("/", response_class=HTMLResponse)
 async def index_page(request: Request):
-    """仪表盘首页"""
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "hide_sidebar": False,
-    })
+    return _render(request, "index.html", hide_sidebar=False)
 
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    """登录页面（无侧边栏）"""
-    return templates.TemplateResponse("login.html", {
-        "request": request,
-        "hide_sidebar": True,
-    })
+    return _render(request, "login.html", hide_sidebar=True)
 
 
 @router.get("/query", response_class=HTMLResponse)
 async def query_page(request: Request):
-    """智能问答页面"""
-    return templates.TemplateResponse("query.html", {
-        "request": request,
-        "hide_sidebar": False,
-    })
+    return _render(request, "query.html", hide_sidebar=False)
 
 
 @router.get("/documents", response_class=HTMLResponse)
 async def documents_page(request: Request):
-    """文档管理页面"""
-    return templates.TemplateResponse("documents.html", {
-        "request": request,
-        "hide_sidebar": False,
-    })
+    return _render(request, "documents.html", hide_sidebar=False)
 
 
 @router.get("/reports", response_class=HTMLResponse)
 async def reports_page(request: Request):
-    """报告中心页面"""
-    return templates.TemplateResponse("reports.html", {
-        "request": request,
-        "hide_sidebar": False,
-    })
+    return _render(request, "reports.html", hide_sidebar=False)
 
 
 @router.get("/poetry", response_class=HTMLResponse)
 async def poetry_page(request: Request):
-    """诗词检索页面"""
-    return templates.TemplateResponse("poetry.html", {
-        "request": request,
-        "hide_sidebar": False,
-    })
+    return _render(request, "poetry.html", hide_sidebar=False)
 
 
 @router.get("/jobs", response_class=HTMLResponse)
 async def jobs_page(request: Request):
-    """职位匹配页面"""
-    return templates.TemplateResponse("jobs.html", {
-        "request": request,
-        "hide_sidebar": False,
-    })
+    return _render(request, "jobs.html", hide_sidebar=False)
 
 
 @router.get("/resume", response_class=HTMLResponse)
 async def resume_page(request: Request):
-    """简历解析页面"""
-    return templates.TemplateResponse("resume.html", {
-        "request": request,
-        "hide_sidebar": False,
-    })
+    return _render(request, "resume.html", hide_sidebar=False)
+
+
+# ===== H5 用户端路由 =====
+
+def _render_user(request: Request, name: str) -> HTMLResponse:
+    """渲染 H5 用户端页面（原生 HTML，无 Jinja2 继承）"""
+    return user_templates.TemplateResponse(request, name)
+
+
+@router.get("/user", response_class=HTMLResponse)
+@router.get("/user/", response_class=HTMLResponse)
+async def user_index(request: Request):
+    return _render_user(request, "index.html")
+
+
+@router.get("/user/login", response_class=HTMLResponse)
+async def user_login(request: Request):
+    return _render_user(request, "login.html")
+
+
+@router.get("/user/profile", response_class=HTMLResponse)
+async def user_profile(request: Request):
+    return _render_user(request, "profile.html")

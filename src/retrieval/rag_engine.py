@@ -2,23 +2,22 @@
 from __future__ import annotations
 
 from llama_index.core import Settings, VectorStoreIndex, Document
-from llama_index.embeddings.ollama import OllamaEmbedding
 from src.core.config import get_settings
+from src.core.embeddings import get_embed_model
 from src.retrieval.vector_store import get_vector_store
 
 
 _index: VectorStoreIndex | None = None
 
+_embed_configured: bool = False
+
 
 def _ensure_settings() -> None:
-    """确保 LlamaIndex 全局 Settings 已配置 Ollama embedding（幂等）。"""
-    # 注意：Settings.embed_model 是 lazy property，直接 set 即可，不要 get（会触发 OpenAI 解析）
-    s = get_settings()
-    Settings.embed_model = OllamaEmbedding(
-        model_name=s.EMBED_MODEL,
-        base_url=s.OLLAMA_HOST,
-        ollama_additional_kwargs={"dim": s.EMBED_DIM},
-    )
+    """确保 LlamaIndex 全局 Settings 已配置多 provider fallback embedding（幂等）。"""
+    global _embed_configured
+    if not _embed_configured:
+        Settings.embed_model = get_embed_model()
+        _embed_configured = True
 
 
 def get_index() -> VectorStoreIndex:
