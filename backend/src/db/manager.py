@@ -14,10 +14,17 @@ Tables:
   - invite_codes       (joint)
   - usage_logs         (joint)
 """
+import json
 import os
 import sqlite3
 import uuid
 from contextlib import contextmanager
+from datetime import datetime
+
+
+def _dt_now():
+    """Helper for consistent datetime strings."""
+    return datetime.now()
 
 
 SCHEMA_SQL = """
@@ -171,6 +178,105 @@ CREATE TABLE IF NOT EXISTS usage_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_date ON usage_logs(user_id, created_at);
+
+-- ============================================
+-- Quota: quota_records (joint)
+-- ============================================
+CREATE TABLE IF NOT EXISTS quota_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    resource TEXT NOT NULL,
+    date TEXT NOT NULL,
+    used INTEGER DEFAULT 0,
+    daily_limit INTEGER NOT NULL,
+    UNIQUE(user_id, resource, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_quota_records_user ON quota_records(user_id, resource, date);
+
+-- ============================================
+-- Quota: boost_packs (joint)
+-- ============================================
+CREATE TABLE IF NOT EXISTS boost_packs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    pack_name TEXT NOT NULL DEFAULT '标准加量包',
+    credits INTEGER NOT NULL,
+    credits_used INTEGER DEFAULT 0,
+    price_yuan INTEGER DEFAULT 29,
+    purchased_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    status TEXT DEFAULT 'active'
+);
+
+CREATE INDEX IF NOT EXISTS idx_boost_packs_user ON boost_packs(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_boost_packs_expires ON boost_packs(expires_at);
+
+-- ============================================
+-- Quota: boost_consumptions (joint)
+-- ============================================
+CREATE TABLE IF NOT EXISTS boost_consumptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    boost_pack_id INTEGER NOT NULL REFERENCES boost_packs(id),
+    resource TEXT NOT NULL,
+    credits_consumed INTEGER DEFAULT 1,
+    consumed_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_boost_consumptions_user ON boost_consumptions(user_id);
+
+-- ============================================
+-- Knowledge: documents (szbenyx)
+-- ============================================
+CREATE TABLE IF NOT EXISTS documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    file_path TEXT NOT NULL UNIQUE,
+    doc_type TEXT NOT NULL,
+    file_size INTEGER DEFAULT 0,
+    metadata TEXT DEFAULT '{}',
+    status TEXT DEFAULT 'pending',
+    chunk_count INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    processed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
+
+-- ============================================
+-- Knowledge: chunks (szbenyx)
+-- ============================================
+CREATE TABLE IF NOT EXISTS chunks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    char_count INTEGER DEFAULT 0,
+    metadata TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks(document_id);
+
+-- ============================================
+-- Knowledge: query_logs (joint — data flywheel)
+-- ============================================
+CREATE TABLE IF NOT EXISTS query_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    query_text TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    response_time_ms REAL DEFAULT 0,
+    chunk_count INTEGER DEFAULT 0,
+    rating INTEGER DEFAULT NULL,
+    intent_label TEXT DEFAULT NULL,
+    user_id TEXT DEFAULT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_query_logs_time ON query_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_query_logs_user ON query_logs(user_id);
 """
 
 
@@ -506,3 +612,162 @@ class DatabaseManager:
                 (user_id, mission_id)
             ).fetchone()
         return row is not None
+
+    # ============================================
+    # Quota operations (joint)
+    # ============================================
+    def get_quota(self, user_id: str, resource: str, date: str):
+        """Get quota record for a specific user + resource + date."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM quota_records WHERE user_id=? AND resource=? AND date=?",
+                (user_id, resource, date),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def consume_quota(self, user_id: str, resource: str, date: str, limit: int) -> bool:
+        """Consume 1 quota unit. Returns True=success, False=exceeded."""
+        with self.get_conn() as conn:
+            existing = conn.execute(
+                "SELECT used FROM quota_records WHERE user_id=? AND resource=? AND date=?",
+                (user_id, resource, date),
+            ).fetchone()
+            if existing:
+                used = existing[0]
+                if used >= limit:
+                    return False
+                conn.execute(
+                    "UPDATE quota_records SET used=used+1 WHERE user_id=? AND resource=? AND date=?",
+                    (user_id, resource, date),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO quota_records (user_id, resource, date, used, daily_limit) VALUES (?, ?, ?, 1, ?)",
+                    (user_id, resource, date, limit),
+                )
+        return True
+
+    # ============================================
+    # Boost pack operations (joint)
+    # ============================================
+    def create_boost_pack(self, user_id: str, pack_name: str, credits: int,
+                          price_yuan: int = 29, days_valid: int = 30) -> int:
+        """Create a boost pack for a user."""
+        from datetime import timedelta
+        now = _dt_now()
+        expires = (now + timedelta(days=days_valid)).isoformat()
+        with self.get_conn() as conn:
+            cursor = conn.execute(
+                """INSERT INTO boost_packs (user_id, pack_name, credits, credits_used, price_yuan, purchased_at, expires_at, status)
+                   VALUES (?, ?, ?, 0, ?, ?, ?, 'active')""",
+                (user_id, pack_name, credits, price_yuan, now.isoformat(), expires),
+            )
+        return cursor.lastrowid or 0
+
+    def get_boost_credit_remaining(self, user_id: str) -> int:
+        """Get total remaining boost credits for a user."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT COALESCE(SUM(credits - credits_used), 0) AS remaining
+                   FROM boost_packs
+                   WHERE user_id=? AND status='active'
+                     AND expires_at > datetime('now')""",
+                (user_id,),
+            ).fetchone()
+        return row[0] if row else 0
+
+    def consume_boost_credit(self, user_id: str, resource: str) -> bool:
+        """Consume 1 boost credit from the earliest-expiring active pack."""
+        with self.get_conn() as conn:
+            pack = conn.execute(
+                """SELECT * FROM boost_packs
+                   WHERE user_id=? AND status='active'
+                     AND expires_at > datetime('now')
+                     AND credits_used < credits
+                   ORDER BY expires_at ASC LIMIT 1""",
+                (user_id,),
+            ).fetchone()
+
+            if not pack:
+                return False
+
+            pack_dict = dict(pack)
+            pack_id = pack_dict["id"]
+
+            conn.execute(
+                "UPDATE boost_packs SET credits_used=credits_used+1 WHERE id=?",
+                (pack_id,),
+            )
+            conn.execute(
+                "INSERT INTO boost_consumptions (user_id, boost_pack_id, resource, credits_consumed) VALUES (?, ?, ?, 1)",
+                (user_id, pack_id, resource),
+            )
+            if pack_dict["credits_used"] + 1 >= pack_dict["credits"]:
+                conn.execute("UPDATE boost_packs SET status='exhausted' WHERE id=?", (pack_id,))
+        return True
+
+    # ============================================
+    # Document operations (szbenyx)
+    # ============================================
+    def register_document(self, title: str, file_path: str, doc_type: str,
+                          file_size: int = 0, metadata: dict | None = None) -> int:
+        """Register a new document for processing."""
+        with self.get_conn() as conn:
+            cursor = conn.execute(
+                """INSERT INTO documents (title, file_path, doc_type, file_size, metadata, status, created_at)
+                   VALUES (?, ?, ?, ?, ?, 'pending', ?)""",
+                (title, file_path, doc_type, file_size, json.dumps(metadata or {}),
+                 _dt_now().isoformat())
+            )
+        return cursor.lastrowid or 0
+
+    def update_document_status(self, doc_id: int, status: str, chunk_count: int = 0):
+        with self.get_conn() as conn:
+            conn.execute(
+                "UPDATE documents SET status=?, chunk_count=?, processed_at=? WHERE id=?",
+                (status, chunk_count, _dt_now().isoformat(), doc_id)
+            )
+
+    def get_documents(self, status: str | None = None):
+        with self.get_conn() as conn:
+            if status:
+                rows = conn.execute(
+                    "SELECT * FROM documents WHERE status=? ORDER BY created_at DESC", (status,)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM documents ORDER BY created_at DESC"
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ============================================
+    # Query log operations (joint — data flywheel)
+    # ============================================
+    def log_query(self, query_text: str, provider: str, response_time_ms: float,
+                  chunk_count: int = 0, user_id: str | None = None,
+                  intent_label: str | None = None):
+        """Log a query for the data flywheel."""
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO query_logs (query_text, provider, response_time_ms, chunk_count, user_id, intent_label, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (query_text, provider, response_time_ms, chunk_count, user_id, intent_label,
+                 _dt_now().isoformat())
+            )
+
+    def rate_query(self, query_id: int, rating: int):
+        """Rate a query (1-5)."""
+        with self.get_conn() as conn:
+            conn.execute(
+                "UPDATE query_logs SET rating=? WHERE id=?",
+                (rating, query_id),
+            )
+
+    def get_last_query_id(self, user_id: str) -> int | None:
+        """Get the ID of the user's most recent query."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT id FROM query_logs WHERE user_id=? ORDER BY created_at DESC LIMIT 1",
+                (user_id,),
+            ).fetchone()
+        return row[0] if row else None

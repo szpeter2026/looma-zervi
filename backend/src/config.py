@@ -55,9 +55,44 @@ class Config:
     # Quota
     FREE_DAILY_LIMIT = int(os.getenv("FREE_DAILY_LIMIT", "30"))
 
+    # LLM Provider (multi-provider fallback: deepseek, ollama, openai)
+    LLM_PROVIDER_ORDER = os.getenv("LLM_PROVIDER_ORDER", "deepseek,ollama,openai")
+    OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "")
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "")
+
+    # Embedding provider
+    EMBED_PROVIDER_ORDER = os.getenv("EMBED_PROVIDER_ORDER", "ollama,deepseek")
+    EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text:latest")
+    EMBED_DIM = int(os.getenv("EMBED_DIM", "768"))
+
+    # API timeout
+    API_REQUEST_TIMEOUT = float(os.getenv("API_REQUEST_TIMEOUT", "90.0"))
+
+    # pgvector (optional — used by RAG engine if configured)
+    PG_HOST = os.getenv("PG_HOST", "127.0.0.1")
+    PG_PORT = int(os.getenv("PG_PORT", "5432"))
+    PG_USER = os.getenv("PG_USER", "postgres")
+    PG_PASSWORD = os.getenv("PG_PASSWORD", "postgres")
+    PG_DATABASE = os.getenv("PG_DATABASE", "looma")
+
+    # Navigator psychology layer
+    PSYCHOLOGY_ENABLED = os.getenv("PSYCHOLOGY_ENABLED", "true").lower() == "true"
+    PSYCHOLOGY_API_TYPE = os.getenv("PSYCHOLOGY_API_TYPE", "local")
+    SENTINO_API_KEY = os.getenv("SENTINO_API_KEY", "")
+
     @property
     def is_production(self):
         return self.FLASK_ENV == "production"
+
+    @property
+    def PG_DSN(self):
+        return (
+            f"postgresql://{self.PG_USER}:{self.PG_PASSWORD}"
+            f"@{self.PG_HOST}:{self.PG_PORT}/{self.PG_DATABASE}"
+        )
 
 
 def _refresh_config():
@@ -87,3 +122,21 @@ def _refresh_config():
         "http://localhost:5173,http://localhost:5174"
     ).split(",")
     Config.FREE_DAILY_LIMIT = int(os.getenv("FREE_DAILY_LIMIT", "30"))
+    Config.LLM_PROVIDER_ORDER = os.getenv("LLM_PROVIDER_ORDER", "deepseek,ollama,openai")
+    Config.OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+    Config.OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "")
+    Config.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    Config.OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "")
+    Config.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "")
+    Config.EMBED_PROVIDER_ORDER = os.getenv("EMBED_PROVIDER_ORDER", "ollama,deepseek")
+    Config.EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text:latest")
+    Config.EMBED_DIM = int(os.getenv("EMBED_DIM", "768"))
+    Config.API_REQUEST_TIMEOUT = float(os.getenv("API_REQUEST_TIMEOUT", "90.0"))
+    Config.PG_HOST = os.getenv("PG_HOST", "127.0.0.1")
+    Config.PG_PORT = int(os.getenv("PG_PORT", "5432"))
+    Config.PG_USER = os.getenv("PG_USER", "postgres")
+    Config.PG_PASSWORD = os.getenv("PG_PASSWORD", "postgres")
+    Config.PG_DATABASE = os.getenv("PG_DATABASE", "looma")
+    Config.PSYCHOLOGY_ENABLED = os.getenv("PSYCHOLOGY_ENABLED", "true").lower() == "true"
+    Config.PSYCHOLOGY_API_TYPE = os.getenv("PSYCHOLOGY_API_TYPE", "local")
+    Config.SENTINO_API_KEY = os.getenv("SENTINO_API_KEY", "")

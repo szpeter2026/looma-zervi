@@ -34,10 +34,10 @@ def require_auth(f):
 def require_tier(min_tier: str):
     """
     Require the user to have at least the given tier.
-    Tier hierarchy: free < supporter < pro
+    Tier hierarchy: guest < free < supporter < pro < enterprise
     Usage: @require_auth @require_tier("pro")
     """
-    tier_order = {"free": 0, "supporter": 1, "pro": 2}
+    tier_order = {"guest": -1, "free": 0, "supporter": 1, "pro": 2, "enterprise": 3}
 
     def decorator(f):
         @wraps(f)
@@ -51,3 +51,30 @@ def require_tier(min_tier: str):
             return f(*args, **kwargs)
         return decorated
     return decorator
+
+
+def optional_auth(f):
+    """
+    Optional auth — if token is present, set g.user_id/g.user_tier;
+    if absent, treat as guest with a random ID.
+    Used by /v1/ask where guest users also have limited quota.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            try:
+                payload = verify_token(token)
+                g.user_id = payload["sub"]
+                g.user_tier = payload.get("tier", "free")
+                return f(*args, **kwargs)
+            except Exception:
+                pass  # Invalid token → fall through to guest
+
+        import uuid
+        g.user_id = f"guest-{str(uuid.uuid4())[:12]}"
+        g.user_tier = "guest"
+        return f(*args, **kwargs)
+
+    return decorated

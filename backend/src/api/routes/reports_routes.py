@@ -3,48 +3,38 @@ Reports routes blueprint.
 Ownership: szbenyx
 
 Endpoints:
-  GET  /v1/reports/daily    - Get daily report
-  GET  /v1/reports/weekly   - Get weekly report
-  GET  /v1/reports/monthly  - Get monthly report
-  POST /v1/reports/generate - Generate a custom report
+  POST /v1/reports/generate - Generate a daily/weekly/monthly report
+  GET  /v1/reports/list     - List generated reports
 """
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify, current_app, g
 
-from src.api.auth.decorators import require_auth, require_tier
+from src.api.auth.decorators import require_auth
 
 reports_bp = Blueprint("reports", __name__)
 
 
-@reports_bp.route("/daily", methods=["GET"])
-@require_auth
-def daily_report():
-    """Get today's report for the current user."""
-    # TODO: migrate daily report generation
-    return jsonify(report=None, message="daily report endpoint - migrate logic here")
-
-
-@reports_bp.route("/weekly", methods=["GET"])
-@require_auth
-def weekly_report():
-    """Get this week's report."""
-    # TODO: migrate weekly report generation
-    return jsonify(report=None)
-
-
-@reports_bp.route("/monthly", methods=["GET"])
-@require_auth
-def monthly_report():
-    """Get this month's report."""
-    # TODO: migrate monthly report generation
-    return jsonify(report=None)
-
-
 @reports_bp.route("/generate", methods=["POST"])
 @require_auth
-@require_tier("pro")
 def generate_report():
-    """Generate a custom deep-dive report (Pro tier only)."""
+    """Generate a report (daily/weekly/monthly)."""
     data = request.get_json() or {}
-    report_type = data.get("type", "personality_deep_dive")
-    # TODO: migrate deep report generation logic
-    return jsonify(report=None, type=report_type, message="generate endpoint - migrate logic here")
+    report_type = data.get("type", "daily")
+
+    if report_type not in ("daily", "weekly", "monthly"):
+        return jsonify(error="bad_request", message="type must be daily, weekly, or monthly"), 400
+
+    try:
+        from src.pipeline.report_gen import ReportGenerator
+        reporter = ReportGenerator()
+        path = reporter.generate_report(report_type)
+        return jsonify(type=report_type, path=str(path), status="generated")
+    except Exception as e:
+        return jsonify(error="generate_failed", message=str(e)), 500
+
+
+@reports_bp.route("/list", methods=["GET"])
+@require_auth
+def list_reports():
+    """List generated reports (MVP: returns empty list)."""
+    # TODO: implement report listing from reports directory
+    return jsonify(reports=[], total=0)
