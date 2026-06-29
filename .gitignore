@@ -54,3 +54,8 @@ docker/data/
 
 # Miniprogram
 frontend/packages/miniprogram/miniprogram_npm/
+# WeChat DevTools auto-compiles .ts → .js in-place; ignore generated .js (keep .ts source)
+# NOTE: This rule is in root .gitignore (NOT in miniprogram/.gitignore) because
+# WeChat DevTools reads miniprogram/.gitignore as a packaging exclusion rule.
+frontend/packages/miniprogram/**/*.js
+!frontend/packages/miniprogram/typings/*.d.ts
