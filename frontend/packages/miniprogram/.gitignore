@@ -1,0 +1,17 @@
+# WeChat DevTools auto-generated JS from TS
+**/*.js
+!**/*.js.map
+
+# Node
+node_modules/
+
+# Build output
+dist/
+miniprogram_npm/
+
+# IDE
+*.project.settings.json
+
+# OS
+.DS_Store
+Thumbs.db

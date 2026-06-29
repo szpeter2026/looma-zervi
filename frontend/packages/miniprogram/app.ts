@@ -18,13 +18,17 @@ App({
   },
 
   onLaunch() {
+    console.log('[App] onLaunch - PlanetX starting...')
+    
     // Restore token from storage
     const token = wx.getStorageSync('looma_token')
     if (token) {
+      console.log('[App] Found saved token, restoring session')
       store.set('token', token)
       this.globalData.token = token
       this.loadProfile()
     } else {
+      console.log('[App] No saved token, starting WeChat login')
       // Auto-login with WeChat
       this.wechatLogin()
     }
@@ -37,17 +41,22 @@ App({
    * 3. Cache token + load game profile
    */
   wechatLogin() {
+    console.log('[App] wechatLogin() called')
     wx.login({
       success: (res) => {
+        console.log('[App] wx.login success, code:', res.code ? 'received' : 'MISSING')
         if (!res.code) {
           console.error('[App] wx.login failed: no code')
-          eventBus.emit('auth:login', { success: false })
+          eventBus.emit('auth:login', { success: false, error: 'no_code' })
           return
         }
 
+        console.log('[App] Calling authApi.wechatLogin with code...')
         authApi.wechatLogin(res.code).then((data: any) => {
-          if (data.access_token) {
+          console.log('[App] auth response:', JSON.stringify(data)?.slice(0, 200))
+          if (data && data.access_token) {
             const token = data.access_token
+            console.log('[App] Login SUCCESS - token received')
             store.set('token', token)
             store.set('user', data.user)
             this.globalData.token = token
@@ -57,17 +66,17 @@ App({
             // Load full game profile
             this.loadProfile()
           } else {
-            console.error('[App] auth failed:', data)
-            eventBus.emit('auth:login', { success: false })
+            console.error('[App] auth failed: no access_token in response')
+            eventBus.emit('auth:login', { success: false, error: 'no_token' })
           }
         }).catch((err: any) => {
-          console.error('[App] auth network error:', err)
-          eventBus.emit('auth:login', { success: false, error: err })
+          console.error('[App] auth network error:', err?.message || err || 'unknown')
+          eventBus.emit('auth:login', { success: false, error: err?.message || 'network' })
         })
       },
       fail: (err) => {
-        console.error('[App] wx.login error:', err)
-        eventBus.emit('auth:login', { success: false, error: err })
+        console.error('[App] wx.login error:', JSON.stringify(err))
+        eventBus.emit('auth:login', { success: false, error: 'wx_login_failed' })
       },
     })
   },
@@ -77,15 +86,22 @@ App({
    */
   loadProfile() {
     const token = store.get('token')
-    if (!token) return
+    if (!token) {
+      console.warn('[App] loadProfile called but no token')
+      return
+    }
+
+    console.log('[App] Loading game profile...')
 
     // Load game profile (XP, level, personality, fleet)
     gameApi.getProfile().then((data: any) => {
+      console.log('[App] Game profile loaded:', JSON.stringify(data)?.slice(0, 150))
       store.applyGameProfile(data)
     }).catch((err: any) => {
-      console.error('[App] game profile error:', err)
+      console.warn('[App] Game profile error (non-critical):', err?.message || err)
       // If 401, token expired
-      if (err.message?.includes('过期') || err.message?.includes('Unauthorized')) {
+      if (err.message?.includes('过期') || err.message?.includes('Unauthorized') || err.message?.includes('401')) {
+        console.warn('[App] Token expired, re-logging in')
         store.reset()
         wx.removeStorageSync('looma_token')
         this.globalData.token = null
@@ -95,10 +111,12 @@ App({
 
     // Also load auth profile for user info
     authApi.profile().then((data: any) => {
+      console.log('[App] Auth profile loaded')
       store.set('user', data)
       this.globalData.userInfo = data
-    }).catch(() => {
+    }).catch((err: any) => {
       // Non-critical, game profile is more important
+      console.warn('[Auth] Profile fetch failed (non-critical):', err?.message || err)
     })
   },
 

@@ -14,6 +14,8 @@ interface RequestOptions {
   data?: any
   /** Skip auth header (e.g. for login) */
   noAuth?: boolean
+  /** Request timeout in ms (default: 10000) */
+  timeout?: number
 }
 
 export function request<T = any>(options: RequestOptions): Promise<T> {
@@ -26,11 +28,15 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
       header['Authorization'] = `Bearer ${token}`
     }
 
+    const fullUrl = `${API_BASE}${options.url}`
+    console.log(`[API] ${options.method || 'GET'} ${fullUrl}`)
+
     wx.request({
-      url: `${API_BASE}${options.url}`,
+      url: fullUrl,
       method: options.method || 'GET',
       data: options.data,
       header,
+      timeout: options.timeout || 10000,
       success: (resp: any) => {
         if (resp.statusCode >= 200 && resp.statusCode < 300) {
           resolve(resp.data as T)
@@ -42,11 +48,20 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
           reject(new Error('登录已过期，请重新登录'))
         } else {
           const msg = resp.data?.message || resp.data?.error || `HTTP ${resp.statusCode}`
+          console.error(`[API] Error ${resp.statusCode}:`, msg)
           reject(new Error(msg))
         }
       },
       fail: (err) => {
-        reject(new Error(err.errMsg || '网络错误'))
+        // Provide clearer error messages for common network issues
+        let errMsg = err.errMsg || '网络错误'
+        if (errMsg.includes('timeout')) {
+          errMsg = '请求超时，服务器响应过慢'
+        } else if (errMsg.includes('fail')) {
+          errMsg = `网络连接失败 (${API_BASE})`
+        }
+        console.error('[API] Request failed:', errMsg)
+        reject(new Error(errMsg))
       },
     })
   })
@@ -61,6 +76,7 @@ export const authApi = {
       method: 'POST',
       data: { code },
       noAuth: true,
+      timeout: 8000,
     })
   },
 
