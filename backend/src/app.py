@@ -5,11 +5,12 @@ Registers all blueprints, middleware, and error handlers.
 from flask import Flask, jsonify
 from flask_cors import CORS
 
-from src.config import Config
+from src.config import Config, _refresh_config
 
 
 def create_app(env="development"):
     app = Flask(__name__)
+    _refresh_config()  # re-read env vars so per-test overrides are picked up
     app.config.from_object(Config)
 
     # CORS

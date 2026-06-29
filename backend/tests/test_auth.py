@@ -5,6 +5,7 @@ Run: pytest tests/test_auth.py -v
 import pytest
 import sys
 import os
+import tempfile
 
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -12,13 +13,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 @pytest.fixture
 def app():
-    """Create a test app with in-memory database."""
-    os.environ["DATABASE_PATH"] = ":memory:"
+    """Create a test app with a temporary database file."""
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+
+    os.environ["DATABASE_PATH"] = tmp.name
     os.environ["JWT_SECRET"] = "test-secret"
     os.environ["SECRET_KEY"] = "test-flask-secret"
     from src.app import create_app
-    app = create_app("testing")
-    yield app
+    _app = create_app("testing")
+    yield _app
+
+    try:
+        os.unlink(tmp.name)
+    except OSError:
+        pass
 
 
 @pytest.fixture

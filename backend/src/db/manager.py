@@ -17,7 +17,6 @@ Tables:
 import os
 import sqlite3
 import uuid
-from datetime import datetime
 from contextlib import contextmanager
 
 
@@ -176,19 +175,38 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_user_date ON usage_logs(user_id, creat
 
 
 class DatabaseManager:
-    """Thread-safe SQLite manager with WAL mode."""
+    """Thread-safe SQLite manager with WAL mode.
+
+    For in-memory databases (testing), uses URI format with cache=shared
+    so that all connections share the same in-memory DB.
+    """
 
     def __init__(self, db_path: str):
         self.db_path = db_path
-        os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+        self._is_memory = db_path == ":memory:"
+        if not self._is_memory:
+            os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+
+    def _connect(self):
+        """Create a new SQLite connection."""
+        if self._is_memory:
+            # Use URI format to share in-memory DB across connections
+            conn = sqlite3.connect(
+                "file:memdb1?mode=memory&cache=shared",
+                uri=True,
+            )
+        else:
+            conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        if not self._is_memory:
+            conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        return conn
 
     @contextmanager
     def get_conn(self):
         """Get a SQLite connection with WAL mode enabled."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
+        conn = self._connect()
         try:
             yield conn
             conn.commit()
@@ -296,3 +314,195 @@ class DatabaseManager:
                    WHERE user_id = ?""",
                 (xp_amount, user_id)
             )
+
+    def update_level(self, user_id: str, level: int):
+        """Update the user's game level."""
+        with self.get_conn() as conn:
+            conn.execute(
+                """UPDATE game_profiles SET level = ?, updated_at = datetime('now')
+                   WHERE user_id = ?""",
+                (level, user_id)
+            )
+
+    # ============================================
+    # Fleet operations (Jason)
+    # ============================================
+    def create_fleet(self, captain_id: str, name: str, description: str = ""):
+        """Create a new fleet. Captain is auto-added as first member."""
+        fleet_id = str(uuid.uuid4())
+        member_id = str(uuid.uuid4())
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO fleets (id, name, captain_id, description)
+                   VALUES (?, ?, ?, ?)""",
+                (fleet_id, name, captain_id, description)
+            )
+            conn.execute(
+                """INSERT INTO fleet_members (id, fleet_id, user_id)
+                   VALUES (?, ?, ?)""",
+                (member_id, fleet_id, captain_id)
+            )
+        return fleet_id
+
+    def get_fleet_by_id(self, fleet_id: str):
+        """Get fleet details by ID."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM fleets WHERE id = ?", (fleet_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_user_fleet(self, user_id: str):
+        """Get the fleet the user belongs to (one fleet per user in MVP)."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT f.* FROM fleets f
+                   JOIN fleet_members fm ON f.id = fm.fleet_id
+                   WHERE fm.user_id = ?""",
+                (user_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_fleet_members(self, fleet_id: str):
+        """Get all members of a fleet."""
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT fm.id, fm.fleet_id, fm.user_id, fm.joined_at,
+                          u.name, u.email
+                   FROM fleet_members fm
+                   JOIN users u ON fm.user_id = u.id
+                   WHERE fm.fleet_id = ?""",
+                (fleet_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def join_fleet(self, fleet_id: str, user_id: str):
+        """Add a user to a fleet. Raises if fleet doesn't exist or user already in one."""
+        member_id = str(uuid.uuid4())
+        with self.get_conn() as conn:
+            # Verify fleet exists
+            fleet = conn.execute(
+                "SELECT id FROM fleets WHERE id = ?", (fleet_id,)
+            ).fetchone()
+            if not fleet:
+                raise ValueError(f"Fleet {fleet_id} does not exist")
+
+            # Check user not already in a fleet (MVP: one fleet per user)
+            existing = conn.execute(
+                """SELECT fm.fleet_id FROM fleet_members fm
+                   WHERE fm.user_id = ?""",
+                (user_id,)
+            ).fetchone()
+            if existing:
+                raise ValueError(
+                    f"User {user_id} already in fleet {existing['fleet_id']}"
+                )
+
+            conn.execute(
+                """INSERT INTO fleet_members (id, fleet_id, user_id)
+                   VALUES (?, ?, ?)""",
+                (member_id, fleet_id, user_id)
+            )
+
+    def leave_fleet(self, user_id: str):
+        """Remove a user from their fleet. Captain cannot leave (must dissolve)."""
+        with self.get_conn() as conn:
+            # Find user's current fleet
+            membership = conn.execute(
+                """SELECT fm.fleet_id, fm.user_id FROM fleet_members fm
+                   WHERE fm.user_id = ?""",
+                (user_id,)
+            ).fetchone()
+            if not membership:
+                return  # User not in any fleet, nothing to do
+
+            fleet_id = membership["fleet_id"]
+
+            # Check if user is captain — captain cannot leave, must dissolve
+            fleet = conn.execute(
+                "SELECT captain_id FROM fleets WHERE id = ?", (fleet_id,)
+            ).fetchone()
+            if fleet and fleet["captain_id"] == user_id:
+                raise ValueError("Captain cannot leave fleet; dissolve the fleet instead")
+
+            conn.execute(
+                "DELETE FROM fleet_members WHERE user_id = ? AND fleet_id = ?",
+                (user_id, fleet_id)
+            )
+
+    def dissolve_fleet(self, fleet_id: str, captain_id: str):
+        """Dissolve a fleet. Only the captain can dissolve. Removes all members."""
+        with self.get_conn() as conn:
+            fleet = conn.execute(
+                "SELECT * FROM fleets WHERE id = ?", (fleet_id,)
+            ).fetchone()
+            if not fleet:
+                raise ValueError(f"Fleet {fleet_id} does not exist")
+            if fleet["captain_id"] != captain_id:
+                raise ValueError("Only the captain can dissolve the fleet")
+
+            conn.execute(
+                "DELETE FROM fleet_members WHERE fleet_id = ?", (fleet_id,)
+            )
+            conn.execute(
+                "DELETE FROM fleets WHERE id = ?", (fleet_id,)
+            )
+
+    def get_fleet_member_count(self, fleet_id: str) -> int:
+        """Get number of members in a fleet."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) as cnt FROM fleet_members WHERE fleet_id = ?",
+                (fleet_id,)
+            ).fetchone()
+        return row["cnt"] if row else 0
+
+    # ============================================
+    # Mission operations (Jason)
+    # ============================================
+    def complete_mission(self, user_id: str, mission_id: str, xp_reward: int = 0):
+        """Record a mission completion. Returns (completion_id, was_new).
+        If user already completed this mission, returns (None, False) — no double reward."""
+        completion_id = str(uuid.uuid4())
+        with self.get_conn() as conn:
+            try:
+                conn.execute(
+                    """INSERT INTO mission_completions (id, user_id, mission_id, xp_reward)
+                       VALUES (?, ?, ?, ?)""",
+                    (completion_id, user_id, mission_id, xp_reward)
+                )
+            except sqlite3.IntegrityError:
+                # UNIQUE(user_id, mission_id) — already completed
+                return None, False
+
+            # Award XP to game profile
+            if xp_reward > 0:
+                conn.execute(
+                    """UPDATE game_profiles SET xp = xp + ?, updated_at = datetime('now')
+                       WHERE user_id = ?""",
+                    (xp_reward, user_id)
+                )
+
+        return completion_id, True
+
+    def get_user_missions(self, user_id: str):
+        """Get all missions completed by a user."""
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT mc.id, mc.mission_id, mc.xp_reward, mc.completed_at
+                   FROM mission_completions mc
+                   WHERE mc.user_id = ?
+                   ORDER BY mc.completed_at DESC""",
+                (user_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def is_mission_completed(self, user_id: str, mission_id: str) -> bool:
+        """Check if a user has already completed a specific mission."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT id FROM mission_completions
+                   WHERE user_id = ? AND mission_id = ?""",
+                (user_id, mission_id)
+            ).fetchone()
+        return row is not None
