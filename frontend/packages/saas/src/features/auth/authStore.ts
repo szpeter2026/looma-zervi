@@ -58,15 +58,18 @@ export const useSaasAuthStore = create<AuthState>()(
       login: async (email, password) => {
         set({ isLoading: true });
         const api = getAuthApi();
-        const resp = await api.login(email, password);
-        set({ token: resp.access_token, user: resp.user, isAuthenticated: true, isLoading: false });
+        const resp = await api.login({ email, password });
+        set({ token: resp.access_token, user: resp.user as UserProfile, isAuthenticated: true, isLoading: false });
+        // 登录后拉取完整 profile（含 is_early_adopter / created_at）
+        await get().fetchProfile();
       },
 
       register: async (email, password, name) => {
         set({ isLoading: true });
         const api = getAuthApi();
-        const resp = await api.register(email, password, name);
-        set({ token: resp.access_token, user: resp.user, isAuthenticated: true, isLoading: false });
+        const resp = await api.register({ email, password, name });
+        set({ token: resp.access_token, user: resp.user as UserProfile, isAuthenticated: true, isLoading: false });
+        await get().fetchProfile();
       },
 
       logout: () => {
@@ -78,7 +81,7 @@ export const useSaasAuthStore = create<AuthState>()(
         if (!token) return;
         try {
           const api = getAuthApi();
-          const profile = await api.getProfile();
+          const profile = await api.profile();
           set({ user: profile, isAuthenticated: true });
         } catch {
           // Token expired/invalid -> logout

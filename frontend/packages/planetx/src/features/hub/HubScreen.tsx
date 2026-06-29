@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { usePlanetXStore, getRankName, IDENTITY_LABELS } from '../auth/planetxAuthStore'
+import { usePlanetXStore, IDENTITY_LABELS } from '../auth/planetxAuthStore'
 import type { MissionId } from '../auth/planetxAuthStore'
 import XPBar from '../../brand/components/XPBar'
 import FleetPanel from '../../brand/components/FleetPanel'

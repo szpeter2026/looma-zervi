@@ -88,6 +88,12 @@ export interface ApiClientConfig {
   baseURL: string;
   storage?: StorageAdapter;
   tokenKey?: string;
+  /**
+   * Optional custom token resolver.
+   * When provided, the client calls this function instead of reading from storage.
+   * Useful when the token is managed by a Zustand store (e.g. `@looma/shared-core` consumers).
+   */
+  getToken?: () => string | null | Promise<string | null>;
   onUnauthorized?: () => void;
   timeout?: number;
 }
@@ -124,6 +130,7 @@ export class ApiClient {
   private tokenKey: string;
   private onUnauthorized?: () => void;
   private defaultTimeout: number;
+  private externalGetToken?: () => string | null | Promise<string | null>;
 
   constructor(config: ApiClientConfig) {
     this.baseURL = config.baseURL.replace(/\/$/, "");
@@ -131,9 +138,14 @@ export class ApiClient {
     this.tokenKey = config.tokenKey || "looma_token";
     this.onUnauthorized = config.onUnauthorized;
     this.defaultTimeout = config.timeout || 30000;
+    this.externalGetToken = config.getToken;
   }
 
   private async getToken(): Promise<string | null> {
+    if (this.externalGetToken) {
+      const result = this.externalGetToken();
+      return resolveStorageValue(result);
+    }
     return resolveStorageValue(this.storage.getItem(this.tokenKey));
   }
 

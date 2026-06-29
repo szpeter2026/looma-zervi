@@ -230,8 +230,8 @@ interface PlanetXState {
   isLoading: boolean
 
   // 游戏
-  identity: Identity | null
-  personalityType: PersonalityType | null
+  identity: Identity | undefined
+  personalityType: PersonalityType | undefined
 
   // XP
   level: number
@@ -295,8 +295,8 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
   isAuthenticated: false,
   isLoading: false,
 
-  identity: null,
-  personalityType: null,
+  identity: undefined,
+  personalityType: undefined,
 
   level: 1,
   xp: 0,
@@ -384,10 +384,10 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
   login: async (email, password) => {
     try {
       const authApi = getAuthApi()
-      const resp = await authApi.login(email, password)
+      const resp = await authApi.login({ email, password })
       set({
         token: resp.access_token,
-        user: { ...resp.user, identity: null, personality_type: null },
+        user: { ...resp.user, identity: undefined, personality_type: undefined } as any,
         isAuthenticated: true,
       })
       // 加载完整 profile
@@ -405,10 +405,10 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
   register: async (email, password) => {
     try {
       const authApi = getAuthApi()
-      const resp = await authApi.register(email, password)
+      const resp = await authApi.register({ email, password })
       set({
         token: resp.access_token,
-        user: { ...resp.user, identity: null, personality_type: null },
+        user: { ...resp.user, identity: undefined, personality_type: undefined } as any,
         isAuthenticated: true,
       })
       get().setToast('注册成功！欢迎加入 PlanetX 🚀')
@@ -424,7 +424,7 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
   logout: () => {
     set({
       token: null, user: null, isAuthenticated: false,
-      identity: null, personalityType: null,
+      identity: undefined, personalityType: undefined,
       level: 1, xp: 0, xpToNext: 100, missionsCompleted: [],
       fleet: null, teamSize: 0, fleetMembers: [],
       screen: 'auth',
@@ -467,11 +467,11 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
 
       if (data) {
         set({
-          identity: data.identity ?? null,
+          identity: data.identity ?? undefined,
           level: data.level ?? 1,
           xp: data.xp ?? 0,
           xpToNext: data.xp_to_next ?? 100,
-          personalityType: data.personality_type ?? null,
+          personalityType: data.personality_type ?? undefined,
           missionsCompleted: data.missions_completed ?? [],
           fleet: data.fleet ?? null,
           teamSize: data.team_size ?? 0,
