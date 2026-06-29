@@ -31,6 +31,7 @@ class Config:
     # WeChat
     WECHAT_APPID = os.getenv("WECHAT_APPID", "")
     WECHAT_APP_SECRET = os.getenv("WECHAT_APP_SECRET", "")
+    WECHAT_DEV_MODE = os.getenv("WECHAT_DEV_MODE", "false").lower() == "true"
 
     # DeepSeek
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
@@ -109,6 +110,7 @@ def _refresh_config():
     Config.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     Config.WECHAT_APPID = os.getenv("WECHAT_APPID", "")
     Config.WECHAT_APP_SECRET = os.getenv("WECHAT_APP_SECRET", "")
+    Config.WECHAT_DEV_MODE = os.getenv("WECHAT_DEV_MODE", "false").lower() == "true"
     Config.DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
     Config.DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
     Config.DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")

@@ -8,7 +8,7 @@ import { eventBus } from './utils/event-bus'
 import { store } from './utils/store'
 import { authApi, gameApi } from './utils/api'
 
-const API_BASE = 'https://api.genz.ltd'
+const API_BASE = 'http://localhost:5200'
 
 App({
   globalData: {
