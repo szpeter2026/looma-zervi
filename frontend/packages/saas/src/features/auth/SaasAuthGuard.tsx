@@ -4,22 +4,45 @@
  *
  * Checks for looma JWT in the auth store.
  * If not authenticated, redirects to /login.
+ * On mount with a stored token, fetches profile to validate.
  */
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useSaasAuthStore } from "./authStore";
 
 export function SaasAuthGuard({ children }: { children?: ReactNode }) {
   const { token, isAuthenticated, fetchProfile } = useSaasAuthStore();
   const location = useLocation();
+  const [validating, setValidating] = useState(false);
 
   useEffect(() => {
-    if (token && !isAuthenticated) {
-      fetchProfile().catch(() => {
-        useSaasAuthStore.getState().logout();
-      });
+    if (token && !isAuthenticated && !validating) {
+      setValidating(true);
+      fetchProfile()
+        .catch(() => {
+          useSaasAuthStore.getState().logout();
+        })
+        .finally(() => setValidating(false));
     }
-  }, [token, isAuthenticated, fetchProfile]);
+  }, [token, isAuthenticated, fetchProfile, validating]);
+
+  // Show loading while validating stored token
+  if (token && !isAuthenticated && validating) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          color: "var(--color-text-secondary)",
+          fontFamily: "system-ui, sans-serif",
+        }}
+      >
+        <p>验证登录状态...</p>
+      </div>
+    );
+  }
 
   if (!token) {
     return <Navigate to="/login" state={{ from: location }} replace />;

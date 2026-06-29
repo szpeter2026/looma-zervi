@@ -1,28 +1,19 @@
 /**
- * App Layout - SaaS shell with sidebar + header.
+ * App Layout - SaaS shell with sidebar + header + content.
  * Owner: szbenyx
  *
  * Structure:
- *   ┌──────────────────────────────┐
- *   │ Sidebar │      Header         │
- *   │         ├─────────────────────┤
- *   │  - Dash │                     │
- *   │  - Chat │     <Outlet />      │
- *   │  - HR   │                     │
- *   │  - Docs │                     │
- *   │  - Ent  │                     │
- *   └─────────┴─────────────────────┘
+ *   ┌──────────────────────────────────────┐
+ *   │ Sidebar │      Header                 │
+ *   │         ├─────────────────────────────┤
+ *   │         │                             │
+ *   │         │       <Outlet />            │
+ *   │         │                             │
+ *   └─────────┴─────────────────────────────┘
  */
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { useSaasAuthStore } from "../../features/auth/authStore";
-
-const navItems = [
-  { to: "/dashboard", label: "仪表盘" },
-  { to: "/chat", label: "知识库" },
-  { to: "/hr", label: "候选人" },
-  { to: "/docs", label: "文档" },
-  { to: "/enterprise", label: "企业设置" },
-];
+import Sidebar from "./Sidebar";
 
 export function AppLayout() {
   const { user, logout } = useSaasAuthStore();
@@ -34,71 +25,40 @@ export function AppLayout() {
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      {/* Sidebar */}
-      <aside
-        style={{
-          width: "var(--sidebar-width)",
-          background: "var(--color-bg-sidebar)",
-          color: "var(--color-text-sidebar)",
-          padding: "16px 0",
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ padding: "0 20px 20px", fontSize: "18px", fontWeight: 600 }}>
-          T空间
-        </div>
-        <nav>
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              style={({ isActive }) => ({
-                display: "block",
-                padding: "10px 20px",
-                color: isActive
-                  ? "var(--color-text-sidebar-active)"
-                  : "var(--color-text-sidebar)",
-                textDecoration: "none",
-                background: isActive ? "rgba(255,255,255,0.1)" : "none",
-              })}
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-      </aside>
+    <div className="flex min-h-screen">
+      {/* Sidebar - fixed position component handles its own positioning */}
+      <Sidebar />
 
-      {/* Main content */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      {/* Main content area - offset by sidebar width */}
+      <div
+        className="flex-1 flex flex-col min-h-screen"
+        style={{ marginLeft: "var(--sidebar-width)" }}
+      >
+        {/* Header */}
         <header
+          className="flex items-center justify-between px-6 border-b border-gray-200 shrink-0"
           style={{
             height: "var(--header-height)",
-            background: "var(--color-bg-card)",
-            borderBottom: "1px solid #e0e0e0",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 24px",
+            backgroundColor: "var(--color-bg-card)",
           }}
         >
-          <span style={{ color: "var(--color-text-secondary)", fontSize: "14px" }}>
+          <span className="text-sm text-[var(--color-text-secondary)]">
             {user?.email || "Loading..."}
           </span>
           <button
             onClick={handleLogout}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--color-danger)",
-              cursor: "pointer",
-              fontSize: "14px",
-            }}
+            className="bg-transparent border-none cursor-pointer text-sm"
+            style={{ color: "var(--color-danger)" }}
           >
-            退出
+            退出登录
           </button>
         </header>
-        <main style={{ flex: 1, padding: "24px", background: "var(--color-bg-page)" }}>
+
+        {/* Page content */}
+        <main
+          className="flex-1 p-6"
+          style={{ backgroundColor: "var(--color-bg-page)" }}
+        >
           <Outlet />
         </main>
       </div>

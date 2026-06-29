@@ -4,8 +4,8 @@
  * Does NOT import PlanetX styles.
  */
 
-@import "./brand/tokens.css";
-@import "./brand/markdown.css";
+@import "../brand/tokens.css";
+@import "../brand/markdown.css";
 
 * {
   margin: 0;
@@ -13,13 +13,39 @@
   box-sizing: border-box;
 }
 
-body {
+html, body {
   background: var(--color-bg-page);
   color: var(--color-text-primary);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* Utility: line clamp */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Transitions */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }

@@ -1,11 +1,11 @@
 /**
  * PlanetX animations - game-style motion.
- * starPulse, xSpin, screenIn, claimPulse
+ * starPulse, xSpin, screenIn, fadeIn, claimPulse
  */
 
 @keyframes starPulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.1); }
+  0%, 100% { opacity: 0.15; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(2.2); }
 }
 
 @keyframes xSpin {
@@ -14,7 +14,7 @@
 }
 
 @keyframes screenIn {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -22,4 +22,9 @@
   0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.5); }
   50% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
   100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }

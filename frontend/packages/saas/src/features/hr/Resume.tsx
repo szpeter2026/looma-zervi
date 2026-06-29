@@ -1,0 +1,275 @@
+/**
+ * Resume - Upload and AI parsing page.
+ * Owner: szbenyx
+ *
+ * Pure CSS + Tailwind (no tdesign-react).
+ * Uses authStore for token, direct fetch for file upload.
+ */
+import { useState, useRef } from "react";
+import { createApiClient } from "@looma/shared-core";
+import { useSaasAuthStore } from "../auth/authStore";
+
+interface ResumeExperience {
+  title: string;
+  company: string;
+  start_date: string;
+  end_date?: string;
+  description: string;
+}
+
+interface ResumeEducation {
+  school: string;
+  major: string;
+  degree: string;
+}
+
+interface ParsedResume {
+  name?: string;
+  email?: string;
+  phone?: string;
+  skills: string[];
+  experience: ResumeExperience[];
+  education: ResumeEducation[];
+  summary?: string;
+}
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+export default function Resume() {
+  const { token } = useSaasAuthStore();
+  const [resume, setResume] = useState<ParsedResume | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const api = createApiClient({
+    baseURL: API_BASE,
+    getToken: () => token,
+  });
+
+  const handleUpload = async (file: File) => {
+    setParsing(true);
+    setMsg(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const text = await file.text();
+      const data = await api.post<ParsedResume>("/v1/resume/upload", { content: text, filename: file.name });
+      setResume(data);
+      setMsg("简历解析完成");
+    } catch {
+      setMsg("解析失败，请检查文件格式");
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleUpload(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleUpload(file);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6" style={{ color: "var(--color-text-primary)" }}>
+        简历解析
+      </h1>
+
+      {/* 上传区域 */}
+      <div
+        className={`rounded-lg p-8 mb-6 text-center border-2 border-dashed transition-colors cursor-pointer ${
+          dragOver ? "border-[var(--color-primary)] bg-blue-50" : ""
+        }`}
+        style={{
+          backgroundColor: "var(--color-bg-card)",
+          borderColor: dragOver ? "var(--color-primary)" : "#e0e0e0",
+          boxShadow: "var(--shadow-sm)",
+        }}
+        onClick={() => fileInputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,.doc"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+        <span className="text-4xl block mb-3">📄</span>
+        <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>
+          点击或拖拽上传简历
+        </p>
+        <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
+          支持 PDF / Word 格式，AI 自动提取关键信息
+        </p>
+      </div>
+
+      {parsing && (
+        <div className="text-center text-sm mb-4" style={{ color: "var(--color-text-secondary)" }}>
+          AI 正在解析简历，请稍候...
+        </div>
+      )}
+
+      {msg && (
+        <p
+          className="text-sm mb-4 text-center"
+          style={{
+            color: msg.includes("完成") ? "var(--color-success)" : "var(--color-danger)",
+          }}
+        >
+          {msg}
+        </p>
+      )}
+
+      {/* 解析结果 */}
+      {resume && (
+        <div
+          className="rounded-lg p-6"
+          style={{
+            backgroundColor: "var(--color-bg-card)",
+            boxShadow: "var(--shadow-sm)",
+          }}
+        >
+          <h2 className="text-lg font-bold mb-4" style={{ color: "var(--color-text-primary)" }}>
+            解析结果
+          </h2>
+
+          {/* 基本信息 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+            {resume.name && (
+              <div className="flex items-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                <span>👤</span>
+                <span className="font-medium" style={{ color: "var(--color-text-primary)" }}>
+                  {resume.name}
+                </span>
+              </div>
+            )}
+            {resume.email && (
+              <div className="flex items-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                <span>📧</span>
+                <span>{resume.email}</span>
+              </div>
+            )}
+            {resume.phone && (
+              <div className="flex items-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                <span>📱</span>
+                <span>{resume.phone}</span>
+              </div>
+            )}
+          </div>
+
+          {/* 技能标签 */}
+          {resume.skills.length > 0 && (
+            <>
+              <div className="border-t mb-3" style={{ borderColor: "#e0e0e0" }} />
+              <h3 className="text-sm font-medium mb-2" style={{ color: "var(--color-text-secondary)" }}>
+                技能
+              </h3>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {resume.skills.map((s, i) => (
+                  <span
+                    key={i}
+                    className="text-xs px-3 py-1 rounded-full"
+                    style={{
+                      backgroundColor: "#e8f0fe",
+                      color: "var(--color-primary)",
+                    }}
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* 工作经验 */}
+          {resume.experience.length > 0 && (
+            <>
+              <div className="border-t mb-3" style={{ borderColor: "#e0e0e0" }} />
+              <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
+                工作经历
+              </h3>
+              <div className="space-y-3 mb-6">
+                {resume.experience.map((exp, i) => (
+                  <div
+                    key={i}
+                    className="rounded-lg p-3"
+                    style={{ backgroundColor: "var(--color-bg-surface)" }}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-sm" style={{ color: "var(--color-text-primary)" }}>
+                        {exp.title}
+                      </span>
+                      <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                        {exp.start_date} ~ {exp.end_date || "至今"}
+                      </span>
+                    </div>
+                    <p className="text-xs mb-1" style={{ color: "var(--color-text-secondary)" }}>
+                      {exp.company}
+                    </p>
+                    <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                      {exp.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* 教育背景 */}
+          {resume.education.length > 0 && (
+            <>
+              <div className="border-t mb-3" style={{ borderColor: "#e0e0e0" }} />
+              <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
+                教育背景
+              </h3>
+              <div className="space-y-2 mb-6">
+                {resume.education.map((edu, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                    <div>
+                      <span className="font-medium" style={{ color: "var(--color-text-primary)" }}>
+                        {edu.school}
+                      </span>
+                      <span className="ml-2" style={{ color: "var(--color-text-muted)" }}>
+                        {edu.major}
+                      </span>
+                    </div>
+                    <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                      {edu.degree}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* AI 摘要 */}
+          {resume.summary && (
+            <>
+              <div className="border-t mb-3" style={{ borderColor: "#e0e0e0" }} />
+              <h3 className="text-sm font-medium mb-2" style={{ color: "var(--color-text-secondary)" }}>
+                AI 摘要
+              </h3>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+                {resume.summary}
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,26 +1,32 @@
 /**
  * PlanetX brand tokens - game-style visual system.
- * Deep space theme with star purple primary color.
+ * Deep space theme with star purple primary + #C8FF50 accent.
  */
 
 :root {
   /* Colors - PlanetX game theme */
   --px-color-primary: #6C63FF;
   --px-color-primary-hover: #5A52E0;
-  --px-color-accent: #FFD700;
+  --px-color-accent: #C8FF50;
+  --px-color-accent-dim: #A3CC40;
+  --px-color-gold: #FFD700;
+  --px-color-cyan: #00E5FF;
+  --px-color-pink: #FF2D95;
   --px-color-success: #00D9A3;
   --px-color-danger: #FF4757;
   --px-color-warning: #FFA502;
 
   /* Background - deep space */
   --px-color-bg-deep: #0a0a1a;
-  --px-color-bg-card: #1a1a2e;
-  --px-color-bg-surface: #16213e;
-  --px-color-bg-elevated: #0f3460;
+  --px-color-bg-page: #080810;
+  --px-color-bg-card: #0D0D1A;
+  --px-color-bg-surface: #1A1A2E;
+  --px-color-bg-elevated: #16213e;
 
   /* Text */
   --px-color-text: #e0e0ff;
-  --px-color-text-muted: #8888aa;
+  --px-color-text-bright: #E8E8F0;
+  --px-color-text-muted: #B8B8C8;
   --px-color-text-dim: #555577;
 
   /* Spacing */
@@ -39,4 +45,5 @@
   /* Shadows - subtle glow */
   --px-shadow-glow: 0 0 20px rgba(108, 99, 255, 0.3);
   --px-shadow-card: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --px-shadow-accent: 0 0 24px rgba(200, 255, 80, 0.15);
 }

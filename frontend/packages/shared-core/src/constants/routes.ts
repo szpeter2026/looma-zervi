@@ -1,6 +1,6 @@
 /**
  * API route constants.
- * Centralized so both brands use the same paths.
+ * Centralized so both brands use the same paths and stay aligned with the Flask backend.
  */
 
 export const API_ROUTES = {
@@ -13,43 +13,41 @@ export const API_ROUTES = {
   AUTH_REFRESH: "/v1/auth/refresh",
   AUTH_BRIDGE: "/v1/auth/bridge",
 
-  // Game (Jason)
+  // Quota (new top-level path; /v1/auth/quota kept as alias on backend)
+  QUOTA: "/v1/quota",
+
+  // Game
   GAME_PROFILE_SYNC: "/v1/game/profile-sync",
   GAME_PROFILE: "/v1/game/profile",
   GAME_MISSION_COMPLETE: "/v1/game/mission-complete",
   GAME_FLEET_CREATE: "/v1/game/fleet/create",
   GAME_FLEET_JOIN: "/v1/game/fleet/join",
   GAME_FLEET_MINE: "/v1/game/fleet/mine",
+  GAME_FLEET_LEAVE: "/v1/game/fleet/leave",
 
-  // Enterprise (szbenyx)
-  ENTERPRISE_USERS: "/v1/enterprise/users",
-  ENTERPRISE_CANDIDATE: "/v1/enterprise/candidate",
-  ENTERPRISE_INVITE: "/v1/enterprise/invite",
-  ENTERPRISE_USAGE: "/v1/enterprise/usage",
+  // Enterprise (T空间 B-end)
+  ENTERPRISE_CREATE: "/v1/enterprise/create",
+  ENTERPRISE_JOIN: "/v1/enterprise/join",
+  ENTERPRISE_PROFILE: "/v1/enterprise/profile",
+  ENTERPRISE_CANDIDATES: "/v1/enterprise/candidates",
+  ENTERPRISE_CANDIDATES_ADD: "/v1/enterprise/candidates/add",
 
-  // Knowledge base
+  // Ask / RAG / Feedback
   ASK: "/v1/ask",
+  FEEDBACK_RATE: "/v1/feedback/rate",
+  FEEDBACK_LAST_QUERY: "/v1/feedback/last-query",
 
-  // Jobs (szbenyx)
-  JOBS_LIST: "/v1/jobs/",
+  // Jobs
+  JOBS_LIST: "/v1/jobs/list",
   JOBS_MATCH: "/v1/jobs/match",
 
-  // Resume (szbenyx)
+  // Resume
+  RESUME_PARSE: "/v1/resume/parse",
   RESUME_UPLOAD: "/v1/resume/upload",
-  RESUME_MINE: "/v1/resume/mine",
 
-  // Reports (szbenyx)
-  REPORTS_DAILY: "/v1/reports/daily",
-  REPORTS_WEEKLY: "/v1/reports/weekly",
-  REPORTS_MONTHLY: "/v1/reports/monthly",
+  // Reports
   REPORTS_GENERATE: "/v1/reports/generate",
-
-  // Referral (Jason)
-  REFERRAL_GENERATE: "/v1/referral/generate",
-  REFERRAL_MINE: "/v1/referral/mine",
-
-  // Quota (joint)
-  QUOTA: "/v1/quota",
+  REPORTS_LIST: "/v1/reports/list",
 
   // Health
   HEALTH: "/health",

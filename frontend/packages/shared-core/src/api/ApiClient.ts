@@ -1,79 +1,355 @@
 /**
- * API Client - axios instance with JWT interceptor.
- * Shared by both planetx and saas packages.
- * Each brand creates its own instance with its own token storage.
+ * API Client - fetch-based with JWT interceptor and platform-aware storage.
+ * Shared by web (planetx, saas) and miniprogram packages.
+ *
+ * Key features:
+ * - StorageAdapter pattern: Web localStorage + 小程序 wx.storage
+ * - stream()  SSE 流式问答
+ * - upload()  文件上传
+ * - 自动 401 处理：收到 401 时清除 looma_token 并回调 onUnauthorized
  */
-import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+
+declare global {
+  interface Window {
+    wx?: WechatStorage;
+  }
+  const wx: WechatStorage | undefined;
+}
+
+interface WechatStorage {
+  getStorageSync(key: string): unknown;
+  setStorageSync(key: string, data: string): void;
+  removeStorageSync(key: string): void;
+}
+
+/** Platform-agnostic storage contract. */
+export interface StorageAdapter {
+  getItem(key: string): string | null | Promise<string | null>;
+  setItem(key: string, value: string): void | Promise<void>;
+  removeItem(key: string): void | Promise<void>;
+}
+
+/** Web localStorage adapter. */
+export function webStorageAdapter(): StorageAdapter {
+  return {
+    getItem: (key: string) => {
+      try {
+        return localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    setItem: (key: string, value: string) => {
+      try {
+        localStorage.setItem(key, value);
+      } catch {
+        /* ignore */
+      }
+    },
+    removeItem: (key: string) => {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        /* ignore */
+      }
+    },
+  };
+}
+
+/** WeChat miniprogram wx.storage adapter. */
+export function wxStorageAdapter(): StorageAdapter {
+  const storage = typeof wx !== "undefined" ? wx : undefined;
+  return {
+    getItem: (key: string) => {
+      try {
+        return (storage?.getStorageSync(key) as string | null) ?? null;
+      } catch {
+        return null;
+      }
+    },
+    setItem: (key: string, value: string) => {
+      try {
+        storage?.setStorageSync(key, value);
+      } catch {
+        /* ignore */
+      }
+    },
+    removeItem: (key: string) => {
+      try {
+        storage?.removeStorageSync(key);
+      } catch {
+        /* ignore */
+      }
+    },
+  };
+}
 
 export interface ApiClientConfig {
   baseURL: string;
-  getToken: () => string | null;
+  storage?: StorageAdapter;
+  tokenKey?: string;
   onUnauthorized?: () => void;
+  timeout?: number;
+}
+
+export interface RequestOptions {
+  headers?: Record<string, string>;
+  params?: Record<string, any>;
+  timeout?: number;
+}
+
+function buildQueryString(params?: Record<string, any>): string {
+  if (!params) return "";
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(item))}`);
+      }
+    } else {
+      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+    }
+  }
+  return parts.length ? `?${parts.join("&")}` : "";
+}
+
+async function resolveStorageValue<T>(value: T | Promise<T>): Promise<T> {
+  return Promise.resolve(value);
 }
 
 export class ApiClient {
-  private instance: AxiosInstance;
-  private getToken: () => string | null;
+  private baseURL: string;
+  private storage: StorageAdapter;
+  private tokenKey: string;
   private onUnauthorized?: () => void;
+  private defaultTimeout: number;
 
   constructor(config: ApiClientConfig) {
-    this.instance = axios.create({
-      baseURL: config.baseURL,
-      timeout: 30000,
-      headers: { "Content-Type": "application/json" },
-    });
-    this.getToken = config.getToken;
+    this.baseURL = config.baseURL.replace(/\/$/, "");
+    this.storage = config.storage || webStorageAdapter();
+    this.tokenKey = config.tokenKey || "looma_token";
     this.onUnauthorized = config.onUnauthorized;
+    this.defaultTimeout = config.timeout || 30000;
+  }
 
-    // Request interceptor: attach JWT
-    this.instance.interceptors.request.use(
-      (req: InternalAxiosRequestConfig) => {
-        const token = this.getToken();
-        if (token) {
-          req.headers.Authorization = `Bearer ${token}`;
-        }
-        return req;
-      },
-      (err) => Promise.reject(err)
-    );
+  private async getToken(): Promise<string | null> {
+    return resolveStorageValue(this.storage.getItem(this.tokenKey));
+  }
 
-    // Response interceptor: handle 401
-    this.instance.interceptors.response.use(
-      (resp) => resp,
-      (err) => {
-        if (err.response?.status === 401 && this.onUnauthorized) {
-          this.onUnauthorized();
-        }
-        return Promise.reject(err);
+  /** Store a token in the configured storage adapter. */
+  async setToken(token: string): Promise<void> {
+    await resolveStorageValue(this.storage.setItem(this.tokenKey, token));
+  }
+
+  /** Remove the stored token. Called automatically on 401 responses. */
+  async clearToken(): Promise<void> {
+    await resolveStorageValue(this.storage.removeItem(this.tokenKey));
+  }
+
+  private async buildHeaders(
+    extraHeaders?: Record<string, string>,
+    includeAuth = true
+  ): Promise<Record<string, string>> {
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      ...extraHeaders,
+    };
+
+    if (includeAuth) {
+      const token = await this.getToken();
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
       }
+    }
+
+    return headers;
+  }
+
+  private async request<T = any>(
+    method: string,
+    url: string,
+    data?: any,
+    options: RequestOptions = {}
+  ): Promise<T> {
+    const query = buildQueryString(options.params);
+    const fullUrl = `${this.baseURL}${url}${query}`;
+    const isFormData = typeof FormData !== "undefined" && data instanceof FormData;
+    const headers = await this.buildHeaders(
+      isFormData ? options.headers : { "Content-Type": "application/json", ...options.headers },
+      true
     );
+
+    const controller = new AbortController();
+    const timeoutMs = options.timeout ?? this.defaultTimeout;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(fullUrl, {
+        method,
+        headers,
+        body: data ? (isFormData ? data : JSON.stringify(data)) : undefined,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error("request_timeout");
+      }
+      throw err;
+    }
+    clearTimeout(timer);
+
+    if (response.status === 401) {
+      await this.clearToken();
+      this.onUnauthorized?.();
+      const error = await this.parseError(response);
+      throw new ApiError(response.status, error, "Unauthorized");
+    }
+
+    if (!response.ok) {
+      const error = await this.parseError(response);
+      throw new ApiError(response.status, error, `HTTP ${response.status}`);
+    }
+
+    const contentType = response.headers.get("Content-Type") || "";
+    if (contentType.includes("application/json")) {
+      return (await response.json()) as T;
+    }
+    return (await response.text()) as unknown as T;
   }
 
-  async get<T = any>(url: string, params?: Record<string, any>): Promise<T> {
-    const resp = await this.instance.get<T>(url, { params });
-    return resp.data;
+  private async parseError(response: Response): Promise<Record<string, any>> {
+    try {
+      const data = await response.json();
+      return typeof data === "object" && data !== null ? data : { message: String(data) };
+    } catch {
+      return { message: response.statusText || `HTTP ${response.status}` };
+    }
   }
 
-  async post<T = any>(url: string, data?: any): Promise<T> {
-    const resp = await this.instance.post<T>(url, data);
-    return resp.data;
+  async get<T = any>(url: string, params?: Record<string, any>, options?: RequestOptions): Promise<T> {
+    return this.request<T>("GET", url, undefined, { ...options, params });
   }
 
-  async put<T = any>(url: string, data?: any): Promise<T> {
-    const resp = await this.instance.put<T>(url, data);
-    return resp.data;
+  async post<T = any>(url: string, data?: any, options?: RequestOptions): Promise<T> {
+    return this.request<T>("POST", url, data, options);
   }
 
-  async delete<T = any>(url: string): Promise<T> {
-    const resp = await this.instance.delete<T>(url);
-    return resp.data;
+  async put<T = any>(url: string, data?: any, options?: RequestOptions): Promise<T> {
+    return this.request<T>("PUT", url, data, options);
+  }
+
+  async delete<T = any>(url: string, params?: Record<string, any>, options?: RequestOptions): Promise<T> {
+    return this.request<T>("DELETE", url, undefined, { ...options, params });
+  }
+
+  /**
+   * Upload a file via multipart/form-data.
+   * The field name defaults to "file".
+   */
+  async upload<T = any>(url: string, file: File, fieldName = "file", options?: RequestOptions): Promise<T> {
+    const formData = new FormData();
+    formData.append(fieldName, file);
+
+    const query = buildQueryString(options?.params);
+    const fullUrl = `${this.baseURL}${url}${query}`;
+    const headers = await this.buildHeaders(options?.headers, true);
+    delete headers["Content-Type"];
+
+    const controller = new AbortController();
+    const timeoutMs = options?.timeout ?? this.defaultTimeout;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(fullUrl, {
+        method: "POST",
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error("request_timeout");
+      }
+      throw err;
+    }
+    clearTimeout(timer);
+
+    if (response.status === 401) {
+      await this.clearToken();
+      this.onUnauthorized?.();
+      const error = await this.parseError(response);
+      throw new ApiError(response.status, error, "Unauthorized");
+    }
+
+    if (!response.ok) {
+      const error = await this.parseError(response);
+      throw new ApiError(response.status, error, `HTTP ${response.status}`);
+    }
+
+    const contentType = response.headers.get("Content-Type") || "";
+    if (contentType.includes("application/json")) {
+      return (await response.json()) as T;
+    }
+    return (await response.text()) as unknown as T;
+  }
+
+  /**
+   * SSE 流式请求。
+   * 返回一个 ReadableStream<Uint8Array>，调用方可用 TextDecoder 逐段读取。
+   */
+  async stream(url: string, data?: any, options?: RequestOptions): Promise<ReadableStream<Uint8Array>> {
+    const query = buildQueryString(options?.params);
+    const fullUrl = `${this.baseURL}${url}${query}`;
+    const headers = await this.buildHeaders(
+      { "Content-Type": "application/json", Accept: "text/event-stream", ...options?.headers },
+      true
+    );
+
+    const controller = new AbortController();
+    const timeoutMs = options?.timeout ?? this.defaultTimeout;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(fullUrl, {
+      method: "POST",
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (response.status === 401) {
+      await this.clearToken();
+      this.onUnauthorized?.();
+      const error = await this.parseError(response);
+      throw new ApiError(response.status, error, "Unauthorized");
+    }
+
+    if (!response.ok || !response.body) {
+      const error = await this.parseError(response);
+      throw new ApiError(response.status, error, `HTTP ${response.status}`);
+    }
+
+    return response.body;
   }
 }
 
-/**
- * Factory function to create an ApiClient instance.
- * Each brand calls this with its own token getter.
- */
+export class ApiError extends Error {
+  status: number;
+  body: Record<string, any>;
+
+  constructor(status: number, body: Record<string, any>, message?: string) {
+    super(message || `HTTP ${status}`);
+    this.status = status;
+    this.body = body;
+  }
+}
+
+/** Factory function to create an ApiClient instance. */
 export function createApiClient(config: ApiClientConfig): ApiClient {
   return new ApiClient(config);
 }

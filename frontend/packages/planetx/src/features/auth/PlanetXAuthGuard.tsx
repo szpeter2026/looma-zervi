@@ -7,19 +7,19 @@
  */
 import { ReactNode, useEffect } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { usePlanetXAuthStore } from "./planetxAuthStore";
+import { usePlanetXStore } from "./planetxAuthStore";
 
 export function PlanetXAuthGuard({ children }: { children?: ReactNode }) {
-  const { token, isAuthenticated, fetchProfile } = usePlanetXAuthStore();
+  const { token, isAuthenticated, loadProfile } = usePlanetXStore();
   const location = useLocation();
 
   useEffect(() => {
     if (token && !isAuthenticated) {
-      fetchProfile().catch(() => {
-        usePlanetXAuthStore.getState().logout();
+      loadProfile().catch(() => {
+        usePlanetXStore.getState().logout();
       });
     }
-  }, [token, isAuthenticated, fetchProfile]);
+  }, [token, isAuthenticated, loadProfile]);
 
   if (!token) {
     return <Navigate to="/auth" state={{ from: location }} replace />;

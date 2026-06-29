@@ -4,34 +4,31 @@
  *
  * Routes:
  *   /auth     - Login/Register screen
- *   /         - Hub screen (home)
+ *   /         - PlanetX Home (game hub)
  *   /quiz     - Personality quiz
  *   /result   - Quiz result
- *   /fleet    - Fleet (team) screen
- *   /profile  - User profile
  */
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { PlanetXAuthGuard } from "./features/auth/PlanetXAuthGuard";
-import { Placeholder } from "./brand/components/Placeholder";
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { PlanetXAuthGuard } from './features/auth/PlanetXAuthGuard'
+import AuthScreen from './features/auth/AuthScreen'
+import PlanetXHome from './features/PlanetXHome'
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         {/* Public routes */}
-        <Route path="/auth" element={<Placeholder title="Auth" />} />
+        <Route path="/auth" element={<AuthScreen />} />
 
-        {/* Protected routes */}
+        {/* Main game hub (handles all screens internally) */}
         <Route element={<PlanetXAuthGuard />}>
-          <Route path="/" element={<Placeholder title="Hub" />} />
-          <Route path="/quiz" element={<Placeholder title="Personality Quiz" />} />
-          <Route path="/result" element={<Placeholder title="Result" />} />
-          <Route path="/fleet" element={<Placeholder title="Fleet" />} />
-          <Route path="/profile" element={<Placeholder title="Profile" />} />
+          <Route path="/" element={<PlanetXHome />} />
+          <Route path="/quiz" element={<PlanetXHome />} />
+          <Route path="/result" element={<PlanetXHome />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
-  );
+  )
 }
