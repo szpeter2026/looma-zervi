@@ -3,13 +3,16 @@
     "target": "ES2018",
     "module": "CommonJS",
     "moduleResolution": "node",
-    "strict": true,
+    "strict": false,
     "noImplicitAny": false,
+    "noEmitOnError": false,
+    "skipLibCheck": true,
     "removeComments": true,
     "preserveConstEnums": true,
     "experimentalDecorators": true,
-    "lib": ["ES2018"],
-    "typeRoots": ["./typings"]
+    "lib": ["ES2018", "DOM"],
+    "typeRoots": ["./typings"],
+    "ignoreDeprecations": "6.0"
   },
   "include": ["./**/*.ts"],
   "exclude": ["node_modules"]

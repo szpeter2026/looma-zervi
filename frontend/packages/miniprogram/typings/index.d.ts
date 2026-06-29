@@ -29,6 +29,7 @@ declare const wx: {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
     data?: any
     header?: Record<string, string>
+    timeout?: number
     success?: (res: { statusCode: number; data: any }) => void
     fail?: (err: { errMsg: string }) => void
   }): void
