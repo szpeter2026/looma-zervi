@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# Node
+node_modules/
+frontend/packages/*/dist/
+frontend/packages/*/.vite/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+backend/data/
+
+# ChromaDB
+backend/chroma_data/
+
+# Logs
+logs/
+*.log
+
+# Docker
+docker/data/
+
+# Miniprogram
+frontend/packages/miniprogram/miniprogram_npm/

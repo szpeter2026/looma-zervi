@@ -1,0 +1,64 @@
+version: "3.8"
+
+services:
+  # ============================================
+  # Looma Backend (Flask)
+  # ============================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: looma-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - backend-data:/app/data
+      - chroma-data:/app/chroma_data
+    networks:
+      - looma-net
+
+  # ============================================
+  # ChromaDB (Vector Database)
+  # ============================================
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: looma-chromadb
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - CHROMA_DB_IMPL=duckdb+parquet
+      - PERSIST_DIRECTORY=/chroma/chroma
+    networks:
+      - looma-net
+
+  # ============================================
+  # Nginx (Reverse Proxy)
+  # ============================================
+  nginx:
+    image: nginx:alpine
+    container_name: looma-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+    networks:
+      - looma-net
+
+volumes:
+  backend-data:
+  chroma-data:
+
+networks:
+  looma-net:
+    driver: bridge

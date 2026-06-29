@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "paths": {
+      "@looma/shared-core": ["../shared-core/src"],
+      "@looma/shared-core/*": ["../shared-core/src/*"],
+      "@planetx/*": ["./src/*"]
+    }
+  },
+  "include": ["src"]
+}

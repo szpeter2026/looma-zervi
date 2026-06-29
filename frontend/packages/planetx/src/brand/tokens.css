@@ -1,0 +1,42 @@
+/**
+ * PlanetX brand tokens - game-style visual system.
+ * Deep space theme with star purple primary color.
+ */
+
+:root {
+  /* Colors - PlanetX game theme */
+  --px-color-primary: #6C63FF;
+  --px-color-primary-hover: #5A52E0;
+  --px-color-accent: #FFD700;
+  --px-color-success: #00D9A3;
+  --px-color-danger: #FF4757;
+  --px-color-warning: #FFA502;
+
+  /* Background - deep space */
+  --px-color-bg-deep: #0a0a1a;
+  --px-color-bg-card: #1a1a2e;
+  --px-color-bg-surface: #16213e;
+  --px-color-bg-elevated: #0f3460;
+
+  /* Text */
+  --px-color-text: #e0e0ff;
+  --px-color-text-muted: #8888aa;
+  --px-color-text-dim: #555577;
+
+  /* Spacing */
+  --px-spacing-xs: 4px;
+  --px-spacing-sm: 8px;
+  --px-spacing-md: 16px;
+  --px-spacing-lg: 24px;
+  --px-spacing-xl: 32px;
+
+  /* Radius - larger for game feel */
+  --px-radius-sm: 8px;
+  --px-radius-md: 12px;
+  --px-radius-lg: 16px;
+  --px-radius-xl: 20px;
+
+  /* Shadows - subtle glow */
+  --px-shadow-glow: 0 0 20px rgba(108, 99, 255, 0.3);
+  --px-shadow-card: 0 4px 12px rgba(0, 0, 0, 0.4);
+}

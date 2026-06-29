@@ -1,0 +1,52 @@
+/* pages/index/index.wxss */
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #0a0a1a;
+  color: #e0e0ff;
+}
+
+.logo {
+  font-size: 32px;
+  font-weight: 600;
+  color: #6C63FF;
+  margin-bottom: 8px;
+}
+
+.slogan {
+  font-size: 16px;
+  color: #8888aa;
+  margin-bottom: 48px;
+}
+
+.loading {
+  color: #8888aa;
+  font-size: 14px;
+}
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.tier-badge {
+  padding: 4px 16px;
+  background: rgba(108, 99, 255, 0.2);
+  color: #6C63FF;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.login-btn {
+  padding: 12px 48px;
+  background: #6C63FF;
+  color: white;
+  border-radius: 24px;
+  font-size: 16px;
+  font-weight: 500;
+}

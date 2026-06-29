@@ -1,0 +1,22 @@
+{
+  "name": "looma-zervi-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Looma-Zervi frontend monorepo: PlanetX (C-end) + T-space (B-end)",
+  "scripts": {
+    "dev:planetx": "pnpm --filter @looma/planetx dev",
+    "dev:saas": "pnpm --filter @looma/saas dev",
+    "build:planetx": "pnpm --filter @looma/planetx build",
+    "build:saas": "pnpm --filter @looma/saas build",
+    "build:all": "pnpm --filter @looma/shared-core build && pnpm build:planetx && pnpm build:saas",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  }
+}

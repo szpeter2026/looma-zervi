@@ -1,0 +1,23 @@
+<!-- pages/auth/auth.wxml -->
+<view class="container">
+  <view class="title">绑定邮箱</view>
+  <view class="desc">绑定邮箱后可在 Web 端同步使用</view>
+
+  <input
+    class="input"
+    placeholder="邮箱地址"
+    type="text"
+    bindinput="onEmailInput"
+    value="{{email}}"
+  />
+  <input
+    class="input"
+    placeholder="密码 (至少8位)"
+    password="true"
+    bindinput="onPasswordInput"
+    value="{{password}}"
+  />
+
+  <view class="btn" bindtap="handleBind">绑定账号</view>
+  <view class="btn-secondary" bindtap="handleSkip">稍后再说</view>
+</view>
