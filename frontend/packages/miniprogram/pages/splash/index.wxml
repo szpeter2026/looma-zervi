@@ -1,0 +1,16 @@
+<star-bg />
+<view class="splash-container">
+  <view class="splash-logo">
+    <text class="logo-text">Planet</text><text class="logo-x">X</text>
+  </view>
+  <view class="slogan">你的职业飞行器</view>
+
+  <view wx:if="{{loading}}" class="loading-text">
+    正在连接星际网络...
+  </view>
+
+  <view wx:elif="{{loginFailed}}" class="login-failed">
+    <view class="failed-text">连接失败，请重试</view>
+    <view class="btn-primary" bindtap="handleRetryLogin">重新连接</view>
+  </view>
+</view>

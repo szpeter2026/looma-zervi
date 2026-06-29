@@ -1,0 +1,8 @@
+{
+  "usingComponents": {
+    "star-bg": "/components/star-bg/index",
+    "xp-bar": "/components/xp-bar/index",
+    "achievement": "/components/achievement/index"
+  },
+  "navigationBarTitleText": "PlanetX"
+}

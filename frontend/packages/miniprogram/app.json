@@ -1,7 +1,12 @@
 {
   "pages": [
-    "pages/index/index",
-    "pages/auth/auth"
+    "pages/splash/index",
+    "pages/hub/index",
+    "pages/ask/index",
+    "pages/profile/index",
+    "pages/quiz/index",
+    "pages/result/index",
+    "pages/auth/index"
   ],
   "window": {
     "backgroundTextStyle": "dark",
@@ -12,5 +17,26 @@
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json",
-  "lazyCodeLoading": "requiredComponents"
+  "lazyCodeLoading": "requiredComponents",
+  "tabBar": {
+    "custom": true,
+    "color": "#B8B8C8",
+    "selectedColor": "#C8FF50",
+    "backgroundColor": "#0D0D1A",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/hub/index",
+        "text": "母舰"
+      },
+      {
+        "pagePath": "pages/ask/index",
+        "text": "问答"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
+    ]
+  }
 }
