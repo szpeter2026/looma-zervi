@@ -19,6 +19,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { path: "/", label: "仪表盘", icon: "◉" },
   { path: "/query", label: "智能问答", icon: "◈" },
+  { path: "/poetry", label: "诗词文库", icon: "◇" },
   { path: "/jobs", label: "职位匹配", icon: "◈" },
   { path: "/resume", label: "简历解析", icon: "◈" },
   { path: "/reports", label: "报告中心", icon: "◆" },

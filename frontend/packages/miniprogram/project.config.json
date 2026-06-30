@@ -2,7 +2,7 @@
   "miniprogramRoot": "./",
   "projectname": "looma-miniprogram",
   "description": "PlanetX miniprogram shell - WeChat entry point",
-  "appid": "wx073d0aa7778622da",
+  "appid": "wx6563950292092013",
   "setting": {
     "urlCheck": true,
     "es6": true,
@@ -39,7 +39,7 @@
     "disableUseStrict": false,
     "minifyWXML": true,
     "showES6CompileOption": false,
-    "useCompilerPlugins": false,
+    "useCompilerPlugins": ["typescript"],
     "compileWorklet": false,
     "localPlugins": false,
     "condition": false,

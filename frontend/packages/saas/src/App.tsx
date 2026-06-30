@@ -19,6 +19,7 @@ import Login from "./features/auth/Login";
 import Register from "./features/auth/Register";
 import Dashboard from "./features/dashboard/Dashboard";
 import Chat from "./features/chat/Chat";
+import Poetry from "./features/poetry/Poetry";
 import Jobs from "./features/hr/Jobs";
 import Resume from "./features/hr/Resume";
 import Reports from "./features/reports/Reports";
@@ -37,6 +38,7 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/query" element={<Chat />} />
+              <Route path="/poetry" element={<Poetry />} />
               <Route path="/jobs" element={<Jobs />} />
               <Route path="/resume" element={<Resume />} />
               <Route path="/reports" element={<Reports />} />

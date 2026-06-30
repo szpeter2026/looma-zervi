@@ -14,6 +14,7 @@ Tables:
   - invite_codes       (joint)
   - usage_logs         (joint)
 """
+from __future__ import annotations
 import json
 import os
 import sqlite3
@@ -225,6 +226,27 @@ CREATE TABLE IF NOT EXISTS boost_consumptions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_boost_consumptions_user ON boost_consumptions(user_id);
+
+-- ============================================
+-- Poetry: poems (Jason)
+-- ============================================
+CREATE TABLE IF NOT EXISTS poems (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    author TEXT NOT NULL DEFAULT '',
+    dynasty TEXT NOT NULL DEFAULT '',
+    theme TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    tags TEXT DEFAULT '',              -- comma-separated tags for filtering
+    source TEXT DEFAULT 'imported',    -- imported | manual
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(title, author)
+);
+
+CREATE INDEX IF NOT EXISTS idx_poems_dynasty ON poems(dynasty);
+CREATE INDEX IF NOT EXISTS idx_poems_author ON poems(author);
+CREATE INDEX IF NOT EXISTS idx_poems_theme ON poems(theme);
+CREATE INDEX IF NOT EXISTS idx_poems_title ON poems(title);
 
 -- ============================================
 -- Knowledge: documents (szbenyx)
@@ -705,6 +727,130 @@ class DatabaseManager:
             if pack_dict["credits_used"] + 1 >= pack_dict["credits"]:
                 conn.execute("UPDATE boost_packs SET status='exhausted' WHERE id=?", (pack_id,))
         return True
+
+    # ============================================
+    # Poetry operations (Jason)
+    # ============================================
+    def insert_poem(self, title: str, author: str = "", dynasty: str = "",
+                    theme: str = "", content: str = "", tags: str = "",
+                    source: str = "imported") -> int:
+        """Insert a single poem. Returns the row id."""
+        with self.get_conn() as conn:
+            cursor = conn.execute(
+                """INSERT OR IGNORE INTO poems (title, author, dynasty, theme, content, tags, source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (title, author, dynasty, theme, content, tags, source)
+            )
+        return cursor.lastrowid or 0
+
+    def bulk_insert_poems(self, poems: list[dict]) -> int:
+        """Bulk insert poems from a list of dicts.
+        Each dict must have: title, content. Optional: author, dynasty, theme, tags.
+        Returns count of inserted rows."""
+        inserted = 0
+        with self.get_conn() as conn:
+            for p in poems:
+                try:
+                    conn.execute(
+                        """INSERT OR IGNORE INTO poems (title, author, dynasty, theme, content, tags, source)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (p.get("title", ""), p.get("author", ""), p.get("dynasty", ""),
+                         p.get("theme", ""), p.get("content", ""), p.get("tags", ""),
+                         p.get("source", "imported"))
+                    )
+                    inserted += 1
+                except sqlite3.IntegrityError:
+                    pass  # duplicate title, skip
+        return inserted
+
+    def get_poem_by_id(self, poem_id: int):
+        """Get a single poem by id."""
+        with self.get_conn() as conn:
+            row = conn.execute("SELECT * FROM poems WHERE id = ?", (poem_id,)).fetchone()
+        return dict(row) if row else None
+
+    def get_poems(self, dynasty: str | None = None, author: str | None = None,
+                  theme: str | None = None, keyword: str | None = None,
+                  page: int = 1, per_page: int = 20) -> dict:
+        """Browse/filter poems with pagination.
+        Returns {items: [...], total: N, page: P, per_page: PP}."""
+        clauses = []
+        params = []
+        if dynasty:
+            clauses.append("dynasty = ?")
+            params.append(dynasty)
+        if author:
+            clauses.append("author = ?")
+            params.append(author)
+        if theme:
+            clauses.append("theme = ?")
+            params.append(theme)
+        if keyword:
+            clauses.append("(title LIKE ? OR content LIKE ? OR author LIKE ?)")
+            params.extend([f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"])
+
+        where = " AND ".join(clauses) if clauses else ""
+        where_sql = f"WHERE {where}" if where else ""
+
+        # Count
+        with self.get_conn() as conn:
+            count_row = conn.execute(
+                f"SELECT COUNT(*) as cnt FROM poems {where_sql}", params
+            ).fetchone()
+            total = count_row["cnt"] if count_row else 0
+
+            # Paginate
+            offset = (page - 1) * per_page
+            rows = conn.execute(
+                f"""SELECT id, title, author, dynasty, theme,
+                           SUBSTR(content, 1, 80) as content_preview, tags
+                    FROM poems {where_sql}
+                    ORDER BY id ASC
+                    LIMIT ? OFFSET ?""",
+                params + [per_page, offset]
+            ).fetchall()
+
+        return {
+            "items": [dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }
+
+    def get_random_poems(self, count: int = 3):
+        """Get random poems for discovery mode."""
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT id, title, author, dynasty, theme,
+                          SUBSTR(content, 1, 120) as content_preview
+                   FROM poems
+                   ORDER BY RANDOM()
+                   LIMIT ?""",
+                (count,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def count_poems(self) -> int:
+        """Total poem count."""
+        with self.get_conn() as conn:
+            row = conn.execute("SELECT COUNT(*) as cnt FROM poems").fetchone()
+        return row["cnt"] if row else 0
+
+    def get_poetry_stats(self) -> dict:
+        """Get poetry collection stats: total, dynasty distribution, theme distribution."""
+        with self.get_conn() as conn:
+            total = conn.execute("SELECT COUNT(*) as cnt FROM poems").fetchone()["cnt"]
+            dynasties = conn.execute(
+                "SELECT dynasty, COUNT(*) as cnt FROM poems GROUP BY dynasty ORDER BY cnt DESC LIMIT 20"
+            ).fetchall()
+            themes = conn.execute(
+                "SELECT theme, COUNT(*) as cnt FROM poems GROUP BY theme ORDER BY cnt DESC LIMIT 20"
+            ).fetchall()
+        return {
+            "total": total,
+            "dynasties": [{"name": r["dynasty"], "count": r["cnt"]} for r in dynasties],
+            "themes": [{"name": r["theme"], "count": r["cnt"]} for r in themes],
+        }
 
     # ============================================
     # Document operations (szbenyx)
