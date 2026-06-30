@@ -71,7 +71,7 @@ Page({
 
     // Sync to backend (best-effort)
     gameApi.syncProfile({
-      personality_type: personality,
+      personality_type: personality.name,
     }).catch(() => {})
 
     gameApi.completeMission('personality').catch(() => {})

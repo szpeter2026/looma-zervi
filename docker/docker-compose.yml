@@ -13,6 +13,7 @@ services:
     env_file:
       - ../backend/.env
     volumes:
+      - ../backend:/app                         # 代码 bind mount，rsync 后 restart 即生效
       - backend-data:/app/data
       - chroma-data:/app/chroma_data
     networks:

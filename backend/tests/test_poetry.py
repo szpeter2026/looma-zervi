@@ -17,7 +17,7 @@ def app():
     tmp.close()
 
     os.environ["DATABASE_PATH"] = tmp.name
-    os.environ["JWT_SECRET"] = "test-secret"
+    os.environ["JWT_SECRET"] = "test-jwt-secret-for-local-testing-only-2026"
     os.environ["SECRET_KEY"] = "test-flask-secret"
     from src.app import create_app
     _app = create_app("testing")

@@ -24,7 +24,7 @@ class Config:
     FLASK_ENV = os.getenv("FLASK_ENV", "development")
 
     # JWT
-    JWT_SECRET = os.getenv("JWT_SECRET", "dev-jwt-secret-change-me")
+    JWT_SECRET = os.getenv("JWT_SECRET", "looma-zervi-default-jwt-secret-change-in-production-2026")
     JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "24"))
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
@@ -105,7 +105,7 @@ def _refresh_config():
     """
     Config.SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
     Config.FLASK_ENV = os.getenv("FLASK_ENV", "development")
-    Config.JWT_SECRET = os.getenv("JWT_SECRET", "dev-jwt-secret-change-me")
+    Config.JWT_SECRET = os.getenv("JWT_SECRET", "looma-zervi-default-jwt-secret-change-in-production-2026")
     Config.JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "24"))
     Config.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     Config.WECHAT_APPID = os.getenv("WECHAT_APPID", "")

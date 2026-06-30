@@ -498,7 +498,7 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
         level,
         xp,
         xp_to_next: xpToNext,
-        personality_type: personalityType,
+        personality_type: personalityType?.name ?? personalityType,
       })
     } catch { /* best-effort */ }
   },

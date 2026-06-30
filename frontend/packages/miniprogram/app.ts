@@ -9,7 +9,7 @@ import { store } from './utils/store'
 import { authApi, gameApi } from './utils/api'
 import { getDeviceInfo } from './utils/device'
 
-const API_BASE = 'http://localhost:5200'
+const API_BASE = 'http://localhost:5000'
 
 App({
   globalData: {

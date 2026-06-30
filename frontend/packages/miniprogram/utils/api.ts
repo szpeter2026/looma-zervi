@@ -6,7 +6,7 @@
 import { eventBus } from './event-bus'
 import { store } from './store'
 
-const API_BASE = 'http://localhost:5200'
+const API_BASE = 'http://localhost:5000'
 
 interface RequestOptions {
   url: string
