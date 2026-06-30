@@ -152,6 +152,8 @@ export interface Act1SessionState {
   chosen_option: number | null;
   completed: boolean;
   remaining_steps: number;
+  /** Whether the chosen domain supports a cross-domain path (e.g. 职业域→诗域) */
+  has_cross_domain?: boolean;
 }
 
 /** Act 1 advance response */
@@ -171,6 +173,10 @@ export interface Act1AdvanceResponse {
   convergence_texture?: ConvergenceTexture;
   end_hook?: string;
   prev_step?: number;
+  /** Cross-domain echo triggered (职业域→诗域) */
+  echo_triggered?: boolean;
+  /** Whether a cross-domain choice was made */
+  cross_chosen?: boolean;
   error?: string;
 }
 

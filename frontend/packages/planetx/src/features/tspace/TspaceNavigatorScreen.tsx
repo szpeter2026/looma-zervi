@@ -14,7 +14,7 @@
  *
  * Ref: tspace_act1_prototype.html / GDD §5.1 / GDD §9.2
  */
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import StarBackground from '../../brand/components/StarBackground'
 import FeedbackSurvey from '../feedback/FeedbackSurvey'
 import type {
@@ -26,14 +26,24 @@ import type {
 
 // ── Domain definitions (hardcoded for offline-first rendering) ──
 
-const DOMAINS = [
+interface DomainDef {
+  key: string
+  icon: string
+  name: string
+  color: string
+  emotion: string
+  hint: string
+  isMVP?: boolean
+}
+
+const DOMAINS: readonly DomainDef[] = [
   { key: '职业域', icon: '💼', name: '职业域', color: '#4ecdc4', emotion: '焦虑→希望', hint: '一份完美JD背后的隐藏代价', isMVP: true },
   { key: '身份域', icon: '🪪', name: '身份域', color: '#ff6b6b', emotion: '回顾→重构', hint: '过去的自己走了出来' },
   { key: '诗域',   icon: '📜', name: '诗域',   color: '#f9ca24', emotion: '孤独→共鸣', hint: '墙上半首被擦掉的诗' },
   { key: '信任域', icon: '⚖️', name: '信任域', color: '#a29bfe', emotion: '怀疑→确认', hint: '审判庭上你认识被告' },
   { key: '自我域', icon: '🪞', name: '自我域', color: '#fd79a8', emotion: '困惑→认知', hint: '镜子给你没选的标签' },
   { key: '迷雾域', icon: '🌫️', name: '迷雾域', color: '#636e72', emotion: '迷失→探索', hint: '非Navigator的声音在等你' },
-] as const
+]
 
 const SINGLE_STEPS = [
   { id: 0, label: '开场' }, { id: 1, label: '信号' },
@@ -56,7 +66,7 @@ const CROSS_STEPS = [
 const CSS = {
   page: {
     minHeight: '100vh', background: '#0a0a0f', color: '#c8c8d4',
-    display: 'flex', justifyContent: 'center', overflowX: 'hidden', position: 'relative' as const,
+    display: 'flex', justifyContent: 'center', overflowX: 'hidden' as const, position: 'relative' as const,
     fontFamily: "-apple-system, 'SF Pro Display', 'PingFang SC', 'Microsoft YaHei', sans-serif",
   },
   container: {
@@ -275,7 +285,6 @@ export default function TspaceNavigatorScreen() {
     chosenOption === null && crossChosen === null
   const domainInfo = DOMAINS.find(d => d.key === domain)
   const currentStepLabel = steps[Math.min(step, finalStep)]?.label || ''
-  const currentStepIndex = Math.min(step, finalStep)
 
   // ── Render ──
 
@@ -356,7 +365,7 @@ export default function TspaceNavigatorScreen() {
               )}
             </div>
             <div style={{ display: 'flex', gap: '3px', marginBottom: '8px' }}>
-              {steps.map((s, idx) => {
+              {steps.map((s, _idx) => {
                 let bg = '#1e1e2e'
                 if (s.id < step) bg = '#55efc4'
                 else if (s.id === step) bg = '#7c6ff7'

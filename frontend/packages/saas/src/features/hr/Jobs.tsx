@@ -12,37 +12,10 @@
  * Uses shared-core typed API factories for backend contract alignment.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
-import { createApiClient, createJobsApi, createCreditApi, type Job, type CreditAnalysis } from "@looma/shared-core";
+import { createApiClient, createJobsApi, createCreditApi, type Job, type JobMatchItem, type CreditAnalysis } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
 
 // ── Types ──
-
-/** Backend actual match response item (enhanced scores) */
-interface MatchItem {
-  job_id: string;
-  title: string;
-  company: string;
-  location: string;
-  salary_range: string;
-  scores: {
-    overall: number;
-    background_match: number;
-    skills_overlap: number;
-    experience_relevance: number;
-    seniority: number;
-    language_requirement: number;
-    company_score: number;
-    salary_match: number;
-    location_match: number;
-    culture_workload_match: number;
-    summary: string;
-    keywords: string[];
-    fit_bullets: string[];
-  };
-  reason: string;
-  matched_skills?: string[];
-  fit_bullets?: string[];
-}
 
 interface ParsedJobData {
   title: string;
@@ -83,7 +56,7 @@ export default function Jobs() {
   const { token } = useSaasAuthStore();
   const [tab, setTab] = useState<TabId>("browse");
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [matches, setMatches] = useState<MatchItem[] | null>(null);
+  const [matches, setMatches] = useState<JobMatchItem[] | null>(null);
   const [resumeText, setResumeText] = useState("");
   const [matching, setMatching] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);

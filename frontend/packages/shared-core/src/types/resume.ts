@@ -51,12 +51,23 @@ export interface Job {
   url?: string;
 }
 
-export interface JobMatchResult {
-  job: Job;
-  score: number;
+/**
+ * Actual API match item returned by POST /v1/jobs/match.
+ * The pipeline returns flat fields + a nested scores object (11 dimensions).
+ */
+export interface JobMatchItem {
+  job_id: string;
+  title: string;
+  company: string;
+  location: string;
+  salary_range: string;
+  /** Multi-dimension scores (来自 Tatha 评分引擎 11 维度) */
+  scores: JobMatchScore;
+  /** 一句话匹配摘要 */
   reason: string;
   matched_skills?: string[];
   missing_skills?: string[];
+  fit_bullets?: string[];
 }
 
 export interface JobMatchRequest {
@@ -64,9 +75,13 @@ export interface JobMatchRequest {
 }
 
 export interface JobMatchResponse {
-  matches: JobMatchResult[];
+  matches: JobMatchItem[];
   total_evaluated: number;
 }
+
+// Legacy alias – kept for backward compatibility with any code that imported JobMatchResult
+/** @deprecated use JobMatchItem instead */
+export type JobMatchResult = JobMatchItem;
 
 // ============================================================
 // Enhanced job types (migrated from Tatha scoring engine)

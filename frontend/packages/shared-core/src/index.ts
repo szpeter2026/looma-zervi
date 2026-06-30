@@ -96,6 +96,7 @@ export type {
   ResumeProject,
   ResumeUploadResult,
   Job,
+  JobMatchItem,
   JobMatchResult,
   JobMatchRequest,
   JobMatchResponse,
