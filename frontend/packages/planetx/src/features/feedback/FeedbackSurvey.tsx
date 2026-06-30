@@ -19,7 +19,7 @@
 import { useState } from 'react'
 import { createApiClient, createNarrativeApi } from '@looma/shared-core'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000'
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 interface Props {
   sessionId: string

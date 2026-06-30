@@ -28,11 +28,17 @@ export default function Resume() {
   const handleUpload = async (file: File) => {
     setParsing(true);
     setMsg(null);
+    setResume(null);
     try {
-      const text = await file.text();
-      const result = await resumeApi.parse(text);
-      setResume(result.extracted);
-      setMsg("简历解析完成");
+      const result = await resumeApi.upload(file) as any;
+      if (result.extracted) {
+        setResume(result.extracted);
+        setMsg("简历解析完成");
+      } else if (result.error) {
+        setMsg(result.error);
+      } else {
+        setMsg("简历解析完成，但未能提取结构化信息");
+      }
     } catch {
       setMsg("解析失败，请检查文件格式");
     } finally {

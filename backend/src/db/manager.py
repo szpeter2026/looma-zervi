@@ -353,6 +353,82 @@ CREATE TABLE IF NOT EXISTS narrative_feedback (
 );
 
 CREATE INDEX IF NOT EXISTS idx_narrative_feedback_session ON narrative_feedback(session_id);
+
+-- ============================================
+-- Domain Engine: value imprints (Jason — GDD §3.2)
+-- ============================================
+CREATE TABLE IF NOT EXISTS value_imprints (
+    user_id         TEXT NOT NULL,
+    survival        INTEGER NOT NULL DEFAULT 0,
+    freedom         INTEGER NOT NULL DEFAULT 0,
+    belonging       INTEGER NOT NULL DEFAULT 0,
+    updated_at      TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- ============================================
+-- Navigator Memory: memory entries (Jason — GDD §3.4)
+-- ============================================
+CREATE TABLE IF NOT EXISTS navigator_memories (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         TEXT NOT NULL,
+    memory_level    TEXT NOT NULL,              -- surface | deep | fragment | taboo
+    content         TEXT NOT NULL,
+    context         TEXT DEFAULT NULL,
+    domain          TEXT DEFAULT NULL,
+    choice          TEXT DEFAULT NULL,
+    importance      REAL DEFAULT 1.0,
+    referenced_count INTEGER DEFAULT 0,
+    session_id      TEXT DEFAULT NULL,
+    created_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_navigator_memories_user ON navigator_memories(user_id);
+CREATE INDEX IF NOT EXISTS idx_navigator_memories_level ON navigator_memories(memory_level);
+
+-- ============================================
+-- Domain Engine: emergent strategy log (Jason — GDD §7.3)
+-- ============================================
+CREATE TABLE IF NOT EXISTS emergent_strategy_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         TEXT NOT NULL,
+    strategy_type   TEXT NOT NULL,              -- poetry_refuge | trust_farming | unknown_speedrun | mbti_rejector | cross_domain_hacker
+    triggered_at    TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_emergent_strategy_user ON emergent_strategy_log(user_id);
+
+-- ============================================
+-- Domain Engine: domain visit log (Jason)
+-- ============================================
+CREATE TABLE IF NOT EXISTS domain_visits (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         TEXT NOT NULL,
+    session_id      TEXT NOT NULL,
+    domain          TEXT NOT NULL,
+    previous_domain TEXT DEFAULT NULL,
+    interaction_level TEXT DEFAULT NULL,        -- intended | acceptable | forbidden
+    echo_triggered  INTEGER NOT NULL DEFAULT 0, -- 0/1
+    entered_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (session_id) REFERENCES narrative_sessions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_domain_visits_user ON domain_visits(user_id);
+CREATE INDEX IF NOT EXISTS idx_domain_visits_session ON domain_visits(session_id);
+
+-- ============================================
+-- Narrative: Act 1 state persistence
+-- ============================================
+CREATE TABLE IF NOT EXISTS act1_sessions (
+    session_id      TEXT PRIMARY KEY,
+    state_json      TEXT NOT NULL,
+    updated_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES narrative_sessions(id)
+);
 """
 
 
@@ -1095,6 +1171,31 @@ class DatabaseManager:
                  1 if shared else 0, share_channel, open_feedback),
             )
 
+    # ============================================================
+    # Act 1 state persistence
+    # ============================================================
+
+    def save_act1_state(self, session_id: str, state_json: str):
+        """Persist Act 1 session state as JSON."""
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO act1_sessions (session_id, state_json, updated_at)
+                   VALUES (?, ?, datetime('now'))
+                   ON CONFLICT(session_id) DO UPDATE SET
+                     state_json = excluded.state_json,
+                     updated_at = datetime('now')""",
+                (session_id, state_json),
+            )
+
+    def get_act1_state(self, session_id: str) -> str | None:
+        """Retrieve Act 1 session state JSON, or None."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT state_json FROM act1_sessions WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+            return row["state_json"] if row else None
+
     def get_narrative_stats(self) -> dict:
         """Get aggregated Phase 0 metrics for admin dashboard.
 
@@ -1166,3 +1267,127 @@ class DatabaseManager:
             "domains": [{"domain": r["domain"], "count": r["cnt"]} for r in domain_rows],
             "open_feedback": [{"domain": r["domain"], "text": r["open_feedback"], "at": r["created_at"]} for r in open_fb_rows],
         }
+
+    # ================================================================
+    # Value Imprint methods (GDD §3.2)
+    # ================================================================
+
+    def get_value_imprints(self, user_id: str) -> dict | None:
+        """Get accumulated value imprints for a user."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT survival, freedom, belonging FROM value_imprints WHERE user_id=?",
+                (user_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return {"survival": row["survival"], "freedom": row["freedom"], "belonging": row["belonging"]}
+
+    def save_value_imprints(self, user_id: str, imprints: dict):
+        """Save/update value imprints for a user."""
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO value_imprints (user_id, survival, freedom, belonging, updated_at)
+                   VALUES (?, ?, ?, ?, datetime('now'))
+                   ON CONFLICT(user_id) DO UPDATE SET
+                     survival = excluded.survival,
+                     freedom = excluded.freedom,
+                     belonging = excluded.belonging,
+                     updated_at = excluded.updated_at""",
+                (user_id, imprints.get("survival", 0),
+                 imprints.get("freedom", 0), imprints.get("belonging", 0)),
+            )
+
+    # ================================================================
+    # Navigator Memory methods (GDD §3.4)
+    # ================================================================
+
+    def record_navigator_memory(self, user_id: str, memory_level: str,
+                                content: str, context: str | None = None,
+                                domain: str | None = None,
+                                importance: float = 1.0,
+                                session_id: str | None = None):
+        """Persist a Navigator memory entry."""
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO navigator_memories
+                   (user_id, memory_level, content, context, domain, importance, session_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (user_id, memory_level, content, context, domain, importance, session_id),
+            )
+
+    def get_navigator_memories(self, user_id: str, memory_level: str | None = None,
+                                limit: int = 20) -> list[dict]:
+        """Retrieve Navigator memories for a user."""
+        if memory_level:
+            sql = """SELECT * FROM navigator_memories
+                     WHERE user_id=? AND memory_level=?
+                     ORDER BY importance DESC, referenced_count ASC
+                     LIMIT ?"""
+            params = (user_id, memory_level, limit)
+        else:
+            sql = """SELECT * FROM navigator_memories
+                     WHERE user_id=?
+                     ORDER BY created_at DESC LIMIT ?"""
+            params = (user_id, limit)
+        with self.get_conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def mark_memory_referenced(self, memory_id: int):
+        """Increment reference count for a memory."""
+        with self.get_conn() as conn:
+            conn.execute(
+                "UPDATE navigator_memories SET referenced_count = referenced_count + 1 WHERE id=?",
+                (memory_id,),
+            )
+
+    # ================================================================
+    # Emergent Strategy Log (GDD §7.3)
+    # ================================================================
+
+    def log_emergent_strategy(self, user_id: str, strategy_type: str):
+        """Log an emergent strategy detection."""
+        with self.get_conn() as conn:
+            conn.execute(
+                "INSERT INTO emergent_strategy_log (user_id, strategy_type) VALUES (?, ?)",
+                (user_id, strategy_type),
+            )
+
+    def get_emergent_strategies(self, user_id: str) -> list[str]:
+        """Get all strategies detected for a user."""
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT strategy_type FROM emergent_strategy_log WHERE user_id=?",
+                (user_id,),
+            ).fetchall()
+        return [r["strategy_type"] for r in rows]
+
+    # ================================================================
+    # Domain Visit Log
+    # ================================================================
+
+    def log_domain_visit(self, user_id: str, session_id: str, domain: str,
+                         previous_domain: str | None = None,
+                         interaction_level: str | None = None,
+                         echo_triggered: bool = False):
+        """Log a domain visit event."""
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO domain_visits
+                   (user_id, session_id, domain, previous_domain, interaction_level, echo_triggered)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (user_id, session_id, domain, previous_domain, interaction_level,
+                 1 if echo_triggered else 0),
+            )
+
+    def get_user_domain_history(self, user_id: str, limit: int = 20) -> list[dict]:
+        """Get recent domain visit history for a user."""
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT domain, interaction_level, echo_triggered, entered_at
+                   FROM domain_visits WHERE user_id=?
+                   ORDER BY entered_at DESC LIMIT ?""",
+                (user_id, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]

@@ -25,6 +25,7 @@ import Poetry from "./features/poetry/Poetry";
 import Jobs from "./features/hr/Jobs";
 import Resume from "./features/hr/Resume";
 import Reports from "./features/reports/Reports";
+import Pricing from "./features/pricing/Pricing";
 
 /** 轻量 ErrorBoundary 包装器，用于隔离单个功能的崩溃 */
 function FeatureGuard({ children }: { children: React.ReactNode }) {
@@ -47,9 +48,10 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Dashboard — 自由浏览，无需登录 */}
+          {/* Public pages — 自由浏览，无需登录 */}
           <Route element={<AppLayout />}>
             <Route path="/" element={<FeatureGuard><Dashboard /></FeatureGuard>} />
+            <Route path="/pricing" element={<FeatureGuard><Pricing /></FeatureGuard>} />
           </Route>
 
           {/* Protected routes (需要登录的功能页) */}

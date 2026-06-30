@@ -31,6 +31,8 @@ export {
   createPaymentApi,
   createQuotaApi,
   createNarrativeApi,
+  createAct1Api,
+  createCreditApi,
 } from "./api/createApi";
 
 // Types
@@ -92,10 +94,16 @@ export type {
   ResumeExperience,
   ResumeEducation,
   ResumeProject,
+  ResumeUploadResult,
   Job,
   JobMatchResult,
   JobMatchRequest,
   JobMatchResponse,
+  ParsedJob,
+  JobUploadResult,
+  JobMatchScore,
+  CreditAnalysis,
+  CheckCompanyRequest,
 } from "./types/resume";
 
 export type {
@@ -141,6 +149,16 @@ export type {
   NarrativeEndRequest,
   NarrativeFeedbackRequest,
   NarrativeStats,
+  Act1DomainSummary,
+  Act1Step,
+  ConvergenceTexture,
+  Act1ContentResponse,
+  Act1ChoiceOption,
+  Act1SessionState,
+  Act1AdvanceResponse,
+  Act1ChoiceRequest,
+  Act1ChoiceResponse,
+  Act1InitRequest,
 } from "./types/narrative";
 
 export {

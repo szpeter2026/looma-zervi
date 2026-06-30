@@ -102,6 +102,20 @@ def end_session():
     db = _get_db()
     db.update_narrative_session(session_id, status, duration_seconds)
 
+    # ── Engine cleanup ──
+    user_id = g.get("user_id")
+    if user_id:
+        try:
+            from src.agents.domain_engine import get_domain_engine
+            from src.agents.navigator_memory import get_navigator_memory
+
+            engine = get_domain_engine(db=db)
+            memory = get_navigator_memory(db=db)
+            engine.end_session(user_id, session_id)
+            memory.on_session_end(user_id)
+        except Exception as e:
+            logger.warning(f"Engine cleanup failed for session {session_id}: {e}")
+
     logger.info(f"Narrative session {session_id} → {status} ({duration_seconds}s)")
     return jsonify(ok=True, session_id=session_id, status=status)
 
@@ -163,3 +177,458 @@ def get_stats():
     db = _get_db()
     stats = db.get_narrative_stats()
     return jsonify(stats)
+
+
+# =========================================================================
+# Engine endpoints (GDD §3 & §7 integration)
+# =========================================================================
+
+@narrative_bp.route("/engine/domain-enter", methods=["POST"])
+@optional_auth
+def engine_domain_enter():
+    """Record domain entry and get cross-domain effects.
+
+    Body:
+      session_id  (required) - narrative session ID
+      domain      (required) - domain being entered
+    """
+    data = request.get_json() or {}
+    session_id = data.get("session_id", "").strip()
+    domain = data.get("domain", "").strip()
+
+    if not session_id or not domain:
+        return jsonify(error="bad_request", message="session_id and domain required"), 400
+
+    if domain not in VALID_DOMAINS:
+        return jsonify(error="bad_request", message=f"unknown domain: {domain}"), 400
+
+    user_id = g.get("user_id", "guest")
+    db = _get_db()
+
+    try:
+        from src.agents.domain_engine import get_domain_engine
+        engine = get_domain_engine(db=db)
+
+        result = engine.record_domain_enter(user_id, session_id, domain)
+
+        # Also log visit to DB
+        if result:
+            try:
+                db.log_domain_visit(
+                    user_id=user_id,
+                    session_id=session_id,
+                    domain=domain,
+                    previous_domain=result.get("previous_domain"),
+                    interaction_level=result.get("interaction_level"),
+                    echo_triggered=result.get("echo") is not None,
+                )
+            except Exception:
+                pass
+
+        return jsonify(domain_entry=result or {"domain": domain})
+    except Exception as e:
+        logger.error(f"domain_enter failed: {e}", exc_info=True)
+        return jsonify(error="engine_error", message=str(e)), 500
+
+
+@narrative_bp.route("/engine/choice", methods=["POST"])
+@optional_auth
+def engine_record_choice():
+    """Record a narrative choice and accumulate value imprint.
+
+    Body:
+      session_id  (required)
+      domain      (required)
+      choice      (required) - description of the choice made
+      importance  (optional) - 1.0-5.0, default 1.0
+    """
+    data = request.get_json() or {}
+    session_id = data.get("session_id", "").strip()
+    domain = data.get("domain", "").strip()
+    choice = data.get("choice", "").strip()
+    importance = float(data.get("importance", 1.0))
+
+    if not session_id or not domain or not choice:
+        return jsonify(error="bad_request",
+                       message="session_id, domain, choice required"), 400
+
+    user_id = g.get("user_id", "guest")
+    db = _get_db()
+
+    try:
+        from src.agents.domain_engine import get_domain_engine
+        from src.agents.navigator_memory import get_navigator_memory
+
+        engine = get_domain_engine(db=db)
+        memory = get_navigator_memory(db=db)
+
+        engine.record_choice(session_id, domain, choice, user_id)
+        imprint_result = engine.add_imprint(user_id, domain)
+
+        # Record as Navigator memory
+        memory.record_choice(user_id, domain, choice,
+                             importance=importance,
+                             session_id=session_id)
+
+        # Also log as narrative event
+        db.log_narrative_event(
+            session_id=session_id,
+            event_type="choice_made",
+            domain=domain,
+            choice=choice,
+            metadata={"importance": importance},
+        )
+
+        # Check emergent strategies
+        strategies = engine.detect_strategies(user_id)
+        for s in strategies:
+            try:
+                db.log_emergent_strategy(user_id, s["strategy"])
+            except Exception:
+                pass
+
+        return jsonify(
+            ok=True,
+            imprint=imprint_result,
+            strategies_detected=[s["strategy"] for s in strategies] if strategies else [],
+        )
+    except Exception as e:
+        logger.error(f"record_choice failed: {e}", exc_info=True)
+        return jsonify(error="engine_error", message=str(e)), 500
+
+
+@narrative_bp.route("/engine/state", methods=["GET"])
+@optional_auth
+def engine_get_state():
+    """Get current Navigator engine state for the authenticated user.
+
+    Returns value imprints, domain history, active strategies,
+    and convergence status.
+    """
+    user_id = g.get("user_id", "guest")
+    session_id = request.args.get("session_id", "").strip()
+    db = _get_db()
+
+    try:
+        from src.agents.domain_engine import get_domain_engine
+        from src.agents.navigator_memory import get_navigator_memory
+        from src.agents.convergence import get_convergence
+
+        engine = get_domain_engine(db=db)
+        memory = get_navigator_memory(db=db)
+        convergence = get_convergence(engine=engine, memory=memory)
+
+        engine_ctx = engine.build_navigator_context(user_id, session_id or "latest")
+        memory_stats = memory.get_memory_stats(user_id)
+
+        result = {
+            "user_id": user_id,
+            "imprints": engine_ctx["imprint"],
+            "imprint_total": engine_ctx["imprint_total"],
+            "dominant_axis": engine_ctx["dominant_axis"],
+            "is_balanced": engine_ctx["is_balanced"],
+            "is_extreme": engine_ctx["is_extreme"],
+            "estimated_act": engine_ctx["estimated_act"],
+            "visited_domains": engine_ctx["visited_domains"],
+            "domain_count": engine_ctx["domain_count"],
+            "echo_chain_length": engine_ctx["echo_chain_length"],
+            "active_strategies": engine_ctx["active_strategies"],
+            "memory": memory_stats,
+        }
+
+        if session_id:
+            result["convergence"] = convergence.get_convergence_stats(user_id, session_id)
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"get_state failed: {e}", exc_info=True)
+        return jsonify(error="engine_error", message=str(e)), 500
+
+
+@narrative_bp.route("/engine/matrix", methods=["GET"])
+def engine_get_matrix():
+    """Get the 6×6 domain interaction matrix (public, for reference)."""
+    matrix: dict[str, dict[str, dict]] = {}
+    for (src, tgt), (level, desc) in _load_matrix().items():
+        if src not in matrix:
+            matrix[src] = {}
+        matrix[src][tgt] = {"level": level.value, "description": desc}
+    return jsonify(matrix=matrix, domains=VALID_DOMAINS)
+
+
+def _load_matrix():
+    """Lazy import the interaction matrix."""
+    from src.agents.domain_engine import INTERACTION_MATRIX
+    return INTERACTION_MATRIX
+
+
+# =========================================================================
+# Act 1 State Machine endpoints (GDD §5.1 integration)
+# =========================================================================
+
+@narrative_bp.route("/engine/act1/init", methods=["POST"])
+@optional_auth
+def act1_init():
+    """Initialize an Act 1 session for a given domain.
+
+    Body:
+      session_id  (required) - narrative session ID
+      domain      (required) - domain to enter (职业域/身份域/诗域/信任域/自我域/迷雾域)
+    """
+    data = request.get_json() or {}
+    session_id = data.get("session_id", "").strip()
+    domain = data.get("domain", "").strip()
+
+    if not session_id or not domain:
+        return jsonify(error="bad_request", message="session_id and domain required"), 400
+
+    if domain not in VALID_DOMAINS:
+        return jsonify(error="bad_request", message=f"unknown domain: {domain}"), 400
+
+    user_id = g.get("user_id", "guest")
+
+    try:
+        from src.agents.act1_state_machine import get_act1
+        db = _get_db()
+        act1 = get_act1(db=db)
+        act1.init_session(session_id, user_id)
+        state = act1.select_domain(session_id, domain)
+
+        # Also log domain_enter on the engine side
+        db = _get_db()
+        try:
+            from src.agents.domain_engine import get_domain_engine
+            engine = get_domain_engine(db=db)
+            engine.record_domain_enter(user_id, session_id, domain)
+            db.log_domain_visit(
+                user_id=user_id, session_id=session_id, domain=domain,
+                previous_domain=None, interaction_level=None, echo_triggered=False,
+            )
+        except Exception:
+            pass
+
+        return jsonify(state.to_dict()), 201
+    except Exception as e:
+        logger.error(f"act1_init failed: {e}", exc_info=True)
+        return jsonify(error="engine_error", message=str(e)), 500
+
+
+@narrative_bp.route("/engine/act1/state", methods=["GET"])
+@optional_auth
+def act1_get_state():
+    """Get current Act 1 state for a session.
+
+    Query: session_id (required)
+    """
+    session_id = request.args.get("session_id", "").strip()
+    if not session_id:
+        return jsonify(error="bad_request", message="session_id required"), 400
+
+    try:
+        from src.agents.act1_state_machine import get_act1
+        db = _get_db()
+        act1 = get_act1(db=db)
+        state = act1.get_state(session_id)
+        if state is None:
+            return jsonify(error="not_found", message="session not initialized"), 404
+        return jsonify(state.to_dict())
+    except Exception as e:
+        logger.error(f"act1_get_state failed: {e}", exc_info=True)
+        return jsonify(error="engine_error", message=str(e)), 500
+
+
+@narrative_bp.route("/engine/act1/advance", methods=["POST"])
+@optional_auth
+def act1_advance():
+    """Advance to the next step in the Act 1 narrative.
+
+    Body:
+      session_id  (required)
+    """
+    data = request.get_json() or {}
+    session_id = data.get("session_id", "").strip()
+
+    if not session_id:
+        return jsonify(error="bad_request", message="session_id required"), 400
+
+    try:
+        from src.agents.act1_state_machine import get_act1
+        db = _get_db()
+        act1 = get_act1(db=db)
+        result = act1.advance(session_id)
+
+        if result.get("error"):
+            return jsonify(error="state_error", message=result["error"], state=result), 400
+
+        # Optionally log as narrative event
+        try:
+            db.log_narrative_event(
+                session_id=session_id,
+                event_type="domain_enter" if result["step"] <= 2 else "choice_made",
+                domain=result.get("domain"),
+                choice=result.get("imprint_name"),
+                metadata={"act1_step": result["step"], "label": result.get("label")},
+            )
+        except Exception:
+            pass
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"act1_advance failed: {e}", exc_info=True)
+        return jsonify(error="engine_error", message=str(e)), 500
+
+
+@narrative_bp.route("/engine/act1/choice", methods=["POST"])
+@optional_auth
+def act1_make_choice():
+    """Make a choice at Act 1 step 3 (domain) or step 7 (cross-domain).
+
+    Body:
+      session_id     (required)
+      choice_index   (required) - 0, 1, or 2
+    """
+    data = request.get_json() or {}
+    session_id = data.get("session_id", "").strip()
+    choice_index = int(data.get("choice_index", -1))
+
+    if not session_id or choice_index < 0:
+        return jsonify(error="bad_request", message="session_id and choice_index required"), 400
+
+    user_id = g.get("user_id", "guest")
+    db = _get_db()
+
+    try:
+        from src.agents.act1_state_machine import get_act1
+        act1 = get_act1(db=db)
+        result = act1.make_choice(session_id, choice_index)
+
+        if result.get("error"):
+            return jsonify(error="state_error", message=result["error"]), 400
+
+        state = act1.get_state(session_id)
+        is_cross = result.get("is_cross_choice", False)
+
+        # Record imprint via engine
+        if state and state.domain:
+            try:
+                from src.agents.domain_engine import get_domain_engine
+                from src.agents.navigator_memory import get_navigator_memory
+
+                engine = get_domain_engine(db=db)
+                memory = get_navigator_memory(db=db)
+
+                imprint_axis = result.get("imprint_axis", "freedom")
+                imprint_points = result.get("imprint_points", 2)
+                target_domain = "诗域" if is_cross else state.domain
+
+                engine.record_choice(session_id, target_domain, result.get("imprint_name", ""), user_id)
+                engine.add_imprint(user_id, target_domain, imprint_points)
+
+                memory.record_choice(
+                    user_id=user_id,
+                    domain=target_domain,
+                    choice=result.get("imprint_name", ""),
+                    importance=float(imprint_points) / 3.0,
+                    session_id=session_id,
+                )
+            except Exception:
+                pass
+
+        # Log choice as narrative event
+        try:
+            db.log_narrative_event(
+                session_id=session_id,
+                event_type="cross_domain_choice" if is_cross else "choice_made",
+                domain="诗域" if is_cross else (state.domain if state else ""),
+                choice=result.get("imprint_name", ""),
+                metadata={
+                    "choice_index": choice_index,
+                    "imprint_axis": result.get("imprint_axis"),
+                    "is_cross_choice": is_cross,
+                },
+            )
+        except Exception:
+            pass
+
+        # Auto-advance
+        advance_result = act1.advance(session_id)
+        result["step"] = advance_result.get("step", 4)
+        result["consequence"] = advance_result.get("narrative")
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"act1_make_choice failed: {e}", exc_info=True)
+        return jsonify(error="engine_error", message=str(e)), 500
+
+
+@narrative_bp.route("/engine/act1/reset", methods=["POST"])
+@optional_auth
+def act1_reset():
+    """Reset current Act 1 path (keep domain, reset steps).
+
+    Body:
+      session_id  (required)
+      hard        (optional) - if true, clear domain too
+    """
+    data = request.get_json() or {}
+    session_id = data.get("session_id", "").strip()
+    hard = data.get("hard", False)
+
+    if not session_id:
+        return jsonify(error="bad_request", message="session_id required"), 400
+
+    try:
+        from src.agents.act1_state_machine import get_act1
+        db = _get_db()
+        act1 = get_act1(db=db)
+        if hard:
+            act1.hard_reset(session_id)
+        else:
+            act1.reset(session_id)
+        return jsonify(ok=True, session_id=session_id, hard=hard)
+    except Exception as e:
+        logger.error(f"act1_reset failed: {e}", exc_info=True)
+        return jsonify(error="engine_error", message=str(e)), 500
+
+
+@narrative_bp.route("/engine/act1/content", methods=["GET"])
+def act1_get_content():
+    """Get Act 1 narrative content library (domains, steps, choices).
+    Used by frontend to bootstrap the UI without hardcoding narrative text.
+
+    Query:
+      domain (optional) - filter to single domain content
+    """
+    from src.agents.narrative_content import (
+        DOMAIN_CONTENT, ACT1_STEPS, NAVIGATOR_LINES, get_convergence_comparison, VERDICT_TEXT,
+    )
+
+    domain_filter = request.args.get("domain", "").strip()
+
+    if domain_filter:
+        from src.agents.narrative_content import get_domain
+        d = get_domain(domain_filter)
+        if d is None:
+            return jsonify(error="bad_request", message=f"unknown domain: {domain_filter}"), 400
+        return jsonify(domain=d, steps=ACT1_STEPS)
+
+    return jsonify(
+        domains={
+            name: {
+                "icon": data["icon"],
+                "en": data["en"],
+                "color": data["color"],
+                "emotion_arc": data["emotion_arc"],
+                "encounter_summary": data["encounter"][:80] + "…",
+                "choice_count": len(data["choices"]),
+            }
+            for name, data in DOMAIN_CONTENT.items()
+        },
+        steps=ACT1_STEPS,
+        navigator_lines={
+            key: {"line": val["line"][:60] + "…", "confidence": val["confidence"]}
+            for key, val in NAVIGATOR_LINES.items()
+        },
+        convergence_comparison=get_convergence_comparison(),
+        verdict=VERDICT_TEXT[:200] + "…",
+    )

@@ -302,12 +302,67 @@ def dispatch(
     # ── Navigator 对话模式 ──
     if context.get("navigator_mode") and intent == "unknown":
         try:
-            navigator_system = context.get("navigator_system_prompt", "")
+            user_id = context.get("user_id", "guest")
+            session_id = context.get("session_id", "")
             session_history = context.get("session_history", [])
             current_stage = context.get("current_stage", "greeting")
             active_domain = context.get("active_domain", "")
+            session_num = context.get("session_num", 1)
+            interaction_count = context.get("interaction_count", 0)
 
-            # Psychology layer
+            # ── Engine initialization ──
+            db = current_app._db if hasattr(current_app, '_db') else None
+            from src.agents.domain_engine import get_domain_engine
+            from src.agents.navigator_memory import get_navigator_memory
+            from src.agents.convergence import get_convergence
+
+            engine = get_domain_engine(db=db)
+            memory = get_navigator_memory(db=db)
+            convergence = get_convergence(engine=engine, memory=memory)
+
+            # ── Stage: domain_enter → record domain entry + cross-domain effects ──
+            domain_context: dict = {}
+            if current_stage == "domain_enter" and active_domain:
+                crossing = engine.record_domain_enter(user_id, session_id, active_domain)
+                if crossing:
+                    domain_context = crossing
+
+            # ── Stage: choice_made → record choice + imprint ──
+            if current_stage == "choice_made" and active_domain:
+                user_choice = context.get("last_choice", "")
+                if user_choice:
+                    engine.record_choice(session_id, active_domain, user_choice, user_id)
+                    importance = context.get("choice_importance", 1.0)
+                    memory.record_choice(user_id, active_domain, user_choice,
+                                         importance=importance, session_id=session_id)
+
+            # ── Intelligence: detect emergent strategies ──
+            strategies = engine.detect_strategies(user_id)
+            if strategies and db:
+                for s in strategies:
+                    try:
+                        db.log_emergent_strategy(user_id, s["strategy"])
+                    except Exception:
+                        pass
+
+            # ── Check convergence trigger ──
+            if convergence.should_trigger_convergence(user_id, session_id, interaction_count):
+                current_stage = "convergence"
+                convergence.mark_convergence_triggered(session_id)
+                logger.info(f"Convergence triggered: user={user_id} session={session_id}")
+
+            # ── Build Navigator system prompt (core of the engine) ──
+            navigator_system = convergence.build_system_prompt(
+                user_id=user_id,
+                session_id=session_id,
+                active_domain=active_domain or None,
+                confidence=context.get("confidence", 0.5),
+                stage=current_stage,
+                query=query,
+                session_num=session_num,
+            )
+
+            # ── Psychology layer (optional enhancement) ──
             psychology_hint = ""
             if current_app.config.get("PSYCHOLOGY_ENABLED", True):
                 try:
@@ -317,21 +372,32 @@ def dispatch(
                 except Exception:
                     pass
 
-            # Build prompt
+            # ── Build chat history ──
             history_text = ""
             for msg in session_history[-4:]:
                 role = "用户" if msg.get("role") == "user" else "Navigator"
                 content = msg.get("content", "")[:80]
                 history_text += f"{role}：{content}\n"
 
-            domain_hint = ""
-            if active_domain:
-                domain_hint = f"[当前域：{active_domain}]\n"
+            # ── Assemble full prompt ──
+            domain_hint = f"[当前域：{active_domain}]\n" if active_domain else ""
+
+            # Inject domain crossing narrative if available
+            crossing_narrative = ""
+            if domain_context.get("crossing_narrative"):
+                crossing_narrative = f"\n[跨域感知 — 注入你的回应中]\n{domain_context['crossing_narrative']}\n"
+
+            # Inject echo narrative if active
+            echo_narrative = ""
+            if domain_context.get("echo") and domain_context["echo"].get("narrative_hint"):
+                echo_narrative = f"\n[回声感知 — 你感知到跨域共鸣]\n{domain_context['echo']['narrative_hint']}\n"
 
             full_prompt = (
                 f"{navigator_system}\n\n"
                 f"{domain_hint}"
                 f"{psychology_hint}\n"
+                f"{crossing_narrative}"
+                f"{echo_narrative}"
                 f"[对话历史]\n{history_text}\n"
                 f"[用户消息] {query}\n\n"
                 f"请以 Navigator 身份回应（不超过120字，纯文本）："
@@ -341,13 +407,25 @@ def dispatch(
             answer = _call_llm(full_prompt) or "...（信号中断）"
             _timing["navigator_llm"] = int((time.time() - t_nav) * 1000)
 
+            # Build engine metadata for response
+            engine_ctx = engine.build_navigator_context(user_id, session_id)
+            navigator_extras: dict = {
+                "navigator_mode": True,
+                "current_stage": current_stage,
+                "active_domain": active_domain,
+                "estimated_act": engine_ctx.get("estimated_act"),
+                "imprint": engine_ctx.get("imprint"),
+                "echo_chain": engine_ctx.get("echo_chain_length", 0),
+                "convergence_triggered": current_stage == "convergence",
+                "active_strategies": engine_ctx.get("active_strategies", []),
+                "domain_context": domain_context,
+            }
+            # Remove null-ish values
+            navigator_extras = {k: v for k, v in navigator_extras.items() if v not in (None, "", [], {})}
+
             return {
                 "answer": answer.strip(),
-                "extracted": {
-                    "navigator_mode": True,
-                    "current_stage": current_stage,
-                    "active_domain": active_domain,
-                },
+                "extracted": navigator_extras,
                 "slots": slots,
             }
         except Exception as e:

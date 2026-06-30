@@ -93,10 +93,16 @@ export default function Sidebar() {
               }}
             />
           </div>
-          <div className="mt-1.5">
+          <div className="mt-1.5 flex items-center justify-between">
             <span className="text-xs text-white/30">
               {quota.tier === "free" ? "免费版" : quota.tier === "supporter" ? "支持版" : "专业版"}
             </span>
+            <NavLink
+              to="/pricing"
+              className="text-xs text-white/40 hover:text-white transition-colors no-underline"
+            >
+              查看套餐 →
+            </NavLink>
           </div>
         </div>
       )}

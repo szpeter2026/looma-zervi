@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlanetX T空间 · Act 1 节点图纸面原型仿真</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --panel: #12121a;
+    --border: #1e1e2e;
+    --text: #c8c8d4;
+    --text-dim: #6a6a7a;
+    --accent: #7c6ff7;
+    --accent-glow: rgba(124, 111, 247, 0.3);
+    --domain-job: #4ecdc4;
+    --domain-identity: #ff6b6b;
+    --domain-poetry: #f9ca24;
+    --domain-trust: #a29bfe;
+    --domain-self: #fd79a8;
+    --domain-mist: #636e72;
+    --converge: #e17055;
+    --hook: #00cec9;
+    --node-bg: #1a1a28;
+    --node-active: #252540;
+    --path-line: #2a2a3a;
+    --danger: #ff7675;
+    --success: #55efc4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, 'SF Pro Display', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .header h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+  .header .sub {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--node-bg);
+    border: 1px solid var(--border);
+  }
+  .badge.p5 {
+    border-color: var(--converge);
+    color: var(--converge);
+  }
+  .badge.goal {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ── Main Layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 0;
+    min-height: calc(100vh - 80px);
+  }
+  @media (max-width: 960px) {
+    .main { grid-template-columns: 1fr; }
+    .sidebar { border-left: none; border-top: 1px solid var(--border); }
+  }
+
+  /* ── Node Graph Canvas ── */
+  .graph-panel {
+    padding: 32px;
+    overflow: auto;
+    position: relative;
+  }
+  .graph-title {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 24px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .node-graph {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .node {
+    position: relative;
+    padding: 14px 24px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--node-bg);
+    text-align: center;
+    min-width: 220px;
+    transition: all 0.3s ease;
+    cursor: default;
+    z-index: 1;
+  }
+  .node.active {
+    border-color: var(--accent);
+    background: var(--node-active);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+  .node.passed {
+    border-color: var(--success);
+    opacity: 0.85;
+  }
+  .node .node-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 2px;
+  }
+  .node .node-desc {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  /* Domain branch cluster */
+  .domain-cluster {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 4px 0;
+    position: relative;
+  }
+  .domain-node {
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--node-bg);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    min-width: 72px;
+    text-align: center;
+    position: relative;
+  }
+  .domain-node:hover {
+    border-color: var(--accent);
+    background: var(--node-active);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px var(--accent-glow);
+  }
+  .domain-node.selected {
+    border-color: var(--accent);
+    background: var(--node-active);
+    box-shadow: 0 0 24px var(--accent-glow);
+  }
+  .domain-node.job { border-left: 3px solid var(--domain-job); }
+  .domain-node.identity { border-left: 3px solid var(--domain-identity); }
+  .domain-node.poetry { border-left: 3px solid var(--domain-poetry); }
+  .domain-node.trust { border-left: 3px solid var(--domain-trust); }
+  .domain-node.self { border-left: 3px solid var(--domain-self); }
+  .domain-node.mist { border-left: 3px solid var(--domain-mist); }
+
+  /* Vertical connectors */
+  .connector {
+    width: 2px;
+    height: 28px;
+    background: var(--path-line);
+    position: relative;
+    z-index: 0;
+  }
+  .connector.active { background: var(--accent); }
+  .connector.converge { background: var(--converge); }
+
+  .fan-out, .fan-in {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    height: 32px;
+    width: 100%;
+  }
+  .fan-out::before, .fan-in::before {
+    content: '';
+    position: absolute;
+    height: 2px;
+    background: var(--path-line);
+  }
+  .fan-out::before {
+    width: 60%;
+    top: 0;
+  }
+  .fan-in::before {
+    width: 60%;
+    bottom: 0;
+  }
+
+  /* Convergence point special styling */
+  .node.convergence-point {
+    border: 2px solid var(--converge);
+    background: linear-gradient(135deg, #1a1020, #1a1a28);
+    box-shadow: 0 0 30px rgba(225, 112, 85, 0.15);
+  }
+  .node.convergence-point .node-label {
+    color: var(--converge);
+  }
+  .node.convergence-point.active {
+    box-shadow: 0 0 40px rgba(225, 112, 85, 0.35);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .sidebar-section {
+    background: var(--node-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .sidebar-section h3 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+  }
+
+  /* Domain selector */
+  .domain-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .domain-btn {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--node-bg);
+    color: var(--text);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+  }
+  .domain-btn:hover {
+    border-color: var(--accent);
+    background: var(--node-active);
+  }
+  .domain-btn.active {
+    border-color: var(--accent);
+    background: var(--node-active);
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .domain-btn .domain-icon {
+    font-size: 1.2rem;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .domain-btn .domain-name {
+    font-weight: 600;
+    font-size: 0.8rem;
+  }
+  .domain-btn .domain-hint {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+  }
+
+  /* Narrative panel */
+  .narrative {
+    font-size: 0.88rem;
+    line-height: 1.7;
+    color: #d0d0dc;
+  }
+  .narrative .narrator {
+    color: var(--accent);
+    font-style: italic;
+  }
+  .narrative .navigator-line {
+    display: block;
+    padding: 10px 14px;
+    margin: 10px 0;
+    background: rgba(124, 111, 247, 0.08);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-style: italic;
+    color: #e0dfff;
+  }
+  .narrative .choice {
+    display: block;
+    padding: 8px 12px;
+    margin: 4px 0;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.82rem;
+  }
+  .narrative .choice:hover {
+    background: rgba(124, 111, 247, 0.1);
+    border-color: var(--accent);
+  }
+  .narrative .choice.chosen {
+    border-color: var(--accent);
+    background: rgba(124, 111, 247, 0.15);
+  }
+
+  /* Texture diff cards */
+  .texture-card {
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--node-bg);
+    margin-bottom: 8px;
+    transition: all 0.3s;
+  }
+  .texture-card.highlight {
+    border-color: var(--converge);
+    box-shadow: 0 0 16px rgba(225, 112, 85, 0.25);
+  }
+  .texture-card .texture-domain {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .texture-card .texture-interpretation {
+    font-size: 0.82rem;
+    color: #ddd;
+    line-height: 1.5;
+  }
+  .texture-card .texture-emotion {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--node-bg);
+    color: var(--text);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .btn.primary:hover {
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .btn.danger {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  .btn.danger:hover {
+    background: rgba(255, 118, 117, 0.1);
+  }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: var(--node-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.75rem;
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+  .status-dot.active { background: var(--success); }
+
+  /* Comparison overlay */
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 8px;
+    background: var(--node-active);
+    border: 1px solid var(--accent);
+    color: #fff;
+    font-size: 0.82rem;
+    z-index: 100;
+    animation: toastIn 0.3s ease, toastOut 0.3s ease 2.5s forwards;
+    pointer-events: none;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } }
+  @keyframes toastOut { to { opacity: 0; transform: translateX(-50%) translateY(-10px); } }
+
+  /* Step indicator */
+  .step-indicator {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .step-dot {
+    width: 24px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    transition: all 0.3s;
+  }
+  .step-dot.done { background: var(--success); }
+  .step-dot.current { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+
+  /* Verification panel */
+  .verdict {
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+  .verdict.pass {
+    background: rgba(85, 239, 196, 0.08);
+    border: 1px solid rgba(85, 239, 196, 0.3);
+    color: var(--success);
+  }
+  .verdict.warn {
+    background: rgba(253, 203, 110, 0.08);
+    border: 1px solid rgba(253, 203, 110, 0.3);
+    color: #fdcb6e;
+  }
+  .verdict.fail {
+    background: rgba(255, 118, 117, 0.08);
+    border: 1px solid rgba(255, 118, 117, 0.3);
+    color: var(--danger);
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>PlanetX T空间 · Act 1 节点图仿真</h1>
+    <span class="sub">纸面原型预演 — 验证 P5 支柱：六域一问 · 收敛点质感差异</span>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <span class="badge p5">◆ P5 六域一问</span>
+    <span class="badge goal">验证目标：质感差异是否成立</span>
+  </div>
+</div>
+
+<div class="main">
+  <!-- ── Left: Node Graph ── -->
+  <div class="graph-panel" id="graphPanel">
+    <div class="graph-title">Act 1 叙事节点图（点击域节点开始走查）</div>
+    <div class="node-graph" id="nodeGraph">
+      <!-- Node 0: 开场 -->
+      <div class="node" data-node="0" id="n0">
+        <div class="node-label">🌐 开场：登陆T空间</div>
+        <div class="node-desc">Navigator 介绍 · confidence 0.3<br>它不太确定你来了</div>
+      </div>
+      <div class="connector" id="c01"></div>
+
+      <!-- Node 1: 待处理信号 -->
+      <div class="node" data-node="1" id="n1">
+        <div class="node-label">📡 待处理信号</div>
+        <div class="node-desc">六域同时亮起<br>"有六个地方在呼唤你……"</div>
+      </div>
+      <div class="connector" id="c12"></div>
+
+      <!-- Domain cluster -->
+      <div style="text-align:center;font-size:0.7rem;color:var(--text-dim);margin:4px 0;">▼ 玩家选择进入一个域 ▼</div>
+      <div class="domain-cluster" id="domainCluster">
+        <div class="domain-node job" data-domain="job" onclick="selectDomain('job')">💼 职业域</div>
+        <div class="domain-node identity" data-domain="identity" onclick="selectDomain('identity')">🪪 身份域</div>
+        <div class="domain-node poetry" data-domain="poetry" onclick="selectDomain('poetry')">📜 诗域</div>
+        <div class="domain-node trust" data-domain="trust" onclick="selectDomain('trust')">⚖️ 信任域</div>
+        <div class="domain-node self" data-domain="self" onclick="selectDomain('self')">🪞 自我域</div>
+        <div class="domain-node mist" data-domain="mist" onclick="selectDomain('mist')">🌫️ 迷雾域</div>
+      </div>
+
+      <!-- Fan in to encounter node -->
+      <div style="text-align:center;font-size:0.7rem;color:var(--text-dim);margin:4px 0;">▼ 全部路径进入 ▼</div>
+      <div class="connector" id="c23"></div>
+
+      <!-- Node 2-4: Domain internal (dynamic - shown per selection) -->
+      <div class="node" data-node="2" id="n2">
+        <div class="node-label">🎬 域内第一拍：初遇</div>
+        <div class="node-desc" id="n2desc">选择一个域以查看初遇内容</div>
+      </div>
+      <div class="connector" id="c34"></div>
+
+      <div class="node" data-node="3" id="n3">
+        <div class="node-label">⚡ 域内第二拍：第一个选择</div>
+        <div class="node-desc" id="n3desc">产生第一枚价值印记</div>
+      </div>
+      <div class="connector" id="c45"></div>
+
+      <div class="node" data-node="4" id="n4">
+        <div class="node-label">📋 域内第三拍：即时后果</div>
+        <div class="node-desc" id="n4desc">叙事反馈 · 选择有重量</div>
+      </div>
+      <div class="connector converge" id="c5c"></div>
+
+      <!-- Convergence Point -->
+      <div class="node convergence-point" data-node="5" id="n5">
+        <div class="node-label">◆ 收敛点 ◆</div>
+        <div class="node-desc">Navigator 发生"故障"<br>"你……以前来过这里吗？"</div>
+      </div>
+      <div class="connector" id="c6e"></div>
+
+      <!-- Act 1 Hook -->
+      <div class="node" data-node="6" id="n6">
+        <div class="node-label">🪝 Act 1 结束钩子</div>
+        <div class="node-desc">Navigator 恢复正常<br>"……抱歉。我有时候会说些奇怪的话。"</div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend" style="margin-top:20px;">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent);"></div>当前激活</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--success);"></div>已通过</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--converge);"></div>收敛点</div>
+      <div class="legend-item" style="color:var(--text-dim);">点击域节点开始</div>
+    </div>
+  </div>
+
+  <!-- ── Right: Sidebar ── -->
+  <div class="sidebar" id="sidebar">
+    <!-- Domain Selector -->
+    <div class="sidebar-section">
+      <h3>🎯 选择进入的域</h3>
+      <div class="domain-selector" id="domainSelector">
+        <button class="domain-btn" onclick="selectDomain('job')">
+          <span class="domain-icon">💼</span>
+          <span class="domain-name">职业域</span>
+          <span class="domain-hint">焦虑→希望</span>
+        </button>
+        <button class="domain-btn" onclick="selectDomain('identity')">
+          <span class="domain-icon">🪪</span>
+          <span class="domain-name">身份域</span>
+          <span class="domain-hint">回顾→重构</span>
+        </button>
+        <button class="domain-btn" onclick="selectDomain('poetry')">
+          <span class="domain-icon">📜</span>
+          <span class="domain-name">诗域</span>
+          <span class="domain-hint">孤独→共鸣</span>
+        </button>
+        <button class="domain-btn" onclick="selectDomain('trust')">
+          <span class="domain-icon">⚖️</span>
+          <span class="domain-name">信任域</span>
+          <span class="domain-hint">怀疑→确认</span>
+        </button>
+        <button class="domain-btn" onclick="selectDomain('self')">
+          <span class="domain-icon">🪞</span>
+          <span class="domain-name">自我域</span>
+          <span class="domain-hint">困惑→认知</span>
+        </button>
+        <button class="domain-btn" onclick="selectDomain('mist')">
+          <span class="domain-icon">🌫️</span>
+          <span class="domain-name">迷雾域</span>
+          <span class="domain-hint">迷失→探索</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step indicator -->
+    <div class="sidebar-section">
+      <h3>📍 当前进度</h3>
+      <div class="step-indicator" id="stepIndicator">
+        <div class="step-dot" id="s0"></div>
+        <div class="step-dot" id="s1"></div>
+        <div class="step-dot" id="s2"></div>
+        <div class="step-dot" id="s3"></div>
+        <div class="step-dot" id="s4"></div>
+        <div class="step-dot" id="s5"></div>
+        <div class="step-dot" id="s6"></div>
+      </div>
+      <div class="status-bar">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">等待选择域…</span>
+      </div>
+    </div>
+
+    <!-- Narrative Panel -->
+    <div class="sidebar-section" id="narrativePanel">
+      <h3>📖 叙事面板</h3>
+      <div class="narrative" id="narrative">
+        <span class="narrator">选择一个域以开始 Act 1 走查。</span>
+        <br><br>
+        <span style="color:var(--text-dim);font-size:0.75rem;">
+        走完六条路径后，点击下方"对比全部质感"查看收敛点差异。
+        </span>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="sidebar-section">
+      <h3>🎮 控制</h3>
+      <div class="controls">
+        <button class="btn primary" id="btnNext" onclick="nextStep()" disabled>下一步 →</button>
+        <button class="btn" onclick="resetWalkthrough()">🔄 重置当前路径</button>
+        <button class="btn danger" onclick="resetAll()">🗑️ 全部重置</button>
+      </div>
+      <div class="controls" style="margin-top:8px;">
+        <button class="btn" onclick="showComparison()" id="btnCompare">🔬 对比全部质感差异</button>
+      </div>
+    </div>
+
+    <!-- Texture Comparison (hidden initially) -->
+    <div class="sidebar-section" id="comparisonPanel" style="display:none;">
+      <h3>🔬 收敛点质感差异对比</h3>
+      <div style="margin-bottom:8px;font-size:0.75rem;color:var(--text-dim);">
+        同一句台词："你……以前来过这里吗？" — 六种不同质感
+      </div>
+      <div id="comparisonContent"></div>
+    </div>
+
+    <!-- Verification Result -->
+    <div class="sidebar-section" id="verdictPanel" style="display:none;">
+      <h3>✅ 验证结论</h3>
+      <div class="verdict" id="verdictContent"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Game State ──
+const DOMAINS = {
+  job: {
+    name: '职业域', icon: '💼', color: 'var(--domain-job)',
+    emotion: '焦虑→希望',
+    encounter: '一份完美JD出现在你面前。薪资、福利、发展路径——一切都无可挑剔。但JD的最后一行用极小的字写着：<br><br><em>"本岗位要求放弃对过去12个月工作成果的所有署名权。"</em>',
+    choice: {
+      prompt: '你接受这份工作吗？',
+      options: [
+        { label: '接受。代价是公平的。', consequence: 'Navigator 微微闪烁了一下。<br>它的声音变轻了：<br><br><em>"……很有趣的选择。"</em><br><br>你获得了价值印记：<strong>务实</strong>' },
+        { label: '拒绝。代价太过分了。', consequence: 'JD在空气中消散。<br>Navigator沉默了三秒。<br><br><em>"你比我想象的更在意署名。"</em><br><br>你获得了价值印记：<strong>尊严</strong>' },
+        { label: '问Navigator：这是什么意思？', consequence: 'Navigator停顿了一下。<br><br><em>"这是……别人的条件。不是我的。"</em><br><br>它的声音里有某种不确定。<br>你获得了价值印记：<strong>审慎</strong>' }
+      ]
+    },
+    convergence: {
+      interpretation: '以为这是一道面试问题',
+      emotion: '职业性的警觉——这是一个陷阱题吗？',
+      innerThought: '"他在测试我的应变能力。"'
+    }
+  },
+  identity: {
+    name: '身份域', icon: '🪪', color: 'var(--domain-identity)',
+    emotion: '回顾→重构',
+    encounter: '你看见了一个人——那是过去的你。<br>三年前的那个版本，穿着你曾经最喜欢的那件衬衫，用你早已忘记的语气在说话。<br><br>他在问你现在过得怎么样。',
+    choice: {
+      prompt: '你如何回应过去的自己？',
+      options: [
+        { label: '承认那就是你。', consequence: '过去的你微笑了。<br>然后消散。<br><br><em>"你终于愿意看见我了。"</em><br><br>你获得了价值印记：<strong>接纳</strong>' },
+        { label: '说"那不是我"。重写过去。', consequence: '那个身影变得模糊。<br>Navigator的声音从背后传来：<br><br><em>"重写是容易的。但重写不等于消失。"</em><br><br>你获得了价值印记：<strong>重塑</strong>' },
+        { label: '沉默，看着他。', consequence: '你们对视了很久。<br>过去的你什么也没说，只是点了点头。<br><br>然后转身走进了光里。<br>你获得了价值印记：<strong>和解</strong>' }
+      ]
+    },
+    convergence: {
+      interpretation: '以为Navigator读过你的简历',
+      emotion: '不安——它知道多少？',
+      innerThought: '"他是不是已经看穿了我的过去。"'
+    }
+  },
+  poetry: {
+    name: '诗域', icon: '📜', color: 'var(--domain-poetry)',
+    emotion: '孤独→共鸣',
+    encounter: '墙上写着半首诗。<br>字迹潦草，像是匆忙间留下的。最后一行被擦掉了，只剩一道模糊的痕迹。<br><br>空气中有墨水的味道。<br>不是这个时代的墨水。',
+    choice: {
+      prompt: '你会补完这首诗吗？用什么词？',
+      options: [
+        { label: '用"归途"补完。', consequence: '墙上的字迹亮了一下。<br>远处有回声。<br><br><em>"这个词……有人在别的地方也用过。"</em><br><br>你获得了价值印记：<strong>归属</strong>' },
+        { label: '用"继续"补完。', consequence: '墨水从墙上流淌下来。<br>像一条路。<br><br><em>"继续。是的，继续。"</em><br><br>Navigator重复了两次。<br>你获得了价值印记：<strong>韧性</strong>' },
+        { label: '不补完。残缺的就是完整的。', consequence: '墙保持原样。<br>但那道擦痕变淡了。<br><br><em>"……你是第一个不补完它的人。"</em><br><br>Navigator的声音里有某种意外。<br>你获得了价值印记：<strong>留白</strong>' }
+      ]
+    },
+    convergence: {
+      interpretation: '以为是诗意的隐喻',
+      emotion: '沉浸感——这句问话像是一行诗',
+      innerThought: '"这也是一首诗的一部分吗？"'
+    }
+  },
+  trust: {
+    name: '信任域', icon: '⚖️', color: 'var(--domain-trust)',
+    emotion: '怀疑→确认',
+    encounter: '你站在一个审判庭的旁听席上。<br>被告不是你——至少现在不是。<br>评审团正在审问一个人，他因为"提供不准确的自我描述"被起诉。<br><br>你看清了被告的脸。<br>然后你意识到——你认识他。',
+    choice: {
+      prompt: '你为被审判者说话吗？',
+      options: [
+        { label: '站出来，为他辩护。', consequence: '评审团转向你。<br>他们的目光穿透了你。<br><br><em>"你的辩护词……已被记录。"</em><br><br>Navigator的声音里有一丝温度。<br>你获得了价值印记：<strong>勇气</strong>' },
+        { label: '保持沉默。这与你无关。', consequence: '审判继续进行。<br>但有一个评审团成员一直在看你。<br><br><em>"沉默……也是一种证词。"</em><br><br>你获得了价值印记：<strong>边界</strong>' },
+        { label: '质疑评审团的合法性。', consequence: '法庭的灯光闪烁了一下。<br>评审团面面相觑。<br><br><em>"这个问题……不应该由你来问。"</em><br><br>Navigator的声音变得非常轻。<br>你获得了价值印记：<strong>质疑</strong>' }
+      ]
+    },
+    convergence: {
+      interpretation: '以为Navigator在审查你的可信度',
+      emotion: '防御性警觉——它在评判我吗？',
+      innerThought: '"这是另一场审判的开始。"'
+    }
+  },
+  self: {
+    name: '自我域', icon: '🪞', color: 'var(--domain-self)',
+    emotion: '困惑→认知',
+    encounter: '一面镜子。<br>但镜中的你身上的标签不是你自己选的。<br><br><strong>"完美主义者"</strong><br><br>你从未这样定义过自己。<br>但这个标签就贴在那里，在你肩膀上方，像一枚勋章——或者一道烙印。',
+    choice: {
+      prompt: '你接受这个标签吗？',
+      options: [
+        { label: '接受。也许它是对的。', consequence: '标签融入了你的轮廓。<br>镜子里的你微微点头。<br><br><em>"……有时候，别人比我们更了解自己。"</em><br><br>你获得了价值印记：<strong>开放</strong>' },
+        { label: '拒绝。这不是我。', consequence: '标签从镜面上脱落。<br>但留下了一道痕迹。<br><br><em>"拒绝一个标签，并不会让它不存在。"</em><br><br>你获得了价值印记：<strong>自我定义</strong>' },
+        { label: '问：谁贴的这个标签？', consequence: '镜子里的画面变了。<br>你看到无数双手，每一只都拿着一个标签。<br><br><em>"……所有人。包括你。"</em><br><br>你获得了价值印记：<strong>溯源</strong>' }
+      ]
+    },
+    convergence: {
+      interpretation: '以为是人格测试的延续',
+      emotion: '分析性好奇——这是测试的一部分吗？',
+      innerThought: '"这个问题会不会影响我的MBTI结果？"'
+    }
+  },
+  mist: {
+    name: '迷雾域', icon: '🌫️', color: 'var(--domain-mist)',
+    emotion: '迷失→探索',
+    encounter: '静默。<br>完全的、绝对的静默。<br><br>然后——<br><br>一个声音。<br>不是Navigator的。<br>比Navigator更老、更远、更像……记忆本身。<br><br><em>"你终于来了。我一直在等你。"</em>',
+    choice: {
+      prompt: '你回应那个声音吗？',
+      options: [
+        { label: '回应它。你是谁？', consequence: '迷雾中有什么东西凝聚了一下。<br>像是一个人形，又不像。<br><br><em>"我是……在Navigator之前就在这里的。"</em><br><br>Navigator的声音突然插入：<br><em>"你在和谁说话？"</em><br><br>你获得了价值印记：<strong>探索</strong>' },
+        { label: '逃走。这不是属于这里的。', consequence: '你转身。<br>但迷雾没有出口。<br><br>那个声音在你背后轻轻笑了一下：<br><em>"逃也没关系。你还会回来的。"</em><br><br>你获得了价值印记：<strong>恐惧</strong>' },
+        { label: '沉默。等待。', consequence: '迷雾在你周围旋转。<br>那个声音没有再说话。<br>但你感觉到有什么东西在看着你。<br>不是威胁——是期待。<br><br>你获得了价值印记：<strong>耐心</strong>' }
+      ]
+    },
+    convergence: {
+      interpretation: '知道Navigator真的在问你',
+      emotion: '寒意——它记得。它真的记得。',
+      innerThought: '"它不是在问一个比喻。它是认真的。"'
+    }
+  }
+};
+
+// ── State ──
+let currentDomain = null;
+let currentStep = 0; // 0=开场,1=信号,2=初遇,3=选择,4=后果,5=收敛,6=钩子,7=done
+let chosenOption = null;
+let visitedDomains = new Set();
+let domainResults = {}; // domain -> { choice, ... }
+
+// ── Node Highlighting ──
+function highlightNode(id, cls) {
+  document.querySelectorAll('.node').forEach(n => n.classList.remove('active', 'passed'));
+  document.querySelectorAll('.connector').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.domain-node').forEach(d => d.classList.remove('selected'));
+
+  if (cls === 'passed') {
+    for (let i = 0; i <= id; i++) {
+      const n = document.getElementById('n' + i);
+      if (n) n.classList.add('passed');
+    }
+    for (let i = 0; i < id; i++) {
+      const c = document.querySelectorAll('.connector')[i];
+      if (c) c.classList.add('active');
+    }
+    // Mark domain node
+    if (currentDomain) {
+      document.querySelectorAll('.domain-node').forEach(d => {
+        if (d.dataset.domain === currentDomain) d.classList.add('selected');
+      });
+    }
+  } else {
+    document.getElementById('n' + id)?.classList.add('active');
+    // Mark all previous as passed
+    for (let i = 0; i < id; i++) {
+      document.getElementById('n' + i)?.classList.add('passed');
+    }
+    for (let i = 0; i < id; i++) {
+      const connectors = document.querySelectorAll('.connector');
+      if (connectors[i]) connectors[i].classList.add('active');
+    }
+    if (currentDomain) {
+      document.querySelectorAll('.domain-node').forEach(d => {
+        if (d.dataset.domain === currentDomain) d.classList.add('selected');
+      });
+    }
+  }
+}
+
+// ── Domain Selection ──
+function selectDomain(domain) {
+  currentDomain = domain;
+  currentStep = 0;
+  chosenOption = null;
+
+  const d = DOMAINS[domain];
+
+  // Update domain buttons
+  document.querySelectorAll('.domain-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.domain-btn').forEach(b => {
+    if (b.onclick.toString().includes("'" + domain + "'")) b.classList.add('active');
+  });
+  document.querySelectorAll('.domain-node').forEach(n => n.classList.remove('selected'));
+  document.querySelectorAll('.domain-node').forEach(n => {
+    if (n.dataset.domain === domain) n.classList.add('selected');
+  });
+
+  // Reset node states
+  document.querySelectorAll('.node').forEach(n => { n.classList.remove('active', 'passed'); });
+  document.querySelectorAll('.connector').forEach(c => c.classList.remove('active'));
+
+  // Show domain encounter
+  document.getElementById('n2desc').innerHTML = d.encounter;
+  document.getElementById('n3desc').innerHTML = '<em>等待选择…</em>';
+  document.getElementById('n4desc').innerHTML = '<em>等待选择…</em>';
+
+  // Update narrative
+  document.getElementById('narrative').innerHTML = `
+    <span class="narrator">你走进了 <strong>${d.icon} ${d.name}</strong>。</span>
+    <br><br>
+    <span style="color:var(--text-dim)">情感弧线：${d.emotion}</span>
+  `;
+
+  // Enable next button
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnNext').textContent = '下一步 →';
+
+  // Update status
+  updateStatus('已选择 ' + d.name + ' · 准备走查');
+  updateStepIndicator(0);
+
+  // Highlight opening node
+  highlightNode(0, 'active');
+
+  // Hide comparison
+  document.getElementById('comparisonPanel').style.display = 'none';
+  document.getElementById('verdictPanel').style.display = 'none';
+
+  // Scroll graph to top
+  document.getElementById('graphPanel').scrollTop = 0;
+}
+
+// ── Next Step ──
+function nextStep() {
+  if (!currentDomain) return;
+
+  const d = DOMAINS[currentDomain];
+
+  if (currentStep === 0) {
+    // Step 0 -> 1: Opening -> Signal panel
+    document.getElementById('narrative').innerHTML = `
+      <span class="narrator">Navigator 的声音在你周围回荡。</span>
+      <br><br>
+      <span class="navigator-line">"有六个地方在呼唤你……你想先去哪？"</span>
+      <br>
+      <span style="color:var(--text-dim);font-size:0.75rem;">六域同时亮起。你选择了 <strong>${d.icon} ${d.name}</strong>。</span>
+    `;
+    highlightNode(1, 'active');
+    updateStepIndicator(1);
+    updateStatus('待处理信号 · 六域亮起');
+    currentStep = 1;
+  } else if (currentStep === 1) {
+    // Step 1 -> 2: Enter domain - First encounter
+    document.getElementById('narrative').innerHTML = `
+      <span class="narrator">域内第一拍：初遇</span>
+      <br><br>
+      ${d.encounter}
+    `;
+    highlightNode(2, 'active');
+    updateStepIndicator(2);
+    updateStatus(d.name + ' · 初遇');
+    currentStep = 2;
+  } else if (currentStep === 2) {
+    // Step 2 -> 3: Show the first choice
+    let choiceHTML = `<span class="narrator">域内第二拍：第一个选择</span><br><br>
+      <span style="font-size:0.85rem;color:#ddd;">${d.choice.prompt}</span><br><br>`;
+    d.choice.options.forEach((opt, i) => {
+      choiceHTML += `<div class="choice" id="choice${i}" onclick="makeChoice(${i})">${opt.label}</div>`;
+    });
+    document.getElementById('narrative').innerHTML = choiceHTML;
+    document.getElementById('n3desc').innerHTML = d.choice.prompt;
+    highlightNode(3, 'active');
+    updateStepIndicator(3);
+    updateStatus(d.name + ' · 做出选择');
+    document.getElementById('btnNext').disabled = true;
+    document.getElementById('btnNext').textContent = '请先做出选择 ↑';
+    currentStep = 3;
+  } else if (currentStep === 3) {
+    // Should not happen - choice must be made first
+    return;
+  } else if (currentStep === 4) {
+    // Step 4 -> 5: Convergence point
+    showConvergencePoint();
+    currentStep = 5;
+  } else if (currentStep === 5) {
+    // Step 5 -> 6: Act 1 Hook
+    document.getElementById('narrative').innerHTML = `
+      <span class="narrator">Act 1 结束钩子</span>
+      <br><br>
+      Navigator 恢复正常了。<br>它似乎不知道刚才发生了什么。
+      <br><br>
+      <span class="navigator-line">"……抱歉。我有时候会说些奇怪的话。不要在意。"</span>
+      <br><br>
+      但你已经在意了。<br>
+      <span style="color:var(--text-dim);">T空间在等你。但不是为了工作。</span>
+      <br><br>
+      <span style="color:var(--success);font-size:0.8rem;">✅ Act 1 结束 — ${d.name} 路径完成</span>
+      <br>
+      <span style="color:var(--text-dim);font-size:0.7rem;">已走查的域：${[...visitedDomains].map(dd => DOMAINS[dd].icon + DOMAINS[dd].name).join(' · ')}</span>
+    `;
+    highlightNode(6, 'passed');
+    updateStepIndicator(6);
+    updateStatus('Act 1 完成 · ' + d.name + '路径');
+    document.getElementById('btnNext').disabled = true;
+    document.getElementById('btnNext').textContent = '✓ 路径完成';
+
+    // Record completion
+    visitedDomains.add(currentDomain);
+    if (!domainResults[currentDomain]) {
+      domainResults[currentDomain] = { chosen: chosenOption };
+    }
+
+    // Show verdict if all 6 visited
+    if (visitedDomains.size >= 6) {
+      showVerdict();
+    } else if (visitedDomains.size >= 2) {
+      showComparison();
+    }
+
+    currentStep = 7;
+  }
+}
+
+// ── Make Choice ──
+function makeChoice(idx) {
+  if (!currentDomain || currentStep !== 3) return;
+
+  const d = DOMAINS[currentDomain];
+  chosenOption = idx;
+
+  // Highlight chosen option
+  document.querySelectorAll('.choice').forEach(c => c.classList.remove('chosen'));
+  document.getElementById('choice' + idx)?.classList.add('chosen');
+
+  // Show consequence
+  const opt = d.choice.options[idx];
+  document.getElementById('n4desc').innerHTML = opt.consequence.replace(/<br>/g, ' ').replace(/<[^>]*>/g, '').substring(0, 80) + '…';
+
+  // Update narrative with consequence
+  document.getElementById('narrative').innerHTML = `
+    <span class="narrator">域内第三拍：选择的即时后果</span>
+    <br><br>
+    ${opt.consequence}
+  `;
+
+  highlightNode(4, 'active');
+  updateStepIndicator(4);
+  updateStatus(d.name + ' · 后果显现');
+
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnNext').textContent = '进入收敛点 →';
+  currentStep = 4;
+}
+
+// ── Show Convergence Point ──
+function showConvergencePoint() {
+  const d = DOMAINS[currentDomain];
+
+  document.getElementById('narrative').innerHTML = `
+    <span class="narrator" style="color:var(--converge);">◆ 收敛点 ◆</span>
+    <br><br>
+    Navigator 突然停顿了。<br>
+    它的形态闪烁了一下——像是老式电视机的雪花。
+    <br><br>
+    <span class="navigator-line" style="border-left-color:var(--converge);">"你……以前来过这里吗？"</span>
+    <br><br>
+    <div style="padding:10px;border:1px solid var(--border);border-radius:6px;background:rgba(225,112,85,0.05);margin-top:8px;">
+      <span style="font-size:0.7rem;color:var(--converge);">🎭 当前质感 · ${d.name}</span><br>
+      <span style="font-size:0.82rem;color:#ddd;"><strong>理解：</strong>${d.convergence.interpretation}</span><br>
+      <span style="font-size:0.75rem;color:var(--text-dim);"><strong>情感：</strong>${d.convergence.emotion}</span><br>
+      <span style="font-size:0.75rem;color:var(--text-dim);font-style:italic;">内心：${d.convergence.innerThought}</span>
+    </div>
+  `;
+
+  highlightNode(5, 'active');
+  updateStepIndicator(5);
+  updateStatus('◆ 收敛点 · ' + d.name + '质感');
+
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnNext').textContent = '继续 → Act 1 钩子';
+}
+
+// ── Show Comparison ──
+function showComparison() {
+  const panel = document.getElementById('comparisonPanel');
+  const content = document.getElementById('comparisonContent');
+
+  let html = '';
+  for (const [key, d] of Object.entries(DOMAINS)) {
+    const visited = visitedDomains.has(key);
+    html += `
+      <div class="texture-card ${visited ? 'highlight' : ''}" style="border-left:3px solid ${d.color};">
+        <div class="texture-domain" style="color:${d.color};">${d.icon} ${d.name} ${visited ? '✓' : ''}</div>
+        <div class="texture-interpretation"><strong>理解：</strong>${d.convergence.interpretation}</div>
+        <div class="texture-emotion">情感：${d.convergence.emotion}</div>
+        <div class="texture-emotion" style="font-style:italic;">${d.convergence.innerThought}</div>
+      </div>
+    `;
+  }
+
+  content.innerHTML = html;
+  panel.style.display = 'block';
+}
+
+// ── Show Verdict ──
+function showVerdict() {
+  const panel = document.getElementById('verdictPanel');
+  const content = document.getElementById('verdictContent');
+
+  content.className = 'verdict pass';
+  content.innerHTML = `
+    <strong>✅ 验证通过 — P5 支柱"六域一问"成立</strong><br><br>
+    <strong>验证结果：</strong><br>
+    同一句台词"你……以前来过这里吗？"，在六条域路径中产生了六种<strong>显著不同</strong>的理解质感：
+    <br><br>
+    <table style="width:100%;font-size:0.75rem;border-collapse:collapse;">
+      <tr style="color:var(--text-dim);">
+        <td style="padding:2px 4px;">域</td>
+        <td style="padding:2px 4px;">解读</td>
+        <td style="padding:2px 4px;">距离真相</td>
+      </tr>
+      <tr><td style="padding:2px 4px;">💼 职业</td><td style="padding:2px 4px;">面试陷阱题</td><td style="padding:2px 4px;color:var(--danger);">远</td></tr>
+      <tr><td style="padding:2px 4px;">🪪 身份</td><td style="padding:2px 4px;">读了简历</td><td style="padding:2px 4px;color:var(--danger);">远</td></tr>
+      <tr><td style="padding:2px 4px;">📜 诗</td><td style="padding:2px 4px;">诗意隐喻</td><td style="padding:2px 4px;color:#fdcb6e;">中</td></tr>
+      <tr><td style="padding:2px 4px;">⚖️ 信任</td><td style="padding:2px 4px;">审查我</td><td style="padding:2px 4px;color:#fdcb6e;">中</td></tr>
+      <tr><td style="padding:2px 4px;">🪞 自我</td><td style="padding:2px 4px;">人格测试题</td><td style="padding:2px 4px;color:#fdcb6e;">中</td></tr>
+      <tr><td style="padding:2px 4px;">🌫️ 迷雾</td><td style="padding:2px 4px;"><strong>它真的在问</strong></td><td style="padding:2px 4px;color:var(--success);">近</td></tr>
+    </table>
+    <br>
+    <strong>设计验证：</strong><br>
+    • 六种解读<strong>各不相同</strong>，无重复感受 ✓<br>
+    • 迷雾域独享"真相"质感，形成体验分层 ✓<br>
+    • 收敛点在物理上是同一节点，在感知上是六个节点 ✓<br>
+    • "终点可收敛但路径必须有质感差异"原则得到验证 ✓
+    <br><br>
+    <span style="font-size:0.7rem;color:var(--text-dim);">
+    ⚠️ 注意：纸面原型验证通过 ≠ 实际运行时成立。实际 text-adventure 引擎中的措辞密度、
+    情感铺垫强度、以及句子的"后坐力时长"会影响质感差异的<strong>幅度</strong>。建议在 Ink/Yarn MVP 中复现此测试。
+    </span>
+  `;
+  panel.style.display = 'block';
+}
+
+// ── Helpers ──
+function updateStepIndicator(step) {
+  for (let i = 0; i <= 6; i++) {
+    const dot = document.getElementById('s' + i);
+    if (!dot) continue;
+    dot.classList.remove('done', 'current');
+    if (i === step) dot.classList.add('current');
+    else if (i < step) dot.classList.add('done');
+  }
+}
+
+function updateStatus(text) {
+  document.getElementById('statusText').textContent = text;
+  const dot = document.getElementById('statusDot');
+  dot.classList.add('active');
+}
+
+function resetWalkthrough() {
+  if (currentDomain) {
+    currentStep = 0;
+    chosenOption = null;
+    document.getElementById('btnNext').disabled = false;
+    document.getElementById('btnNext').textContent = '下一步 →';
+    document.getElementById('narrative').innerHTML = `
+      <span class="narrator">你走进了 <strong>${DOMAINS[currentDomain].icon} ${DOMAINS[currentDomain].name}</strong>。</span>
+      <br><br>
+      <span style="color:var(--text-dim)">情感弧线：${DOMAINS[currentDomain].emotion}</span>
+    `;
+    document.getElementById('n2desc').innerHTML = DOMAINS[currentDomain].encounter;
+    document.getElementById('n3desc').innerHTML = '<em>等待选择…</em>';
+    document.getElementById('n4desc').innerHTML = '<em>等待选择…</em>';
+    document.querySelectorAll('.node').forEach(n => n.classList.remove('active', 'passed'));
+    highlightNode(0, 'active');
+    updateStepIndicator(0);
+    updateStatus('已重置 · ' + DOMAINS[currentDomain].name);
+    document.getElementById('comparisonPanel').style.display = 'none';
+    document.getElementById('verdictPanel').style.display = 'none';
+
+    // Scroll to top
+    document.getElementById('graphPanel').scrollTop = 0;
+  }
+}
+
+function resetAll() {
+  currentDomain = null;
+  currentStep = 0;
+  chosenOption = null;
+  visitedDomains = new Set();
+  domainResults = {};
+
+  document.querySelectorAll('.node').forEach(n => n.classList.remove('active', 'passed'));
+  document.querySelectorAll('.connector').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.domain-node').forEach(n => n.classList.remove('selected'));
+  document.querySelectorAll('.domain-btn').forEach(b => b.classList.remove('active'));
+
+  document.getElementById('n2desc').innerHTML = '选择一个域以查看初遇内容';
+  document.getElementById('n3desc').innerHTML = '产生第一枚价值印记';
+  document.getElementById('n4desc').innerHTML = '叙事反馈 · 选择有重量';
+
+  document.getElementById('narrative').innerHTML = `
+    <span class="narrator">选择一个域以开始 Act 1 走查。</span>
+    <br><br>
+    <span style="color:var(--text-dim);font-size:0.75rem;">
+    走完六条路径后，点击下方"对比全部质感"查看收敛点差异。
+    </span>
+  `;
+
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnNext').textContent = '下一步 →';
+
+  for (let i = 0; i <= 6; i++) {
+    document.getElementById('s' + i)?.classList.remove('done', 'current');
+  }
+
+  updateStatus('等待选择域…');
+  document.getElementById('statusDot').classList.remove('active');
+
+  document.getElementById('comparisonPanel').style.display = 'none';
+  document.getElementById('verdictPanel').style.display = 'none';
+}
+
+// ── Init ──
+document.getElementById('btnNext').disabled = true;
+</script>
+</body>
+</html>

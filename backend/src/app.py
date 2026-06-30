@@ -25,6 +25,7 @@ def create_app(env="development"):
     from src.api.routes.resume_routes import resume_bp
     from src.api.routes.reports_routes import reports_bp
     from src.api.routes.referral_routes import referral_bp
+    from src.api.routes.credit_routes import credit_bp
     from src.api.routes.quota_routes import quota_bp
     from src.api.routes.payment_routes import payment_bp
     from src.api.routes.poetry_routes import poetry_bp
@@ -38,6 +39,7 @@ def create_app(env="development"):
     app.register_blueprint(resume_bp, url_prefix="/v1/resume")
     app.register_blueprint(reports_bp, url_prefix="/v1/reports")
     app.register_blueprint(referral_bp, url_prefix="/v1/referral")
+    app.register_blueprint(credit_bp, url_prefix="/v1/credit")
     app.register_blueprint(quota_bp, url_prefix="/v1")
     app.register_blueprint(payment_bp, url_prefix="/v1")
     app.register_blueprint(poetry_bp, url_prefix="/v1/poetry")
@@ -76,13 +78,26 @@ def create_app(env="development"):
                 ],
                 "ask": ["POST /v1/ask", "POST /v1/feedback/rate", "GET  /v1/feedback/last-query"],
                 "quota": ["GET /v1/quota"],
-                "jobs": ["POST /v1/jobs/match", "GET /v1/jobs/list"],
-                "resume": ["POST /v1/resume/parse", "POST /v1/resume/upload"],
+                "jobs": [
+                    "GET  /v1/jobs/list",
+                    "POST /v1/jobs/upload",
+                    "POST /v1/jobs/parse",
+                    "POST /v1/jobs/match",
+                ],
+                "resume": [
+                    "POST /v1/resume/parse",
+                    "POST /v1/resume/upload",
+                    "POST /v1/resume/improve",
+                ],
                 "reports": ["POST /v1/reports/generate", "GET /v1/reports/list"],
                 "payment": [
                     "GET  /v1/payment/plans",
                     "GET  /v1/payment/status",
                     "POST /v1/payment/upgrade",
+                ],
+                "credit": [
+                    "POST /v1/credit/analyze",
+                    "POST /v1/credit/check-company",
                 ],
                 "referral": ["POST /v1/referral/create", "POST /v1/referral/use", "GET /v1/referral/my-codes"],
                 "narrative": [
