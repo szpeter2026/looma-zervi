@@ -1,47 +1,169 @@
 /**
- * API utility for miniprogram.
- * Wraps wx.request with auth header and error handling.
+ * API client for PlanetX miniprogram.
+ * Wraps wx.request with auth header, error handling, and event bus.
  */
 
-const app = getApp();
+import { eventBus } from './event-bus'
+import { store } from './store'
+
+const API_BASE = 'http://localhost:5200'
 
 interface RequestOptions {
-  url: string;
-  method?: "GET" | "POST" | "PUT" | "DELETE";
-  data?: any;
-}
-
-interface ApiResponse<T = any> {
-  statusCode: number;
-  data: T;
+  url: string
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  data?: any
+  /** Skip auth header (e.g. for login) */
+  noAuth?: boolean
+  /** Request timeout in ms (default: 10000) */
+  timeout?: number
 }
 
 export function request<T = any>(options: RequestOptions): Promise<T> {
   return new Promise((resolve, reject) => {
+    const token = store.get('token')
+    const header: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (token && !options.noAuth) {
+      header['Authorization'] = `Bearer ${token}`
+    }
+
+    const fullUrl = `${API_BASE}${options.url}`
+    console.log(`[API] ${options.method || 'GET'} ${fullUrl}`)
+
     wx.request({
-      url: `${app.globalData.apiBase}${options.url}`,
-      method: options.method || "GET",
+      url: fullUrl,
+      method: options.method || 'GET',
       data: options.data,
-      header: {
-        "Content-Type": "application/json",
-        ...app.getAuthHeader(),
-      },
+      header,
+      timeout: options.timeout || 10000,
       success: (resp: any) => {
         if (resp.statusCode >= 200 && resp.statusCode < 300) {
-          resolve(resp.data);
+          resolve(resp.data as T)
         } else if (resp.statusCode === 401) {
           // Token expired
-          app.globalData.token = null;
-          wx.removeStorageSync("looma_token");
-          app.wechatLogin();
-          reject(new Error("Unauthorized"));
+          store.reset()
+          wx.removeStorageSync('looma_token')
+          eventBus.emit('auth:expired')
+          reject(new Error('登录已过期，请重新登录'))
         } else {
-          reject(new Error(resp.data?.message || `HTTP ${resp.statusCode}`));
+          const msg = resp.data?.message || resp.data?.error || `HTTP ${resp.statusCode}`
+          console.error(`[API] Error ${resp.statusCode}:`, msg)
+          reject(new Error(msg))
         }
       },
       fail: (err) => {
-        reject(new Error(err.errMsg || "Network error"));
+        // Provide clearer error messages for common network issues
+        let errMsg = err.errMsg || '网络错误'
+        if (errMsg.includes('timeout')) {
+          errMsg = '请求超时，服务器响应过慢'
+        } else if (errMsg.includes('fail')) {
+          errMsg = `网络连接失败 (${API_BASE})`
+        }
+        console.error('[API] Request failed:', errMsg)
+        reject(new Error(errMsg))
       },
-    });
-  });
+    })
+  })
 }
+
+// ============ Auth API ============
+export const authApi = {
+  /** WeChat login: code -> looma JWT */
+  wechatLogin(code: string): Promise<any> {
+    return request({
+      url: '/v1/auth/wechat',
+      method: 'POST',
+      data: { code },
+      noAuth: true,
+      timeout: 8000,
+    })
+  },
+
+  /** Get user profile */
+  profile(): Promise<any> {
+    return request({ url: '/v1/auth/profile' })
+  },
+
+  /** Bind email to WeChat account */
+  bindEmail(code: string, email: string, password: string): Promise<any> {
+    return request({
+      url: '/v1/auth/bind',
+      method: 'POST',
+      data: { code, email, password },
+    })
+  },
+}
+
+// ============ Game API ============
+export const gameApi = {
+  /** Get game profile (XP, level, personality, fleet, missions) */
+  getProfile(): Promise<any> {
+    return request({ url: '/v1/game/profile' })
+  },
+
+  /** Sync game profile to backend */
+  syncProfile(data: any): Promise<any> {
+    return request({
+      url: '/v1/game/profile-sync',
+      method: 'POST',
+      data,
+    })
+  },
+
+  /** Complete a mission and earn XP */
+  completeMission(missionId: string): Promise<any> {
+    return request({
+      url: '/v1/game/mission-complete',
+      method: 'POST',
+      data: { mission_id: missionId },
+    })
+  },
+
+  /** Create a fleet */
+  createFleet(): Promise<any> {
+    return request({
+      url: '/v1/game/fleet/create',
+      method: 'POST',
+    })
+  },
+
+  /** Join a fleet by invite code */
+  joinFleet(code: string): Promise<any> {
+    return request({
+      url: '/v1/game/fleet/join',
+      method: 'POST',
+      data: { invite_code: code.toUpperCase() },
+    })
+  },
+
+  /** Get my fleet info */
+  getMyFleet(): Promise<any> {
+    return request({ url: '/v1/game/fleet/mine' })
+  },
+}
+
+// ============ Ask API ============
+export const askApi = {
+  /** Ask a question to AI */
+  ask(query: string, sessionHistory?: any[]): Promise<any> {
+    return request({
+      url: '/v1/ask',
+      method: 'POST',
+      data: {
+        query,
+        session_history: sessionHistory || [],
+      },
+    })
+  },
+}
+
+// ============ Quota API ============
+export const quotaApi = {
+  /** Get quota status */
+  getQuota(): Promise<any> {
+    return request({ url: '/v1/quota' })
+  },
+}
+
+export { API_BASE }

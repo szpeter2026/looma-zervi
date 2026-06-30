@@ -1,0 +1,179 @@
+.hub-header {
+  text-align: center;
+  margin-bottom: 32rpx;
+}
+
+.identity-label {
+  font-size: 24rpx;
+  color: #B8B8C8;
+  letter-spacing: 4rpx;
+  margin-top: 8rpx;
+}
+
+/* ============ Tab Nav ============ */
+.tab-nav {
+  display: flex;
+  gap: 8rpx;
+  background: #0D0D1A;
+  border-radius: 24rpx;
+  padding: 8rpx;
+  margin-bottom: 32rpx;
+}
+
+.tab-nav-item {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 0;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #B8B8C8;
+  transition: all 0.2s;
+}
+
+.tab-nav-item.active {
+  background: rgba(200, 255, 80, 0.1);
+  color: #C8FF50;
+}
+
+/* ============ Mission Card ============ */
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.mission-card {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 28rpx;
+  border-radius: 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  background: #0D0D1A;
+}
+
+.mission-icon {
+  font-size: 48rpx;
+  width: 88rpx;
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mission-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mission-name {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.mission-reward {
+  font-size: 24rpx;
+  color: #C8FF50;
+  margin-top: 4rpx;
+}
+
+.mission-status {
+  flex-shrink: 0;
+}
+
+.status-done {
+  font-size: 24rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 20rpx;
+  background: rgba(200, 255, 80, 0.15);
+  color: #C8FF50;
+}
+
+.status-locked {
+  font-size: 32rpx;
+}
+
+.status-todo {
+  font-size: 24rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.05);
+  color: #B8B8C8;
+}
+
+/* ============ Team Card ============ */
+.team-card {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.team-icon {
+  font-size: 64rpx;
+}
+
+.team-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.team-desc {
+  font-size: 24rpx;
+  color: #B8B8C8;
+  margin-top: 4rpx;
+}
+
+/* ============ Personality Card ============ */
+.personality-card {
+  text-align: center;
+  padding: 32rpx;
+}
+
+.personality-emoji {
+  font-size: 96rpx;
+}
+
+.personality-name {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #C8FF50;
+  margin-top: 16rpx;
+}
+
+.personality-tagline {
+  font-size: 24rpx;
+  color: #B8B8C8;
+  margin-top: 8rpx;
+}
+
+/* ============ Stats Grid ============ */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
+.stat-card {
+  background: #0D0D1A;
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  border-radius: 24rpx;
+  padding: 28rpx;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 48rpx;
+  font-weight: 900;
+  color: #C8FF50;
+}
+
+.stat-label {
+  font-size: 24rpx;
+  color: #B8B8C8;
+  margin-top: 8rpx;
+}

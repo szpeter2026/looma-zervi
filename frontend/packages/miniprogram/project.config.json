@@ -2,7 +2,7 @@
   "miniprogramRoot": "./",
   "projectname": "looma-miniprogram",
   "description": "PlanetX miniprogram shell - WeChat entry point",
-  "appid": "REPLACE_WITH_YOUR_APPID",
+  "appid": "wx073d0aa7778622da",
   "setting": {
     "urlCheck": true,
     "es6": true,
@@ -22,7 +22,7 @@
     "uploadWithSourceMap": true,
     "compileHotReLoad": false,
     "lazyloadPlaceholderEnable": false,
-    "useMultiFrameRuntime": true,
+    "useMultiFrameRuntime": false,
     "useApiHook": true,
     "useApiHostProcess": true,
     "babelSetting": {
@@ -39,13 +39,23 @@
     "disableUseStrict": false,
     "minifyWXML": true,
     "showES6CompileOption": false,
-    "useCompilerPlugins": false
+    "useCompilerPlugins": false,
+    "compileWorklet": false,
+    "localPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true
   },
   "compileType": "miniprogram",
-  "libVersion": "3.3.4",
+  "libVersion": "3.15.0",
   "condition": {},
   "editorSetting": {
     "tabIndent": "insertSpaces",
     "tabSize": 2
+  },
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
   }
 }

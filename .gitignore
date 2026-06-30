@@ -54,3 +54,6 @@ docker/data/
 
 # Miniprogram
 frontend/packages/miniprogram/miniprogram_npm/
+# TS build artifacts - DO NOT put *.js in miniprogram/.gitignore (DevTools reads it as packaging rule)
+frontend/packages/miniprogram/**/*.js
+!frontend/packages/miniprogram/typings/*.d.ts

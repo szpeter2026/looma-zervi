@@ -116,12 +116,16 @@ def wechat_login():
     if not code:
         return jsonify(error="bad_request", message="wx.login code required"), 400
 
-    try:
-        wechat_data = code2session(code)
-    except ValueError as e:
-        return jsonify(error="wechat_error", message=str(e)), 400
-
-    openid = wechat_data["openid"]
+    # Dev mode: skip WeChat API, use code as mock openid
+    if current_app.config.get("WECHAT_DEV_MODE"):
+        openid = f"dev_{code[:20]}"
+        print(f"[DEV MODE] Wechat login - mock openid: {openid}")
+    else:
+        try:
+            wechat_data = code2session(code)
+        except ValueError as e:
+            return jsonify(error="wechat_error", message=str(e)), 400
+        openid = wechat_data["openid"]
     db = _get_db()
 
     user = db.get_user_by_openid(openid)

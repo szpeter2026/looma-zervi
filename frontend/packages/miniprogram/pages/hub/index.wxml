@@ -1,0 +1,82 @@
+<view class="page-container safe-bottom">
+  <!-- Header -->
+  <view class="hub-header">
+    <view class="logo-text">Planet<text class="logo-x">X</text></view>
+    <view class="identity-label" wx:if="{{identityLabel}}">{{identityLabel}}</view>
+  </view>
+
+  <!-- XP Bar -->
+  <xp-bar level="{{level}}" xp="{{xp}}" xpToNext="{{xpToNext}}" />
+
+  <!-- Internal Tabs -->
+  <view class="tab-nav">
+    <view class="tab-nav-item {{activeTab === 'missions' ? 'active' : ''}}" data-tab="missions" bindtap="switchTab">🎯 任务</view>
+    <view class="tab-nav-item {{activeTab === 'team' ? 'active' : ''}}" data-tab="team" bindtap="switchTab">👥 舰队</view>
+    <view class="tab-nav-item {{activeTab === 'profile' ? 'active' : ''}}" data-tab="profile" bindtap="switchTab">🪪 我的</view>
+  </view>
+
+  <!-- Missions Tab -->
+  <view wx:if="{{activeTab === 'missions'}}" class="tab-content">
+    <view
+      wx:for="{{missions}}"
+      wx:key="id"
+      class="mission-card {{missionsCompleted.includes(item.id) ? 'done' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="onMissionTap"
+    >
+      <view class="mission-icon">{{item.icon}}</view>
+      <view class="mission-info">
+        <view class="mission-name">{{item.name}}</view>
+        <view class="mission-reward">🎁 {{item.reward}}</view>
+      </view>
+      <view class="mission-status">
+        <text wx:if="{{missionsCompleted.includes(item.id)}}" class="status-done">已完成</text>
+        <text wx:elif="{{item.requires && !missionsCompleted.includes(item.requires)}}" class="status-locked">🔒</text>
+        <text wx:else class="status-todo">待完成</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Team Tab -->
+  <view wx:elif="{{activeTab === 'team'}}" class="tab-content">
+    <view class="card team-card">
+      <view class="team-icon">🚀</view>
+      <view wx:if="{{teamSize > 0}}" class="team-info">
+        <view class="team-title">舰队成员: {{teamSize}}人</view>
+        <view class="team-desc">集齐3人解锁隐藏星图</view>
+      </view>
+      <view wx:else class="team-info">
+        <view class="team-title">尚未组建舰队</view>
+        <view class="team-desc">完成人格测试后可创建舰队</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Profile Tab -->
+  <view wx:elif="{{activeTab === 'profile'}}" class="tab-content">
+    <view class="card personality-card">
+      <view class="personality-emoji">{{personalityEmoji || '🌌'}}</view>
+      <view class="personality-name">{{personalityName || '未测试'}}</view>
+      <view class="personality-tagline">{{personalityTagline || '完成人格测试获取你的星际身份'}}</view>
+    </view>
+
+    <view class="stats-grid">
+      <view class="stat-card">
+        <view class="stat-value">{{missionsCompleted.length}}</view>
+        <view class="stat-label">完成任务</view>
+      </view>
+      <view class="stat-card">
+        <view class="stat-value">{{teamSize}}</view>
+        <view class="stat-label">舰队成员</view>
+      </view>
+      <view class="stat-card">
+        <view class="stat-value">0</view>
+        <view class="stat-label">信号传播</view>
+      </view>
+      <view class="stat-card">
+        <view class="stat-value">{{xp}}</view>
+        <view class="stat-label">总能量</view>
+      </view>
+    </view>
+  </view>
+</view>

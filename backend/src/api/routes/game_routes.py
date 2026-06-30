@@ -64,7 +64,19 @@ def get_game_profile():
     db = _get_db()
     profile = db.get_game_profile(g.user_id)
     if not profile:
-        return jsonify(error="not_found", message="no game profile yet"), 404
+        # Return default profile for new users (not an error)
+        return jsonify(
+            id=None,
+            user_id=g.user_id,
+            personality_type="",
+            personality_detail="",
+            xp=0,
+            level=1,
+            xp_to_next=100,
+            missions_completed=0,
+            total_mission_xp=0,
+            updated_at=None,
+        )
 
     # Compute current level from XP (level column may be stale)
     computed_level = _calculate_level(profile["xp"])
