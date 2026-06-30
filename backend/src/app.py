@@ -42,6 +42,48 @@ def create_app(env="development"):
     def health():
         return jsonify(status="ok", service="looma-backend")
 
+    # --- Root: API info (so visiting localhost:5200 in browser is helpful) ---
+    @app.route("/", methods=["GET"])
+    def api_info():
+        return jsonify(
+            service="looma-backend",
+            status="ok",
+            version="v1",
+            endpoints={
+                "auth": [
+                    "POST /v1/auth/register",
+                    "POST /v1/auth/login",
+                    "POST /v1/auth/wechat",
+                    "POST /v1/auth/bind",
+                    "GET  /v1/auth/profile",
+                    "POST /v1/auth/refresh",
+                    "POST /v1/auth/bridge",
+                ],
+                "game": [
+                    "GET  /v1/game/profile",
+                    "POST /v1/game/profile-sync",
+                    "POST /v1/game/mission-complete",
+                    "POST /v1/game/fleet/create",
+                    "POST /v1/game/fleet/join",
+                    "GET  /v1/game/fleet/mine",
+                    "POST /v1/game/fleet/leave",
+                ],
+                "ask": ["POST /v1/ask", "POST /v1/feedback/rate", "GET  /v1/feedback/last-query"],
+                "quota": ["GET /v1/quota"],
+                "jobs": ["POST /v1/jobs/match", "GET /v1/jobs/list"],
+                "resume": ["POST /v1/resume/parse", "POST /v1/resume/upload"],
+                "reports": ["POST /v1/reports/generate", "GET /v1/reports/list"],
+                "referral": ["POST /v1/referral/create", "POST /v1/referral/use", "GET /v1/referral/my-codes"],
+                "enterprise": [
+                    "POST /v1/enterprise/create",
+                    "POST /v1/enterprise/join",
+                    "GET  /v1/enterprise/profile",
+                    "GET  /v1/enterprise/candidates",
+                    "POST /v1/enterprise/candidates/add",
+                ],
+            },
+        )
+
     # --- Error handlers ---
     @app.errorhandler(404)
     def not_found(e):

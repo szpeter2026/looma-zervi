@@ -47,11 +47,11 @@ Page({
     // Check if already logged in (token restored from storage)
     const token = store.get('token')
     if (token) {
-      console.log('[Splash] Token found in storage, going to hub in 800ms')
-      // Wait a moment for profile to load, then go to hub
-      setTimeout(() => {
-        wx.switchTab({ url: '/pages/hub/index' })
-      }, 800)
+      console.log('[Splash] Token found, navigating to hub immediately')
+      wx.switchTab({
+        url: '/pages/hub/index',
+        fail: (err: any) => console.error('[Splash] switchTab failed:', JSON.stringify(err)),
+      })
     } else {
       console.log('[Splash] No token, waiting for app.ts wechatLogin...')
       // Set timeout fallback: if no response in 5s, show dev mode option

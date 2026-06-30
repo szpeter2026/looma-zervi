@@ -1,6 +1,4 @@
 {
-  "usingComponents": {
-    "star-bg": "/components/star-bg/index"
-  },
+  "usingComponents": {},
   "navigationStyle": "custom"
 }

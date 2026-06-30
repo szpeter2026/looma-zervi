@@ -32,18 +32,32 @@ Page({
   },
 
   _profileHandler: null as any,
+  _profileLoaded: false,
 
   onLoad() {
+    console.log('[Hub] onLoad')
     this._profileHandler = () => this.refreshFromStore()
     eventBus.on('profile:loaded', this._profileHandler)
   },
 
   onShow() {
-    // Update tab bar selected state
+    console.log('[Hub] onShow')
+
+    // Update tab bar selected state (custom tab bar)
     const tabBar = (this as any).getTabBar?.()
     if (tabBar) tabBar.setData({ selected: 0 })
 
     this.refreshFromStore()
+
+    // Lazy-load profile from backend (deferred from app.onLaunch for performance)
+    if (!this._profileLoaded) {
+      this._profileLoaded = true
+      const app = getApp() as any
+      if (app.loadProfile) {
+        console.log('[Hub] Triggering loadProfile from hub page')
+        app.loadProfile()
+      }
+    }
   },
 
   onUnload() {

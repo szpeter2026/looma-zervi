@@ -8,6 +8,7 @@ interface IAppOption {
     token: string | null
     userInfo: any
     apiBase: string
+    device: any
   }
   wechatLogin(): void
   loadProfile(): void
@@ -35,11 +36,11 @@ declare const wx: {
   }): void
 
   // Navigation
-  switchTab(opts: { url: string }): void
-  redirectTo(opts: { url: string }): void
-  navigateTo(opts: { url: string }): void
+  switchTab(opts: { url: string; success?: () => void; fail?: (err: any) => void }): void
+  redirectTo(opts: { url: string; success?: () => void; fail?: (err: any) => void }): void
+  navigateTo(opts: { url: string; success?: () => void; fail?: (err: any) => void }): void
   navigateBack(opts?: { delta?: number }): void
-  reLaunch(opts: { url: string }): void
+  reLaunch(opts: { url: string; success?: () => void; fail?: (err: any) => void }): void
 
   // UI
   showToast(opts: { title: string; icon?: 'success' | 'none' | 'loading' }): void
@@ -60,6 +61,11 @@ declare const wx: {
 
   // Scroll
   createSelectorQuery(): any
+
+  // Device info (3.7.0+ — HarmonyOS compatible)
+  getDeviceInfo(): { platform: string; brand: string; model: string }
+  getAppBaseInfo(): { SDKVersion: string; language: string; version: string }
+  getSystemSetting(): { windowWidth: number; windowHeight: number }
 }
 
 declare const App: (opts: any) => void

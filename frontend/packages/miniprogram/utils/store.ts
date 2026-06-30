@@ -65,8 +65,16 @@ export const store = {
     if (data.level !== undefined) state.level = data.level
     if (data.xp !== undefined) state.xp = data.xp
     if (data.xp_to_next !== undefined) state.xpToNext = data.xp_to_next
-    if (data.personality_type !== undefined) state.personalityType = data.personality_type
-    if (data.missions_completed !== undefined) state.missionsCompleted = data.missions_completed
+    if (data.personality_type !== undefined) {
+      // Backend returns "" for no personality; treat as undefined
+      const pt = data.personality_type as any
+      state.personalityType = (pt && typeof pt === 'object') ? pt : undefined
+    }
+    if (data.missions_completed !== undefined) {
+      // Backend may return a count (number) or an array; ensure array
+      const mc = data.missions_completed as any
+      state.missionsCompleted = Array.isArray(mc) ? mc : []
+    }
     if (data.fleet !== undefined) state.fleet = data.fleet
     if (data.team_size !== undefined) state.teamSize = data.team_size
     if (data.fleet_members !== undefined) state.fleetMembers = data.fleet_members

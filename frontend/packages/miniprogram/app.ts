@@ -7,6 +7,7 @@
 import { eventBus } from './utils/event-bus'
 import { store } from './utils/store'
 import { authApi, gameApi } from './utils/api'
+import { getDeviceInfo } from './utils/device'
 
 const API_BASE = 'http://localhost:5200'
 
@@ -15,21 +16,29 @@ App({
     token: null as string | null,
     userInfo: null as any,
     apiBase: API_BASE,
+    device: null as any,
   },
 
   onLaunch() {
     console.log('[App] onLaunch - PlanetX starting...')
-    
-    // Restore token from storage
+
+    // Detect platform (HarmonyOS compatible, 3.7.0+)
+    const device = getDeviceInfo()
+    this.globalData.device = device
+    console.log('[App] Platform:', device.platform, '| HarmonyOS:', device.isHarmony)
+
+    // Restore token from storage — but DON'T call loadProfile here.
+    // API calls during onLaunch block the framework's launch flow.
+    // loadProfile is deferred to hub page's onShow.
     const token = wx.getStorageSync('looma_token')
     if (token) {
       console.log('[App] Found saved token, restoring session')
       store.set('token', token)
       this.globalData.token = token
-      this.loadProfile()
+      // NOTE: loadProfile() moved to hub page onShow — don't call here
     } else {
       console.log('[App] No saved token, starting WeChat login')
-      // Auto-login with WeChat
+      // Auto-login with WeChat (async, doesn't block launch)
       this.wechatLogin()
     }
   },
@@ -63,6 +72,20 @@ App({
             this.globalData.userInfo = data.user
             wx.setStorageSync('looma_token', token)
             eventBus.emit('auth:login', { success: true, user: data.user })
+
+            // Direct navigation fallback — if splash page is still showing,
+            // switch to hub immediately (don't rely solely on event bus)
+            const pages = getCurrentPages()
+            const currentRoute = pages.length > 0 ? pages[pages.length - 1].route : ''
+            console.log('[App] Current page after login:', currentRoute)
+            if (currentRoute === 'pages/splash/index' || currentRoute === '') {
+              console.log('[App] Navigating to hub directly')
+              wx.switchTab({
+                url: '/pages/hub/index',
+                fail: (err) => console.error('[App] switchTab failed:', JSON.stringify(err)),
+              })
+            }
+
             // Load full game profile
             this.loadProfile()
           } else {

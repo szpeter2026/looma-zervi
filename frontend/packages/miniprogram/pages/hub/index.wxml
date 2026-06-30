@@ -1,5 +1,3 @@
-<star-bg />
-<achievement />
 <view class="page-container safe-bottom">
   <!-- Header -->
   <view class="hub-header">
