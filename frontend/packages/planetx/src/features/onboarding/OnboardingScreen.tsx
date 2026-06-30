@@ -8,7 +8,7 @@ export default function OnboardingScreen() {
   const { setIdentity, setScreen } = usePlanetXStore()
 
   const handleEnterTSpace = () => {
-    const saasUrl = import.meta.env.VITE_SAAS_URL || 'http://localhost:5174/'
+    const saasUrl = import.meta.env.VITE_SAAS_URL || '/tspace/'
     window.location.href = saasUrl
   }
 

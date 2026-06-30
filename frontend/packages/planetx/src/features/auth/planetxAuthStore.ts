@@ -390,6 +390,8 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
         user: { ...resp.user, identity: undefined, personality_type: undefined } as any,
         isAuthenticated: true,
       })
+      // 写入共享 localStorage，T 空间可自动识别
+      getApiClient().setToken(resp.access_token)
       // 加载完整 profile
       await get().loadProfile()
       get().setToast('跃迁成功！欢迎回来 🪐')
@@ -411,6 +413,8 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
         user: { ...resp.user, identity: undefined, personality_type: undefined } as any,
         isAuthenticated: true,
       })
+      // 写入共享 localStorage，T 空间可自动识别
+      getApiClient().setToken(resp.access_token)
       get().setToast('注册成功！欢迎加入 PlanetX 🚀')
       get().setScreen('onboarding')
       return true
@@ -422,6 +426,8 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
   },
 
   logout: () => {
+    // 清除共享 localStorage token
+    getApiClient().clearToken()
     set({
       token: null, user: null, isAuthenticated: false,
       identity: undefined, personalityType: undefined,

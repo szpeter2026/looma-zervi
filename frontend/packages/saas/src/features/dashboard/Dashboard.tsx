@@ -22,7 +22,7 @@ interface HealthStatus {
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 export default function Dashboard() {
-  const { user, quota, token } = useSaasAuthStore();
+  const { user, quota, token, isAuthenticated } = useSaasAuthStore();
   const [health, setHealth] = useState<HealthStatus | null>(null);
 
   useEffect(() => {
@@ -45,6 +45,90 @@ export default function Dashboard() {
       if (q) window.location.href = `/query?q=${encodeURIComponent(q)}`;
     }
   };
+
+  // ===== 未登录：自由浏览模式 =====
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-3xl mx-auto text-center" style={{ paddingTop: "4rem" }}>
+        <h1 className="text-3xl font-bold mb-2" style={{ color: "var(--color-text-primary)" }}>
+          {BRAND_SAAS.name}
+        </h1>
+        <p className="text-lg mb-8" style={{ color: "var(--color-text-secondary)" }}>
+          {BRAND_SAAS.slogan}
+        </p>
+
+        {/* CTA */}
+        <div className="flex justify-center gap-4 mb-10">
+          <a
+            href="/register"
+            className="px-6 py-3 rounded-lg text-white text-sm font-medium no-underline transition-opacity hover:opacity-90"
+            style={{ backgroundColor: "var(--color-primary)" }}
+          >
+            免费注册
+          </a>
+          <a
+            href="/login"
+            className="px-6 py-3 rounded-lg text-sm font-medium no-underline border transition-colors"
+            style={{
+              borderColor: "var(--color-primary)",
+              color: "var(--color-primary)",
+            }}
+          >
+            已有账号？登录
+          </a>
+        </div>
+
+        {/* 能力卡片 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+          {[
+            { icon: "🧠", title: "AI 知识问答", desc: "接入 DeepSeek，秒级响应" },
+            { icon: "📄", title: "简历智能解析", desc: "上传即结构化，匹配岗位" },
+            { icon: "📊", title: "数据报告", desc: "日/周/月智能报告生成" },
+          ].map((item) => (
+            <div
+              key={item.title}
+              className="rounded-lg p-5 text-left"
+              style={{
+                backgroundColor: "var(--color-bg-card)",
+                boxShadow: "var(--shadow-sm)",
+              }}
+            >
+              <div className="text-2xl mb-2">{item.icon}</div>
+              <h3 className="text-sm font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
+                {item.title}
+              </h3>
+              <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                {item.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* 系统状态（无需登录也能看到） */}
+        {health && (
+          <div className="flex items-center justify-center gap-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
+            <span
+              className="inline-block w-2 h-2 rounded-full"
+              style={{
+                backgroundColor:
+                  health.status === "healthy" ? "var(--color-success)" : "var(--color-warning)",
+              }}
+            />
+            <span>系统 {health.status === "healthy" ? "运行正常" : "服务降级"}</span>
+            <span>·</span>
+            <span>v{health.version}</span>
+          </div>
+        )}
+
+        {/* 底部提示 */}
+        <p className="text-xs mt-6" style={{ color: "var(--color-text-muted)" }}>
+          从 PlanetX 过来的？你的账号已自动同步 ✨
+        </p>
+      </div>
+    );
+  }
+
+  // ===== 已登录：完整看板 =====
 
   return (
     <div className="max-w-5xl mx-auto">

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-const SAAS_URL = import.meta.env.VITE_SAAS_URL || 'http://localhost:5174/'
+const SAAS_URL = import.meta.env.VITE_SAAS_URL || '/tspace/'
 
 /**
  * Redirect /narrative to the T-space (SaaS) experience.

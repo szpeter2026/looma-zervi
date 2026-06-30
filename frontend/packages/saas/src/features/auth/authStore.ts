@@ -44,6 +44,8 @@ interface AuthState {
   logout: () => void;
   fetchProfile: () => Promise<void>;
   fetchQuota: () => Promise<void>;
+  /** 从 PlanetX 共享的 looma_token 自动登录 */
+  tryAutoLogin: () => Promise<void>;
 }
 
 export const useSaasAuthStore = create<AuthState>()(
@@ -60,6 +62,8 @@ export const useSaasAuthStore = create<AuthState>()(
         const api = getAuthApi();
         const resp = await api.login({ email, password });
         set({ token: resp.access_token, user: resp.user as UserProfile, isAuthenticated: true, isLoading: false });
+        // 写入共享 localStorage，PlanetX 侧也可识别（为未来双向 SSO 做准备）
+        getClient().setToken(resp.access_token);
         // 登录后拉取完整 profile（含 is_early_adopter / created_at）
         await get().fetchProfile();
       },
@@ -69,10 +73,13 @@ export const useSaasAuthStore = create<AuthState>()(
         const api = getAuthApi();
         const resp = await api.register({ email, password, name });
         set({ token: resp.access_token, user: resp.user as UserProfile, isAuthenticated: true, isLoading: false });
+        getClient().setToken(resp.access_token);
         await get().fetchProfile();
       },
 
       logout: () => {
+        // 清除共享 localStorage token
+        getClient().clearToken();
         set({ token: null, user: null, quota: null, isAuthenticated: false, isLoading: false });
       },
 
@@ -97,6 +104,26 @@ export const useSaasAuthStore = create<AuthState>()(
           set({ quota: data });
         } catch {
           // Silently ignore quota fetch failures
+        }
+      },
+
+      /** 从 PlanetX 共享的 looma_token 自动登录（C→B 互通核心） */
+      tryAutoLogin: async () => {
+        const state = get();
+        // 已有有效 token，跳过
+        if (state.token && state.isAuthenticated) return;
+        try {
+          const sharedToken = localStorage.getItem("looma_token");
+          if (!sharedToken) return;
+          // 避免重复水合
+          if (state.token === sharedToken && state.isAuthenticated) return;
+          set({ token: sharedToken, isLoading: true });
+          await get().fetchProfile();
+          await get().fetchQuota();
+        } catch {
+          // Token 无效，清除
+          localStorage.removeItem("looma_token");
+          set({ token: null, user: null, isLoading: false });
         }
       },
     }),
