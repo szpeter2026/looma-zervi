@@ -57,3 +57,22 @@ frontend/packages/miniprogram/miniprogram_npm/
 # TS build artifacts - DO NOT put *.js in miniprogram/.gitignore (DevTools reads it as packaging rule)
 frontend/packages/miniprogram/**/*.js
 !frontend/packages/miniprogram/typings/*.d.ts
+
+# Data files (large binaries)
+data/
+
+# Smoke test state
+*.smoke_state*.json
+
+# Root package-lock (frontend uses pnpm)
+package-lock.json
+
+# Reports archive
+reports.zip
+
+# Legacy web UI
+web/
+
+# Playwright
+frontend/playwright-report/
+frontend/test-results/

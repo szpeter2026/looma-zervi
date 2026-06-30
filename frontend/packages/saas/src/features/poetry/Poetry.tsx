@@ -67,8 +67,8 @@ export default function Poetry() {
 
   // Filters
   const [dynastyFilter, setDynastyFilter] = useState<string | null>(null);
-  const [authorFilter, setAuthorFilter] = useState<string>("");
-  const [themeFilter, setThemeFilter] = useState<string | null>(null);
+  const [authorFilter, _setAuthorFilter] = useState<string>("");
+  const [themeFilter, _setThemeFilter] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
   // Detail modal
