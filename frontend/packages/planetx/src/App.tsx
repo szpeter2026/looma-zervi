@@ -14,6 +14,11 @@ import ErrorBoundary from './brand/components/ErrorBoundary'
 import PlanetXHome from './features/PlanetXHome'
 import NarrativeRedirect from './features/onboarding/NarrativeRedirect'
 
+/** 轻量 ErrorBoundary 包装器，用于隔离单个功能的崩溃 */
+function FeatureGuard({ children }: { children: React.ReactNode }) {
+  return <ErrorBoundary>{children}</ErrorBoundary>;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -28,10 +33,10 @@ export default function App() {
           {/* T-space / Navigator narrative experience lives in the SaaS app */}
           <Route path="/narrative" element={<NarrativeRedirect />} />
 
-          {/* Protected routes (require login) */}
+          {/* Protected routes (require login) — feature-isolated */}
           <Route element={<PlanetXAuthGuard />}>
-            <Route path="/quiz" element={<PlanetXHome />} />
-            <Route path="/result" element={<PlanetXHome />} />
+            <Route path="/quiz" element={<FeatureGuard><PlanetXHome /></FeatureGuard>} />
+            <Route path="/result" element={<FeatureGuard><PlanetXHome /></FeatureGuard>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

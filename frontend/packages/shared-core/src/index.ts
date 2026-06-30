@@ -28,7 +28,9 @@ export {
   createResumeApi,
   createJobsApi,
   createReportsApi,
+  createPaymentApi,
   createQuotaApi,
+  createNarrativeApi,
 } from "./api/createApi";
 
 // Types
@@ -117,10 +119,29 @@ export type {
 } from "./types/misc";
 
 export type {
+  PaymentPlan,
+  PlansResponse,
+  PaymentStatus,
+  UpgradeRequest,
+  UpgradeResponse,
+} from "./types/payment";
+
+export type {
   ApiResponse,
   Pagination,
   PaginatedResponse as CommonPaginatedResponse,
 } from "./types/common";
+
+export type {
+  NarrativeDomain,
+  NarrativeEventType,
+  NarrativeStartRequest,
+  NarrativeStartResponse,
+  NarrativeEventRequest,
+  NarrativeEndRequest,
+  NarrativeFeedbackRequest,
+  NarrativeStats,
+} from "./types/narrative";
 
 export {
   BRAND,

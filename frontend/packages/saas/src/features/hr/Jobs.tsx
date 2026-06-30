@@ -3,28 +3,26 @@
  * Owner: szbenyx
  *
  * Pure CSS + Tailwind (no tdesign-react).
- * Uses authStore for token, direct fetch for API calls.
+ * Uses shared-core typed API factories for backend contract alignment.
  */
 import { useState, useEffect } from "react";
-import { createApiClient } from "@looma/shared-core";
+import { createApiClient, createJobsApi, type Job } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
 
-interface Job {
-  id: string;
+/** Backend actual match response item shape */
+interface MatchItem {
+  job_id: string;
   title: string;
   company: string;
-  location?: string;
-  salary_range?: string;
-  description?: string;
-  requirements: string[];
-}
-
-interface JobMatchResult {
-  job: Job;
-  overall_score: number;
-  skill_match: number;
-  experience_match: number;
-  education_match: number;
+  location: string;
+  salary_range: string;
+  scores: {
+    overall: number;
+    money?: number;
+    workload?: number;
+    proximity?: number;
+  };
+  reason: string;
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -38,8 +36,8 @@ function getScoreColor(score: number): string {
 export default function Jobs() {
   const { token } = useSaasAuthStore();
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [matches, setMatches] = useState<JobMatchResult[] | null>(null);
-  const [selectedResume, setSelectedResume] = useState<string>("");
+  const [matches, setMatches] = useState<MatchItem[] | null>(null);
+  const [resumeText, setResumeText] = useState("");
   const [matching, setMatching] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -47,34 +45,24 @@ export default function Jobs() {
     baseURL: API_BASE,
     getToken: () => token,
   });
+  const jobsApi = createJobsApi(api);
 
   useEffect(() => {
-    api
-      .get<Job[]>("/v1/jobs/")
-      .then(setJobs)
+    jobsApi
+      .list()
+      .then((res) => setJobs(res.jobs))
       .catch(() => setMsg("加载职位列表失败"));
   }, [token]);
 
-  useEffect(() => {
-    api
-      .get<{ id: string }[]>("/v1/resume/mine")
-      .then((list) => {
-        if (list.length > 0) setSelectedResume(list[0].id);
-      })
-      .catch(() => {});
-  }, [token]);
-
   const handleMatch = async () => {
-    if (!selectedResume) return;
+    if (!resumeText.trim()) return;
     setMatching(true);
     setMsg(null);
     try {
-      const data = await api.post<JobMatchResult[]>("/v1/jobs/match", {
-        resume_id: selectedResume,
-      });
-      setMatches(data);
+      const res = await jobsApi.match({ resume_text: resumeText });
+      setMatches(res.matches);
     } catch {
-      setMsg("匹配失败");
+      setMsg("匹配失败，请重试");
     } finally {
       setMatching(false);
     }
@@ -88,37 +76,39 @@ export default function Jobs() {
 
       {/* 操作栏 */}
       <div
-        className="rounded-lg p-4 mb-6 flex items-center justify-between"
+        className="rounded-lg p-4 mb-6"
         style={{
           backgroundColor: "var(--color-bg-card)",
           boxShadow: "var(--shadow-sm)",
         }}
       >
-        <div className="flex items-center gap-3">
-          <select
-            value={selectedResume}
-            onChange={(e) => setSelectedResume(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm outline-none"
-            style={{ borderColor: "#e0e0e0", color: "var(--color-text-primary)" }}
-          >
-            <option value="">选择简历</option>
-          </select>
-          <button
-            onClick={handleMatch}
-            disabled={!selectedResume || matching}
-            className="px-4 py-2 text-sm rounded-lg text-white border-none cursor-pointer disabled:opacity-50 transition-colors"
-            style={{ backgroundColor: "var(--color-primary)" }}
-          >
-            {matching ? "匹配中..." : "开始匹配"}
-          </button>
+        <div className="flex flex-col gap-3">
+          <textarea
+            value={resumeText}
+            onChange={(e) => setResumeText(e.target.value)}
+            placeholder="在此粘贴简历文本，AI 将为你匹配最合适的职位..."
+            rows={6}
+            className="border rounded-lg px-3 py-2 text-sm outline-none resize-y w-full"
+            style={{ borderColor: "#e0e0e0", color: "var(--color-text-primary)", backgroundColor: "var(--color-bg-surface)" }}
+          />
+          <div className="flex items-center justify-between">
+            <button
+              onClick={handleMatch}
+              disabled={!resumeText.trim() || matching}
+              className="px-4 py-2 text-sm rounded-lg text-white border-none cursor-pointer disabled:opacity-50 transition-colors"
+              style={{ backgroundColor: "var(--color-primary)" }}
+            >
+              {matching ? "AI 匹配中..." : "开始匹配"}
+            </button>
+            <button
+              onClick={() => { setMatches(null); setResumeText(""); }}
+              className="text-sm bg-transparent border-none cursor-pointer"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              重置
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => setMatches(null)}
-          className="text-sm bg-transparent border-none cursor-pointer"
-          style={{ color: "var(--color-text-muted)" }}
-        >
-          重置
-        </button>
       </div>
 
       {msg && (
@@ -142,34 +132,37 @@ export default function Jobs() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <h3 className="font-bold text-lg" style={{ color: "var(--color-text-primary)" }}>
-                    {m.job.title}
+                    {m.title}
                   </h3>
                   <p className="text-sm mb-2" style={{ color: "var(--color-text-secondary)" }}>
-                    {m.job.company}
-                    {m.job.location && ` · ${m.job.location}`}
+                    {m.company}
+                    {m.location && ` · ${m.location}`}
+                    {m.salary_range && ` · ${m.salary_range}`}
                   </p>
-                  <p className="text-sm line-clamp-2 mb-4" style={{ color: "var(--color-text-secondary)" }}>
-                    {m.job.description}
-                  </p>
+                  {m.reason && (
+                    <p className="text-sm mb-4 px-3 py-2 rounded" style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-bg-surface)" }}>
+                      💡 {m.reason}
+                    </p>
+                  )}
 
                   <div className="border-t pt-3" style={{ borderColor: "#e0e0e0" }}>
                     <div className="grid grid-cols-3 gap-3 text-center text-xs">
                       <div>
-                        <p className="mb-1" style={{ color: "var(--color-text-muted)" }}>技能匹配</p>
-                        <span className="font-bold" style={{ color: getScoreColor(m.skill_match) }}>
-                          {m.skill_match}%
+                        <p className="mb-1" style={{ color: "var(--color-text-muted)" }}>综合评分</p>
+                        <span className="font-bold" style={{ color: getScoreColor(m.scores.overall) }}>
+                          {Math.round(m.scores.overall)}%
                         </span>
                       </div>
                       <div>
-                        <p className="mb-1" style={{ color: "var(--color-text-muted)" }}>经验匹配</p>
-                        <span className="font-bold" style={{ color: getScoreColor(m.experience_match) }}>
-                          {m.experience_match}%
+                        <p className="mb-1" style={{ color: "var(--color-text-muted)" }}>薪酬匹配</p>
+                        <span className="font-bold" style={{ color: getScoreColor((m.scores.money ?? 0) * 3.3) }}>
+                          {Math.round((m.scores.money ?? 0) * 3.3)}%
                         </span>
                       </div>
                       <div>
-                        <p className="mb-1" style={{ color: "var(--color-text-muted)" }}>学历匹配</p>
-                        <span className="font-bold" style={{ color: getScoreColor(m.education_match) }}>
-                          {m.education_match}%
+                        <p className="mb-1" style={{ color: "var(--color-text-muted)" }}>匹配亲和度</p>
+                        <span className="font-bold" style={{ color: getScoreColor((m.scores.proximity ?? 0) * 2) }}>
+                          {Math.round((m.scores.proximity ?? 0) * 2)}%
                         </span>
                       </div>
                     </div>
@@ -185,9 +178,9 @@ export default function Jobs() {
                       cy="40"
                       r="34"
                       fill="none"
-                      stroke={getScoreColor(m.overall_score)}
+                      stroke={getScoreColor(m.scores.overall)}
                       strokeWidth="6"
-                      strokeDasharray={`${(m.overall_score / 100) * 213.6} 213.6`}
+                      strokeDasharray={`${(m.scores.overall / 100) * 213.6} 213.6`}
                       strokeLinecap="round"
                       transform="rotate(-90 40 40)"
                     />
@@ -200,7 +193,7 @@ export default function Jobs() {
                       fontWeight="bold"
                       fill="var(--color-text-primary)"
                     >
-                      {m.overall_score}
+                      {Math.round(m.scores.overall)}
                     </text>
                   </svg>
                   <p className="text-xs mt-1" style={{ color: "var(--color-text-muted)" }}>
@@ -238,7 +231,7 @@ export default function Jobs() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1 max-w-sm">
-                  {job.requirements.slice(0, 5).map((req, j) => (
+                  {(job.requirements ?? []).slice(0, 5).map((req, j) => (
                     <span
                       key={j}
                       className="text-xs px-2 py-0.5 rounded"

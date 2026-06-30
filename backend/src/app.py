@@ -26,7 +26,9 @@ def create_app(env="development"):
     from src.api.routes.reports_routes import reports_bp
     from src.api.routes.referral_routes import referral_bp
     from src.api.routes.quota_routes import quota_bp
+    from src.api.routes.payment_routes import payment_bp
     from src.api.routes.poetry_routes import poetry_bp
+    from src.api.routes.narrative_routes import narrative_bp
 
     app.register_blueprint(auth_bp, url_prefix="/v1/auth")
     app.register_blueprint(game_bp, url_prefix="/v1/game")
@@ -37,7 +39,9 @@ def create_app(env="development"):
     app.register_blueprint(reports_bp, url_prefix="/v1/reports")
     app.register_blueprint(referral_bp, url_prefix="/v1/referral")
     app.register_blueprint(quota_bp, url_prefix="/v1")
+    app.register_blueprint(payment_bp, url_prefix="/v1")
     app.register_blueprint(poetry_bp, url_prefix="/v1/poetry")
+    app.register_blueprint(narrative_bp, url_prefix="/v1/narrative")
 
     # --- Health check ---
     @app.route("/health", methods=["GET"])
@@ -75,7 +79,19 @@ def create_app(env="development"):
                 "jobs": ["POST /v1/jobs/match", "GET /v1/jobs/list"],
                 "resume": ["POST /v1/resume/parse", "POST /v1/resume/upload"],
                 "reports": ["POST /v1/reports/generate", "GET /v1/reports/list"],
+                "payment": [
+                    "GET  /v1/payment/plans",
+                    "GET  /v1/payment/status",
+                    "POST /v1/payment/upgrade",
+                ],
                 "referral": ["POST /v1/referral/create", "POST /v1/referral/use", "GET /v1/referral/my-codes"],
+                "narrative": [
+                    "POST /v1/narrative/start",
+                    "POST /v1/narrative/event",
+                    "POST /v1/narrative/end",
+                    "POST /v1/narrative/feedback",
+                    "GET  /v1/narrative/stats",
+                ],
                 "enterprise": [
                     "POST /v1/enterprise/create",
                     "POST /v1/enterprise/join",
@@ -103,6 +119,16 @@ def create_app(env="development"):
         if not getattr(app, "_db_initialized", False):
             db = DatabaseManager(app.config["DATABASE_PATH"])
             db.init_schema()
+
+            # Auto-seed beta users in dev mode
+            if app.config.get("ENV") == "development":
+                try:
+                    seeded = db.seed_beta_users()
+                    if seeded:
+                        app.logger.info(f"[dev] Seeded {len(seeded)} beta users: {seeded}")
+                except Exception as e:
+                    app.logger.warning(f"[dev] seed_beta_users skipped: {e}")
+
             app._db = db
             app._db_initialized = True
 

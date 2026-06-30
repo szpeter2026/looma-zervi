@@ -44,6 +44,9 @@ class Config:
     CHROMA_PORT = os.getenv("CHROMA_PORT", "8000")
     CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "looma_knowledge")
 
+    # Poetry ChromaDB — always uses embedded PersistentClient (static dataset)
+    POETRY_CHROMA_PATH = os.getenv("POETRY_CHROMA_PATH", "data/poetry_full")
+
     # SQLite — must be dynamic so tests can override per-fixture
     DATABASE_PATH = os.getenv("DATABASE_PATH", "data/looma.db")
 
@@ -118,6 +121,7 @@ def _refresh_config():
     Config.CHROMA_HOST = os.getenv("CHROMA_HOST", "localhost")
     Config.CHROMA_PORT = os.getenv("CHROMA_PORT", "8000")
     Config.CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "looma_knowledge")
+    Config.POETRY_CHROMA_PATH = os.getenv("POETRY_CHROMA_PATH", "data/poetry_full")
     Config.DATABASE_PATH = os.getenv("DATABASE_PATH", "data/looma.db")
     Config.CORS_ORIGINS = os.getenv(
         "CORS_ORIGINS",

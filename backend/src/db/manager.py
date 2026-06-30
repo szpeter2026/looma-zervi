@@ -299,7 +299,72 @@ CREATE TABLE IF NOT EXISTS query_logs (
 
 CREATE INDEX IF NOT EXISTS idx_query_logs_time ON query_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_query_logs_user ON query_logs(user_id);
+
+-- ============================================
+-- Narrative: sessions (Jason — Phase 0 feedback)
+-- ============================================
+CREATE TABLE IF NOT EXISTS narrative_sessions (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT DEFAULT NULL,          -- nullable (guests can play)
+    domain          TEXT NOT NULL,              -- which domain was chosen
+    status          TEXT DEFAULT 'active',       -- active | completed | abandoned
+    duration_seconds REAL DEFAULT 0,
+    started_at      TEXT DEFAULT (datetime('now')),
+    ended_at        TEXT DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_narrative_sessions_user ON narrative_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_narrative_sessions_domain ON narrative_sessions(domain);
+
+-- ============================================
+-- Narrative: events (Jason — Phase 0 event log)
+-- ============================================
+CREATE TABLE IF NOT EXISTS narrative_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id      TEXT NOT NULL,
+    event_type      TEXT NOT NULL,              -- domain_enter | choice_made | convergence_reached | share_attempt | replay
+    domain          TEXT DEFAULT NULL,
+    choice          TEXT DEFAULT NULL,
+    navigator_line  TEXT DEFAULT NULL,
+    metadata_json   TEXT DEFAULT '{}',
+    created_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES narrative_sessions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_narrative_events_session ON narrative_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_narrative_events_type ON narrative_events(event_type);
+
+-- ============================================
+-- Narrative: feedback (Jason — Phase 0 convergence feedback)
+-- ============================================
+CREATE TABLE IF NOT EXISTS narrative_feedback (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id      TEXT NOT NULL,
+    resonated       INTEGER NOT NULL DEFAULT 0, -- 0/1: did Navigator touch you?
+    navigator_quote TEXT DEFAULT NULL,           -- recalled Navigator line
+    would_replay    INTEGER DEFAULT NULL,        -- 0/1/2 (no/maybe/yes)
+    shared          INTEGER NOT NULL DEFAULT 0, -- 0/1
+    share_channel   TEXT DEFAULT NULL,           -- wechat | moments | link | other
+    open_feedback   TEXT DEFAULT NULL,           -- free-text qualitative
+    created_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES narrative_sessions(id),
+    UNIQUE(session_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_narrative_feedback_session ON narrative_feedback(session_id);
 """
+
+
+# ============================================
+# Beta seed data
+# ============================================
+BETA_USERS = [
+    {"name": "测试用户-免费版",   "email": "beta_free@looma.test",       "tier": "free",       "is_early_adopter": 1},
+    {"name": "测试用户-支持者",   "email": "beta_supporter@looma.test",  "tier": "supporter",  "is_early_adopter": 1},
+    {"name": "测试用户-专业版",   "email": "beta_pro@looma.test",        "tier": "pro",        "is_early_adopter": 1},
+    {"name": "测试用户-管理员",   "email": "beta_admin@looma.test",      "tier": "pro",        "is_early_adopter": 1, "role": "admin"},
+]
 
 
 class DatabaseManager:
@@ -901,6 +966,54 @@ class DatabaseManager:
                  _dt_now().isoformat())
             )
 
+    # ============================================
+    # Seed: beta users
+    # ============================================
+    def seed_beta_users(self) -> list[str]:
+        """Seed a set of beta test users with pre-assigned tiers.
+        Only inserts users that don't already exist (by email / wechat_openid).
+        Returns list of created user IDs.
+
+        Creates:
+          - beta_free@looma.test       (tier=free,   early_adopter)
+          - beta_supporter@looma.test  (tier=supporter, early_adopter)
+          - beta_pro@looma.test        (tier=pro,     early_adopter)
+          - beta_admin@looma.test      (tier=pro,     early_adopter, role=admin)
+        """
+        import bcrypt
+
+        created = []
+        with self.get_conn() as conn:
+            for u in BETA_USERS:
+                # Check if already exists (by email)
+                existing = conn.execute(
+                    "SELECT id FROM users WHERE email = ?", (u["email"],)
+                ).fetchone()
+                if existing:
+                    continue
+
+                user_id = str(uuid.uuid4())
+                # Dev-only: use a simple password for test accounts
+                password_hash = bcrypt.hashpw(
+                    "looma123".encode("utf-8"), bcrypt.gensalt()
+                ).decode("utf-8")
+
+                conn.execute(
+                    """INSERT INTO users (id, email, password_hash, name, tier, role, is_early_adopter)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        user_id,
+                        u["email"],
+                        password_hash,
+                        u["name"],
+                        u["tier"],
+                        u.get("role", "user"),
+                        u.get("is_early_adopter", 0),
+                    ),
+                )
+                created.append(user_id)
+        return created
+
     def rate_query(self, query_id: int, rating: int):
         """Rate a query (1-5)."""
         with self.get_conn() as conn:
@@ -917,3 +1030,139 @@ class DatabaseManager:
                 (user_id,),
             ).fetchone()
         return row[0] if row else None
+
+    # ============================================
+    # Narrative operations (Jason — Phase 0 feedback)
+    # ============================================
+    def create_narrative_session(self, user_id: str | None, domain: str) -> str:
+        """Create a new narrative session. Returns session_id."""
+        session_id = str(uuid.uuid4())
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO narrative_sessions (id, user_id, domain)
+                   VALUES (?, ?, ?)""",
+                (session_id, user_id, domain),
+            )
+        return session_id
+
+    def update_narrative_session(self, session_id: str, status: str,
+                                 duration_seconds: float = 0):
+        """Mark a session as completed or abandoned."""
+        with self.get_conn() as conn:
+            conn.execute(
+                """UPDATE narrative_sessions
+                   SET status=?, duration_seconds=?, ended_at=datetime('now')
+                   WHERE id=?""",
+                (status, duration_seconds, session_id),
+            )
+
+    def log_narrative_event(self, session_id: str, event_type: str,
+                            domain: str | None = None,
+                            choice: str | None = None,
+                            navigator_line: str | None = None,
+                            metadata: dict | None = None):
+        """Log a narrative event during a session."""
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO narrative_events
+                   (session_id, event_type, domain, choice, navigator_line, metadata_json)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (session_id, event_type, domain, choice, navigator_line,
+                 json.dumps(metadata or {})),
+            )
+
+    def submit_narrative_feedback(self, session_id: str, resonated: bool,
+                                  navigator_quote: str | None = None,
+                                  would_replay: int | None = None,
+                                  shared: bool = False,
+                                  share_channel: str | None = None,
+                                  open_feedback: str | None = None):
+        """Submit convergence-point qualitative feedback."""
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO narrative_feedback
+                   (session_id, resonated, navigator_quote, would_replay,
+                    shared, share_channel, open_feedback)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(session_id) DO UPDATE SET
+                     resonated = excluded.resonated,
+                     navigator_quote = excluded.navigator_quote,
+                     would_replay = excluded.would_replay,
+                     shared = excluded.shared,
+                     share_channel = excluded.share_channel,
+                     open_feedback = excluded.open_feedback""",
+                (session_id, 1 if resonated else 0, navigator_quote, would_replay,
+                 1 if shared else 0, share_channel, open_feedback),
+            )
+
+    def get_narrative_stats(self) -> dict:
+        """Get aggregated Phase 0 metrics for admin dashboard.
+
+        Returns completion_rate, resonance_rate, share_rate,
+        replay_intent_rate, and top navigator quotes.
+        """
+        with self.get_conn() as conn:
+            # Total sessions
+            total = conn.execute(
+                "SELECT COUNT(*) as cnt FROM narrative_sessions"
+            ).fetchone()["cnt"]
+
+            # Completed sessions
+            completed = conn.execute(
+                "SELECT COUNT(*) as cnt FROM narrative_sessions WHERE status='completed'"
+            ).fetchone()["cnt"]
+
+            # Feedback stats
+            fb_total = conn.execute(
+                "SELECT COUNT(*) as cnt FROM narrative_feedback"
+            ).fetchone()["cnt"]
+
+            resonated = conn.execute(
+                "SELECT COUNT(*) as cnt FROM narrative_feedback WHERE resonated=1"
+            ).fetchone()["cnt"]
+
+            shared_cnt = conn.execute(
+                "SELECT COUNT(*) as cnt FROM narrative_feedback WHERE shared=1"
+            ).fetchone()["cnt"]
+
+            would_replay_yes = conn.execute(
+                "SELECT COUNT(*) as cnt FROM narrative_feedback WHERE would_replay=2"
+            ).fetchone()["cnt"]
+
+            # Top Navigator quotes (non-empty, deduped, sample)
+            quotes = conn.execute(
+                """SELECT navigator_quote, COUNT(*) as cnt
+                   FROM narrative_feedback
+                   WHERE navigator_quote IS NOT NULL AND navigator_quote != ''
+                   GROUP BY navigator_quote
+                   ORDER BY cnt DESC LIMIT 10"""
+            ).fetchall()
+
+            # Per-domain breakdown
+            domain_rows = conn.execute(
+                """SELECT domain, COUNT(*) as cnt
+                   FROM narrative_sessions
+                   GROUP BY domain ORDER BY cnt DESC"""
+            ).fetchall()
+
+            # Open feedback samples (latest 20)
+            open_fb_rows = conn.execute(
+                """SELECT nf.open_feedback, ns.domain, nf.created_at
+                   FROM narrative_feedback nf
+                   JOIN narrative_sessions ns ON nf.session_id = ns.id
+                   WHERE nf.open_feedback IS NOT NULL AND nf.open_feedback != ''
+                   ORDER BY nf.created_at DESC LIMIT 20"""
+            ).fetchall()
+
+        return {
+            "total_sessions": total,
+            "completed_sessions": completed,
+            "completion_rate": round(completed / total * 100, 1) if total > 0 else 0,
+            "feedback_count": fb_total,
+            "resonance_rate": round(resonated / fb_total * 100, 1) if fb_total > 0 else 0,
+            "share_rate": round(shared_cnt / fb_total * 100, 1) if fb_total > 0 else 0,
+            "replay_intent_rate": round(would_replay_yes / fb_total * 100, 1) if fb_total > 0 else 0,
+            "top_quotes": [{"quote": r["navigator_quote"], "count": r["cnt"]} for r in quotes],
+            "domains": [{"domain": r["domain"], "count": r["cnt"]} for r in domain_rows],
+            "open_feedback": [{"domain": r["domain"], "text": r["open_feedback"], "at": r["created_at"]} for r in open_fb_rows],
+        }

@@ -26,6 +26,11 @@ import Jobs from "./features/hr/Jobs";
 import Resume from "./features/hr/Resume";
 import Reports from "./features/reports/Reports";
 
+/** 轻量 ErrorBoundary 包装器，用于隔离单个功能的崩溃 */
+function FeatureGuard({ children }: { children: React.ReactNode }) {
+  return <ErrorBoundary>{children}</ErrorBoundary>;
+}
+
 export default function App() {
   const tryAutoLogin = useSaasAuthStore((s) => s.tryAutoLogin);
 
@@ -44,17 +49,17 @@ export default function App() {
 
           {/* Dashboard — 自由浏览，无需登录 */}
           <Route element={<AppLayout />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<FeatureGuard><Dashboard /></FeatureGuard>} />
           </Route>
 
           {/* Protected routes (需要登录的功能页) */}
           <Route element={<SaasAuthGuard />}>
             <Route element={<AppLayout />}>
-              <Route path="/query" element={<Chat />} />
-              <Route path="/poetry" element={<Poetry />} />
-              <Route path="/jobs" element={<Jobs />} />
-              <Route path="/resume" element={<Resume />} />
-              <Route path="/reports" element={<Reports />} />
+              <Route path="/query" element={<FeatureGuard><Chat /></FeatureGuard>} />
+              <Route path="/poetry" element={<FeatureGuard><Poetry /></FeatureGuard>} />
+              <Route path="/jobs" element={<FeatureGuard><Jobs /></FeatureGuard>} />
+              <Route path="/resume" element={<FeatureGuard><Resume /></FeatureGuard>} />
+              <Route path="/reports" element={<FeatureGuard><Reports /></FeatureGuard>} />
             </Route>
           </Route>
 

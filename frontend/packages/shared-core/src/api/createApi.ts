@@ -258,6 +258,53 @@ export function createReportsApi(client: ApiClient) {
 }
 
 // ============================================================
+// Narrative API (Phase 0 feedback collection)
+// ============================================================
+export function createNarrativeApi(client: ApiClient) {
+  return {
+    /** Start a new narrative session */
+    start: (payload: import("../types/narrative").NarrativeStartRequest) =>
+      client.post<import("../types/narrative").NarrativeStartResponse>(
+        API_ROUTES.NARRATIVE_START,
+        payload,
+      ),
+
+    /** Log a narrative event */
+    event: (payload: import("../types/narrative").NarrativeEventRequest) =>
+      client.post<{ ok: boolean }>(API_ROUTES.NARRATIVE_EVENT, payload),
+
+    /** Mark session complete or abandoned */
+    end: (payload: import("../types/narrative").NarrativeEndRequest) =>
+      client.post<{ ok: boolean }>(API_ROUTES.NARRATIVE_END, payload),
+
+    /** Submit convergence-point qualitative feedback */
+    feedback: (payload: import("../types/narrative").NarrativeFeedbackRequest) =>
+      client.post<{ ok: boolean }>(API_ROUTES.NARRATIVE_FEEDBACK, payload),
+
+    /** Admin: get aggregated Phase 0 metrics */
+    stats: () =>
+      client.get<import("../types/narrative").NarrativeStats>(API_ROUTES.NARRATIVE_STATS),
+  };
+}
+
+// ============================================================
+// Payment API
+// ============================================================
+export function createPaymentApi(client: ApiClient) {
+  return {
+    /** List available pricing plans */
+    plans: () => client.get<import("../types/payment").PlansResponse>(API_ROUTES.PAYMENT_PLANS),
+
+    /** Get current user subscription status */
+    status: () => client.get<import("../types/payment").PaymentStatus>(API_ROUTES.PAYMENT_STATUS),
+
+    /** Upgrade tier (stub: no real payment) */
+    upgrade: (tier: "supporter" | "pro") =>
+      client.post<import("../types/payment").UpgradeResponse>(API_ROUTES.PAYMENT_UPGRADE, { tier }),
+  };
+}
+
+// ============================================================
 // Quota API
 // ============================================================
 export function createQuotaApi(client: ApiClient) {

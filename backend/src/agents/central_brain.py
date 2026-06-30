@@ -5,6 +5,7 @@ Migrated from old central_brain.py (518 lines), adapted for Flask.
 Design: rules-first (fast & reliable for 1.5B models), LLM as enhancement fallback.
 """
 from __future__ import annotations
+from __future__ import annotations
 
 import json
 import random

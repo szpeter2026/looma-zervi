@@ -7,6 +7,7 @@ Endpoints:
   POST /v1/feedback/rate  - Rate a previous query (1-5)
   GET  /v1/feedback/last-query - Get user's last query ID
 """
+from __future__ import annotations
 import time
 import hashlib
 import logging

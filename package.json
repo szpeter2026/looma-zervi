@@ -1,0 +1,24 @@
+{
+  "name": "looma-zervi",
+  "version": "1.0.0",
+  "description": "> Tatha + DemoPeter 融合的工程目录，按功能层组织。 > 决策依据：`docs/决策文档_底座优先修订版.md`（仓库外，原文档在桌面） > 共享 API 契约：`docs/api.yaml`（Looma & Zervi Shared API Contract v1.1.0）",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://gitee.com/szbenyx/looma-zervi.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "docx": "^9.7.1"
+  }
+}

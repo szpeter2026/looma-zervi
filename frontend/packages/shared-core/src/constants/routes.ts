@@ -49,6 +49,18 @@ export const API_ROUTES = {
   REPORTS_GENERATE: "/v1/reports/generate",
   REPORTS_LIST: "/v1/reports/list",
 
+  // Payment
+  PAYMENT_PLANS: "/v1/payment/plans",
+  PAYMENT_STATUS: "/v1/payment/status",
+  PAYMENT_UPGRADE: "/v1/payment/upgrade",
+
   // Health
   HEALTH: "/health",
+
+  // Narrative (Phase 0 feedback collection)
+  NARRATIVE_START: "/v1/narrative/start",
+  NARRATIVE_EVENT: "/v1/narrative/event",
+  NARRATIVE_END: "/v1/narrative/end",
+  NARRATIVE_FEEDBACK: "/v1/narrative/feedback",
+  NARRATIVE_STATS: "/v1/narrative/stats",
 } as const;

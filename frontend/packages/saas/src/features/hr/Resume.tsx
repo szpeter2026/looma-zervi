@@ -6,32 +6,8 @@
  * Uses authStore for token, direct fetch for file upload.
  */
 import { useState, useRef } from "react";
-import { createApiClient } from "@looma/shared-core";
+import { createApiClient, createResumeApi, type ParsedResume } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
-
-interface ResumeExperience {
-  title: string;
-  company: string;
-  start_date: string;
-  end_date?: string;
-  description: string;
-}
-
-interface ResumeEducation {
-  school: string;
-  major: string;
-  degree: string;
-}
-
-interface ParsedResume {
-  name?: string;
-  email?: string;
-  phone?: string;
-  skills: string[];
-  experience: ResumeExperience[];
-  education: ResumeEducation[];
-  summary?: string;
-}
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -47,16 +23,15 @@ export default function Resume() {
     baseURL: API_BASE,
     getToken: () => token,
   });
+  const resumeApi = createResumeApi(api);
 
   const handleUpload = async (file: File) => {
     setParsing(true);
     setMsg(null);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
       const text = await file.text();
-      const data = await api.post<ParsedResume>("/v1/resume/upload", { content: text, filename: file.name });
-      setResume(data);
+      const result = await resumeApi.parse(text);
+      setResume(result.extracted);
       setMsg("简历解析完成");
     } catch {
       setMsg("解析失败，请检查文件格式");
@@ -172,7 +147,7 @@ export default function Resume() {
           </div>
 
           {/* 技能标签 */}
-          {resume.skills.length > 0 && (
+          {resume.skills && resume.skills.length > 0 && (
             <>
               <div className="border-t mb-3" style={{ borderColor: "#e0e0e0" }} />
               <h3 className="text-sm font-medium mb-2" style={{ color: "var(--color-text-secondary)" }}>
@@ -196,14 +171,14 @@ export default function Resume() {
           )}
 
           {/* 工作经验 */}
-          {resume.experience.length > 0 && (
+          {resume.experiences && resume.experiences.length > 0 && (
             <>
               <div className="border-t mb-3" style={{ borderColor: "#e0e0e0" }} />
               <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
                 工作经历
               </h3>
               <div className="space-y-3 mb-6">
-                {resume.experience.map((exp, i) => (
+                {resume.experiences.map((exp, i) => (
                   <div
                     key={i}
                     className="rounded-lg p-3"
@@ -214,15 +189,17 @@ export default function Resume() {
                         {exp.title}
                       </span>
                       <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                        {exp.start_date} ~ {exp.end_date || "至今"}
+                        {exp.start_date || ""} ~ {exp.end_date || "至今"}
                       </span>
                     </div>
                     <p className="text-xs mb-1" style={{ color: "var(--color-text-secondary)" }}>
                       {exp.company}
                     </p>
-                    <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-                      {exp.description}
-                    </p>
+                    {exp.description && (
+                      <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                        {exp.description}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -230,7 +207,7 @@ export default function Resume() {
           )}
 
           {/* 教育背景 */}
-          {resume.education.length > 0 && (
+          {resume.education && resume.education.length > 0 && (
             <>
               <div className="border-t mb-3" style={{ borderColor: "#e0e0e0" }} />
               <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
@@ -244,7 +221,7 @@ export default function Resume() {
                         {edu.school}
                       </span>
                       <span className="ml-2" style={{ color: "var(--color-text-muted)" }}>
-                        {edu.major}
+                        {edu.field}
                       </span>
                     </div>
                     <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
