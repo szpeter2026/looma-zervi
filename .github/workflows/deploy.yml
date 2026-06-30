@@ -150,6 +150,7 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'BOOTSTRAP'
           set -e
           echo "=== Bootstrap server ==="
+          sudo chown -R $(whoami) ${{ secrets.DEPLOY_PATH }} 2>/dev/null || true
           mkdir -p ${{ secrets.DEPLOY_PATH }}
           sudo mkdir -p /var/www/planetx/dist /var/www/saas/dist
           sudo chown -R $(whoami) /var/www/planetx /var/www/saas
