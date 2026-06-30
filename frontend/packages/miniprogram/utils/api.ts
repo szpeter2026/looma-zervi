@@ -1,169 +1,247 @@
 /**
  * API client for PlanetX miniprogram.
- * Wraps wx.request with auth header, error handling, and event bus.
+ *
+ * Refactored to align with @looma/shared-core aggregated API pattern:
+ * - MiniApiClient: wx.request wrapper with same interface as ApiClient
+ * - Factory functions per module  (createMiniAuthApi, createMiniGameApi, ...)
+ * - Single client instance shared by all modules
+ * - Backward-compatible named exports (authApi, gameApi, askApi, quotaApi)
  */
 
 import { eventBus } from './event-bus'
 import { store } from './store'
 
-const API_BASE = 'http://1.14.202.161'
+// ============================================================
+// MiniApiClient — wx.request-based transport
+// ============================================================
 
-interface RequestOptions {
-  url: string
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
-  data?: any
-  /** Skip auth header (e.g. for login) */
-  noAuth?: boolean
-  /** Request timeout in ms (default: 10000) */
+export interface MiniApiClientConfig {
+  baseURL: string
+  /** Return current auth token (null if unauthenticated) */
+  getToken: () => string | null
+  /** Called on 401 response */
+  onUnauthorized?: () => void
+  /** Default request timeout in ms (default: 10000) */
   timeout?: number
 }
 
-export function request<T = any>(options: RequestOptions): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const token = store.get('token')
-    const header: Record<string, string> = {
-      'Content-Type': 'application/json',
-    }
-    if (token && !options.noAuth) {
-      header['Authorization'] = `Bearer ${token}`
-    }
+export class MiniApiClient {
+  private baseURL: string
+  private getToken: () => string | null
+  private onUnauthorized: () => void
+  private defaultTimeout: number
 
-    const fullUrl = `${API_BASE}${options.url}`
-    console.log(`[API] ${options.method || 'GET'} ${fullUrl}`)
+  constructor(config: MiniApiClientConfig) {
+    this.baseURL = config.baseURL.replace(/\/$/, '')
+    this.getToken = config.getToken
+    this.onUnauthorized = config.onUnauthorized ?? (() => {})
+    this.defaultTimeout = config.timeout ?? 10000
+  }
 
-    wx.request({
-      url: fullUrl,
-      method: options.method || 'GET',
-      data: options.data,
-      header,
-      timeout: options.timeout || 10000,
-      success: (resp: any) => {
-        if (resp.statusCode >= 200 && resp.statusCode < 300) {
-          resolve(resp.data as T)
-        } else if (resp.statusCode === 401) {
-          // Token expired
-          store.reset()
-          wx.removeStorageSync('looma_token')
-          eventBus.emit('auth:expired')
-          reject(new Error('登录已过期，请重新登录'))
-        } else {
-          const msg = resp.data?.message || resp.data?.error || `HTTP ${resp.statusCode}`
-          console.error(`[API] Error ${resp.statusCode}:`, msg)
-          reject(new Error(msg))
+  /**
+   * Core request method wrapping wx.request.
+   *
+   * Automatically attaches Bearer token except when skipAuth=true.
+   * On HTTP 401: clears token, resets store, emits auth:expired.
+   */
+  private request<T = any>(
+    method: string,
+    url: string,
+    data?: any,
+    skipAuth = false,
+    timeout?: number,
+  ): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const header: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+
+      if (!skipAuth) {
+        const token = this.getToken()
+        if (token) {
+          header['Authorization'] = `Bearer ${token}`
         }
-      },
-      fail: (err) => {
-        // Provide clearer error messages for common network issues
-        let errMsg = err.errMsg || '网络错误'
-        if (errMsg.includes('timeout')) {
-          errMsg = '请求超时，服务器响应过慢'
-        } else if (errMsg.includes('fail')) {
-          errMsg = `网络连接失败 (${API_BASE})`
-        }
-        console.error('[API] Request failed:', errMsg)
-        reject(new Error(errMsg))
-      },
+      }
+
+      const fullUrl = `${this.baseURL}${url}`
+      console.log(`[API] ${method} ${fullUrl}`)
+
+      wx.request({
+        url: fullUrl,
+        method: method as any,
+        data,
+        header,
+        timeout: timeout ?? this.defaultTimeout,
+        success: (resp: any) => {
+          if (resp.statusCode >= 200 && resp.statusCode < 300) {
+            resolve(resp.data as T)
+          } else if (resp.statusCode === 401) {
+            store.reset()
+            wx.removeStorageSync('looma_token')
+            eventBus.emit('auth:expired')
+            this.onUnauthorized()
+            reject(new Error('登录已过期，请重新登录'))
+          } else {
+            const msg =
+              resp.data?.message || resp.data?.error || `HTTP ${resp.statusCode}`
+            console.error(`[API] Error ${resp.statusCode}:`, msg)
+            reject(new Error(msg))
+          }
+        },
+        fail: (err) => {
+          let errMsg = err.errMsg || '网络错误'
+          if (errMsg.includes('timeout')) {
+            errMsg = '请求超时，服务器响应过慢'
+          } else if (errMsg.includes('fail')) {
+            errMsg = `网络连接失败 (${this.baseURL})`
+          }
+          console.error('[API] Request failed:', errMsg)
+          reject(new Error(errMsg))
+        },
+      })
     })
-  })
+  }
+
+  /** GET request */
+  get<T = any>(url: string): Promise<T> {
+    return this.request<T>('GET', url)
+  }
+
+  /** POST request.
+   * @param skipAuth - if true, omit Authorization header (e.g. login)
+   * @param timeout - per-request timeout override
+   */
+  post<T = any>(
+    url: string,
+    data?: any,
+    skipAuth = false,
+    timeout?: number,
+  ): Promise<T> {
+    return this.request<T>('POST', url, data, skipAuth, timeout)
+  }
+
+  /** PUT request */
+  put<T = any>(url: string, data?: any): Promise<T> {
+    return this.request<T>('PUT', url, data)
+  }
+
+  /** DELETE request */
+  del<T = any>(url: string): Promise<T> {
+    return this.request<T>('DELETE', url)
+  }
 }
 
-// ============ Auth API ============
-export const authApi = {
-  /** WeChat login: code -> looma JWT */
-  wechatLogin(code: string): Promise<any> {
-    return request({
-      url: '/v1/auth/wechat',
-      method: 'POST',
-      data: { code },
-      noAuth: true,
-      timeout: 8000,
-    })
-  },
+// ============================================================
+// Singleton client (shared by all API modules)
+// ============================================================
 
-  /** Get user profile */
-  profile(): Promise<any> {
-    return request({ url: '/v1/auth/profile' })
-  },
+const API_BASE = 'http://1.14.202.161'
 
-  /** Bind email to WeChat account */
-  bindEmail(code: string, email: string, password: string): Promise<any> {
-    return request({
-      url: '/v1/auth/bind',
-      method: 'POST',
-      data: { code, email, password },
-    })
+const client = new MiniApiClient({
+  baseURL: API_BASE,
+  getToken: () => store.get('token'),
+  onUnauthorized: () => {
+    eventBus.emit('auth:expired')
   },
+})
+
+// ============================================================
+// Auth API
+// ============================================================
+
+export function createMiniAuthApi(c: MiniApiClient) {
+  return {
+    /** WeChat login: wx.login code → looma JWT */
+    wechatLogin(code: string) {
+      return c.post('/v1/auth/wechat', { code }, true, 8000)
+    },
+
+    /** Get user profile */
+    profile() {
+      return c.get('/v1/auth/profile')
+    },
+
+    /** Bind email to WeChat account */
+    bindEmail(code: string, email: string, password: string) {
+      return c.post('/v1/auth/bind', { code, email, password })
+    },
+  }
 }
 
-// ============ Game API ============
-export const gameApi = {
-  /** Get game profile (XP, level, personality, fleet, missions) */
-  getProfile(): Promise<any> {
-    return request({ url: '/v1/game/profile' })
-  },
+// ============================================================
+// Game API
+// ============================================================
 
-  /** Sync game profile to backend */
-  syncProfile(data: any): Promise<any> {
-    return request({
-      url: '/v1/game/profile-sync',
-      method: 'POST',
-      data,
-    })
-  },
+export function createMiniGameApi(c: MiniApiClient) {
+  return {
+    /** Get game profile (XP, level, personality, fleet) */
+    getProfile() {
+      return c.get('/v1/game/profile')
+    },
 
-  /** Complete a mission and earn XP */
-  completeMission(missionId: string): Promise<any> {
-    return request({
-      url: '/v1/game/mission-complete',
-      method: 'POST',
-      data: { mission_id: missionId },
-    })
-  },
+    /** Sync game profile to backend */
+    syncProfile(data: Record<string, any>) {
+      return c.post('/v1/game/profile-sync', data)
+    },
 
-  /** Create a fleet */
-  createFleet(): Promise<any> {
-    return request({
-      url: '/v1/game/fleet/create',
-      method: 'POST',
-    })
-  },
+    /** Complete a mission and earn XP */
+    completeMission(missionId: string) {
+      return c.post('/v1/game/mission-complete', { mission_id: missionId })
+    },
 
-  /** Join a fleet by invite code */
-  joinFleet(code: string): Promise<any> {
-    return request({
-      url: '/v1/game/fleet/join',
-      method: 'POST',
-      data: { invite_code: code.toUpperCase() },
-    })
-  },
+    /** Create a fleet */
+    createFleet() {
+      return c.post('/v1/game/fleet/create')
+    },
 
-  /** Get my fleet info */
-  getMyFleet(): Promise<any> {
-    return request({ url: '/v1/game/fleet/mine' })
-  },
+    /** Join a fleet by invite code */
+    joinFleet(code: string) {
+      return c.post('/v1/game/fleet/join', { invite_code: code.toUpperCase() })
+    },
+
+    /** Get my fleet info */
+    getMyFleet() {
+      return c.get('/v1/game/fleet/mine')
+    },
+  }
 }
 
-// ============ Ask API ============
-export const askApi = {
-  /** Ask a question to AI */
-  ask(query: string, sessionHistory?: any[]): Promise<any> {
-    return request({
-      url: '/v1/ask',
-      method: 'POST',
-      data: {
+// ============================================================
+// Chat / Ask API
+// ============================================================
+
+export function createMiniChatApi(c: MiniApiClient) {
+  return {
+    /** Ask a question to AI */
+    ask(query: string, sessionHistory?: any[]) {
+      return c.post('/v1/ask', {
         query,
         session_history: sessionHistory || [],
-      },
-    })
-  },
+      })
+    },
+  }
 }
 
-// ============ Quota API ============
-export const quotaApi = {
-  /** Get quota status */
-  getQuota(): Promise<any> {
-    return request({ url: '/v1/quota' })
-  },
+// ============================================================
+// Quota API
+// ============================================================
+
+export function createMiniQuotaApi(c: MiniApiClient) {
+  return {
+    /** Get quota status */
+    getQuota() {
+      return c.get('/v1/quota')
+    },
+  }
 }
+
+// ============================================================
+// Backward-compatible named exports
+// ============================================================
+
+export const authApi = createMiniAuthApi(client)
+export const gameApi = createMiniGameApi(client)
+export const askApi = createMiniChatApi(client)
+export const quotaApi = createMiniQuotaApi(client)
 
 export { API_BASE }
