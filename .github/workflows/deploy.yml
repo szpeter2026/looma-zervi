@@ -142,12 +142,17 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
+      # SSH 公共参数：保活 + 禁用严格主机检查（已通过 known_hosts 验证）
+      - name: Setup SSH alias
+        run: |
+          echo 'SSH_CMD=ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o StrictHostKeyChecking=accept-new' >> $GITHUB_ENV
+
       # ========================================
       # Step 1: 服务器自举 — 确保目录和 .env 存在
       # ========================================
       - name: Bootstrap server
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'BOOTSTRAP'
+          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'BOOTSTRAP'
           set -e
           echo "=== Bootstrap server ==="
           sudo chown -R $(whoami) ${{ secrets.DEPLOY_PATH }} 2>/dev/null || true
@@ -176,7 +181,7 @@ jobs:
       # ========================================
       - name: Sync code to server
         run: |
-          rsync -avz --delete \
+          rsync -avz -e "$SSH_CMD" --delete \
             --exclude='.git' \
             --exclude='node_modules' \
             --exclude='__pycache__' \
@@ -194,31 +199,51 @@ jobs:
       # ========================================
       - name: Upload PlanetX dist
         run: |
-          rsync -avz --delete \
+          rsync -avz -e "$SSH_CMD" --delete \
             artifacts/planetx/ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/planetx/dist/
 
       - name: Upload Saas dist
         run: |
-          rsync -avz --delete \
+          rsync -avz -e "$SSH_CMD" --delete \
             artifacts/saas/ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/saas/dist/
 
       # ========================================
-      # Step 4: Docker 重建 & 健康检查
+      # Step 4: 启动/重启服务
+      # 首次部署需 build 镜像（可能很久），用 nohup 后台执行防止 SSH 超时断连
       # ========================================
-      - name: Docker compose rebuild
+      - name: Start / restart services
+        timeout-minutes: 15
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+          # 后台启动（首次会 build，后续秒启）
+          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "cd ${{ secrets.DEPLOY_PATH }} && \
-             docker compose -f docker/docker-compose.yml up -d --build && \
-             echo '=== Waiting for services ===' && \
-             sleep 5 && \
-             echo '=== Health check ===' && \
-             curl -sf http://localhost:5000/health && echo ' Backend OK' || echo ' Backend FAIL' && \
-             curl -sf http://localhost/health && echo ' Nginx OK' || echo ' Nginx FAIL'"
+             nohup docker compose -f docker/docker-compose.yml up -d --remove-orphans > /tmp/docker-up.log 2>&1 &"
+
+          # 轮询等待后端 healthy（最长等 10 分钟）
+          echo "=== Waiting for backend to become healthy ==="
+          for i in $(seq 1 60); do
+            sleep 10
+            if $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+              "curl -sf http://localhost:5000/health" 2>/dev/null; then
+              echo " Backend OK (after ${i}0s)"
+              break
+            fi
+            echo "  ... waiting (${i}0s)"
+          done
+
+          # 重启后端以使挂载的新代码生效
+          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "docker compose -f ${{ secrets.DEPLOY_PATH }}/docker/docker-compose.yml restart backend"
+
+          echo "=== Health check ==="
+          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "curl -sf http://localhost:5000/health && echo ' Backend OK' || echo ' Backend FAIL'"
+          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "curl -sf http://localhost/health && echo ' Nginx OK' || echo ' Nginx FAIL'"
 
       - name: Clean up old images
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "docker image prune -f"
