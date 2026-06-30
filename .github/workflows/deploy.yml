@@ -215,7 +215,21 @@ jobs:
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/saas/dist/
 
       # ========================================
-      # Step 4: 启动/重启服务
+      # Step 4: 部署 Nginx 配置（首次/更新时）
+      # ========================================
+      - name: Deploy nginx config
+        run: |
+          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "sudo cp /etc/nginx/sites-enabled/api.genz.ltd /etc/nginx/sites-enabled/api.genz.ltd.bak.$(date +%Y%m%d%H%M%S) 2>/dev/null || true"
+          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "sudo cp ${{ secrets.DEPLOY_PATH }}/nginx-looma-zervi.conf /etc/nginx/sites-enabled/looma-zervi"
+          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "sudo rm -f /etc/nginx/sites-enabled/api.genz.ltd"
+          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "sudo nginx -t && sudo nginx -s reload"
+
+      # ========================================
+      # Step 5: 启动/重启服务
       # 首次部署需 build 镜像（可能很久），用 nohup 后台执行防止 SSH 超时断连
       # ========================================
       - name: Start / restart services
