@@ -61,7 +61,7 @@ export function getRankName(level: number): RankName {
 }
 
 // ============ API Client 初始化 ============
-const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || 'http://localhost:5200'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || 'http://1.14.202.161'
 
 function getApiClient() {
   return createApiClient({
@@ -578,7 +578,6 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
       code = token
         ? 'PX-' + token.substring(0, 8).toUpperCase()
         : 'PX-' + Math.random().toString(36).substring(2, 10).toUpperCase()
-      set({ refCode: code })
     }
     return window.location.origin + window.location.pathname + '?ref=' + code
   },

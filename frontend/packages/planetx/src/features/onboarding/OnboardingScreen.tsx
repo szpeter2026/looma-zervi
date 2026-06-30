@@ -7,6 +7,11 @@ import type { Identity } from '../auth/planetxAuthStore'
 export default function OnboardingScreen() {
   const { setIdentity, setScreen } = usePlanetXStore()
 
+  const handleEnterTSpace = () => {
+    const saasUrl = import.meta.env.VITE_SAAS_URL || 'http://localhost:5174/'
+    window.location.href = saasUrl
+  }
+
   const handleSelect = (type: Identity) => {
     setIdentity(type)
     setScreen('hub')
@@ -93,7 +98,7 @@ export default function OnboardingScreen() {
       {/* T空间入口 */}
       <div style={{ textAlign: 'center', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
         <button
-          onClick={() => window.location.href = '/narrative'}
+          onClick={handleEnterTSpace}
           style={{
             display: 'inline-flex',
             alignItems: 'center',

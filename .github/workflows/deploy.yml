@@ -52,9 +52,14 @@ jobs:
 
       - name: Build PlanetX
         run: pnpm build:planetx
+        env:
+          VITE_API_BASE: ""              # 同源请求，nginx 代理 /v1/ → backend
+          VITE_SAAS_URL: "/tspace/"      # 按钮跳转到同域 T 空间
 
       - name: Build Saas (T-space)
-        run: pnpm build:saas
+        run: pnpm --filter @looma/saas exec vite build --base /tspace/
+        env:
+          VITE_API_BASE: ""              # 同源请求
 
       - name: Upload PlanetX artifact
         uses: actions/upload-artifact@v4

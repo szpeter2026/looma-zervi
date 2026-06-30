@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { usePlanetXStore, QUIZ_QUESTIONS } from '../auth/planetxAuthStore'
 
 /**
@@ -6,8 +7,13 @@ import { usePlanetXStore, QUIZ_QUESTIONS } from '../auth/planetxAuthStore'
 export default function QuizScreen() {
   const { quizStep, answerQuiz, setScreen } = usePlanetXStore()
 
+  useEffect(() => {
+    if (quizStep >= QUIZ_QUESTIONS.length) {
+      setScreen('result')
+    }
+  }, [quizStep, setScreen])
+
   if (quizStep >= QUIZ_QUESTIONS.length) {
-    setScreen('result')
     return null
   }
 
@@ -15,9 +21,6 @@ export default function QuizScreen() {
 
   const handleAnswer = (trait: typeof q.options[number]['trait'], idx: number) => {
     answerQuiz(trait, idx)
-    if (quizStep + 1 >= QUIZ_QUESTIONS.length) {
-      setTimeout(() => setScreen('result'), 300)
-    }
   }
 
   return (
