@@ -61,7 +61,7 @@ export function getRankName(level: number): RankName {
 }
 
 // ============ API Client 初始化 ============
-const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || 'http://1.14.202.161'
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_API_BASE ?? ''
 
 function getApiClient() {
   return createApiClient({

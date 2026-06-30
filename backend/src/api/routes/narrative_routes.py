@@ -30,6 +30,13 @@ def _get_db():
     return current_app._db
 
 
+def _user_id():
+    """Return authenticated user_id, or None for guests (to satisfy FK constraints)."""
+    if g.get("user_tier") == "guest":
+        return None
+    return g.get("user_id")
+
+
 # ── Start session ──
 
 @narrative_bp.route("/start", methods=["POST"])
@@ -45,7 +52,7 @@ def start_session():
     if domain not in VALID_DOMAINS:
         return jsonify(error="bad_request", message=f"unknown domain: {domain}"), 400
 
-    user_id = g.get("user_id")  # None for guests
+    user_id = _user_id()
 
     db = _get_db()
     session_id = db.create_narrative_session(user_id, domain)
@@ -103,7 +110,7 @@ def end_session():
     db.update_narrative_session(session_id, status, duration_seconds)
 
     # ── Engine cleanup ──
-    user_id = g.get("user_id")
+    user_id = _user_id()
     if user_id:
         try:
             from src.agents.domain_engine import get_domain_engine
@@ -202,7 +209,7 @@ def engine_domain_enter():
     if domain not in VALID_DOMAINS:
         return jsonify(error="bad_request", message=f"unknown domain: {domain}"), 400
 
-    user_id = g.get("user_id", "guest")
+    user_id = _user_id()
     db = _get_db()
 
     try:
@@ -252,7 +259,7 @@ def engine_record_choice():
         return jsonify(error="bad_request",
                        message="session_id, domain, choice required"), 400
 
-    user_id = g.get("user_id", "guest")
+    user_id = _user_id()
     db = _get_db()
 
     try:
@@ -305,7 +312,7 @@ def engine_get_state():
     Returns value imprints, domain history, active strategies,
     and convergence status.
     """
-    user_id = g.get("user_id", "guest")
+    user_id = _user_id()
     session_id = request.args.get("session_id", "").strip()
     db = _get_db()
 
@@ -385,7 +392,7 @@ def act1_init():
     if domain not in VALID_DOMAINS:
         return jsonify(error="bad_request", message=f"unknown domain: {domain}"), 400
 
-    user_id = g.get("user_id", "guest")
+    user_id = _user_id()
 
     try:
         from src.agents.act1_state_machine import get_act1
@@ -494,7 +501,7 @@ def act1_make_choice():
     if not session_id or choice_index < 0:
         return jsonify(error="bad_request", message="session_id and choice_index required"), 400
 
-    user_id = g.get("user_id", "guest")
+    user_id = _user_id()
     db = _get_db()
 
     try:

@@ -8,7 +8,7 @@
  */
 import { useState, useCallback, useRef } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 let _uid = 0;
 function uid(): string {

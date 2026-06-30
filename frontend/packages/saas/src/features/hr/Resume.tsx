@@ -9,7 +9,7 @@ import { useState, useRef } from "react";
 import { createApiClient, createResumeApi, type ParsedResume } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export default function Resume() {
   const { token } = useSaasAuthStore();

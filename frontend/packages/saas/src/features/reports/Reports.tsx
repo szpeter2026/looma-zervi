@@ -10,7 +10,7 @@ import { createApiClient, createReportsApi, type Report, type ReportType } from 
 import { formatDate } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 const typeMap: Record<string, { label: string; emoji: string }> = {
   daily: { label: "日报", emoji: "📊" },
