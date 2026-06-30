@@ -19,6 +19,7 @@ services:
       - backend-data:/app/data
       - chroma-data:/app/chroma_data
       - poetry-data:/app/poetry_data
+      - ../data/chroma_models:/root/.cache/chroma/onnx_models
     networks:
       - looma-net
 
