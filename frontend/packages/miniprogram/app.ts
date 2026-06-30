@@ -6,10 +6,8 @@
 
 import { eventBus } from './utils/event-bus'
 import { store } from './utils/store'
-import { authApi, gameApi } from './utils/api'
+import { authApi, gameApi, API_BASE } from './utils/api'
 import { getDeviceInfo } from './utils/device'
-
-const API_BASE = 'http://1.14.202.161'
 
 App({
   globalData: {
