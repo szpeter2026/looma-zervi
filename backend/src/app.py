@@ -26,6 +26,7 @@ def create_app(env="development"):
     from src.api.routes.reports_routes import reports_bp
     from src.api.routes.referral_routes import referral_bp
     from src.api.routes.quota_routes import quota_bp
+    from src.api.routes.poetry_routes import poetry_bp
 
     app.register_blueprint(auth_bp, url_prefix="/v1/auth")
     app.register_blueprint(game_bp, url_prefix="/v1/game")
@@ -36,6 +37,7 @@ def create_app(env="development"):
     app.register_blueprint(reports_bp, url_prefix="/v1/reports")
     app.register_blueprint(referral_bp, url_prefix="/v1/referral")
     app.register_blueprint(quota_bp, url_prefix="/v1")
+    app.register_blueprint(poetry_bp, url_prefix="/v1/poetry")
 
     # --- Health check ---
     @app.route("/health", methods=["GET"])
