@@ -118,9 +118,13 @@ def test_sync_personality_missing_type(authed_client):
 
 
 def test_get_game_profile_not_found(authed_client):
-    """User with no profile should get 404."""
+    """User with no profile should get 200 with default profile."""
     resp = authed_client.get("/v1/game/profile")
-    assert resp.status_code == 404
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["xp"] == 0
+    assert data["level"] == 1
+    assert data["personality_type"] == ""
 
 
 def test_get_game_profile_after_sync(authed_client):
