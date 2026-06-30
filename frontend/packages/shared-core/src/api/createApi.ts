@@ -39,7 +39,7 @@ import type {
   AddCandidateRequest,
   AddCandidateResponse,
 } from "../types/enterprise";
-import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job } from "../types/resume";
+import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job, ResumeUploadResult, ParsedJob, JobUploadResult, CreditAnalysis, CheckCompanyRequest } from "../types/resume";
 import type { Report, GenerateReportRequest } from "../types/misc";
 import { API_ROUTES } from "../constants/routes";
 
@@ -224,8 +224,8 @@ export function createResumeApi(client: ApiClient) {
     parse: (text: string) =>
       client.post<{ extracted: ParsedResume }>(API_ROUTES.RESUME_PARSE, { text }),
 
-    /** Upload resume file (MVP: 501) */
-    upload: (file: File) => client.upload(API_ROUTES.RESUME_UPLOAD, file, "file"),
+    /** Upload resume file for AI parsing (PDF/DOCX → structured JSON) */
+    upload: (file: File) => client.upload<ResumeUploadResult>(API_ROUTES.RESUME_UPLOAD, file, "file"),
   };
 }
 
@@ -234,11 +234,18 @@ export function createResumeApi(client: ApiClient) {
 // ============================================================
 export function createJobsApi(client: ApiClient) {
   return {
-    /** List available jobs */
+    /** List available jobs (persisted + mock fallback) */
     list: () => client.get<{ jobs: Job[]; total: number }>(API_ROUTES.JOBS_LIST),
 
-    /** Match resume to job listings */
-    match: (payload: JobMatchRequest) =>
+    /** Upload JD file for AI parsing (PDF/DOCX → structured JSON) */
+    upload: (file: File) => client.upload<JobUploadResult>(API_ROUTES.JOBS_UPLOAD, file, "file"),
+
+    /** Parse plain JD text into structured data */
+    parse: (text: string) =>
+      client.post<{ parsed: ParsedJob }>(API_ROUTES.JOBS_PARSE, { text }),
+
+    /** Match resume to job listings (with optional job_id filter) */
+    match: (payload: JobMatchRequest & { job_id?: string; job_description?: string }) =>
       client.post<JobMatchResponse>(API_ROUTES.JOBS_MATCH, payload),
   };
 }
@@ -254,6 +261,117 @@ export function createReportsApi(client: ApiClient) {
 
     /** List generated reports */
     list: () => client.get<{ reports: Report[]; total: number }>(API_ROUTES.REPORTS_LIST),
+  };
+}
+
+// ============================================================
+// Credit API (Company evaluation — tripod leg 3)
+// ============================================================
+export function createCreditApi(client: ApiClient) {
+  return {
+    /** Parse raw credit report text via LLM */
+    analyze: (text: string) =>
+      client.post<{ extracted: CreditAnalysis }>(API_ROUTES.CREDIT_ANALYZE, { text }),
+
+    /** Evaluate a company by name (post-match flow) */
+    checkCompany: (payload: CheckCompanyRequest) =>
+      client.post<{ extracted: CreditAnalysis }>(API_ROUTES.CREDIT_CHECK_COMPANY, payload),
+  };
+}
+
+// ============================================================
+// Narrative API (Phase 0 feedback collection)
+// ============================================================
+export function createNarrativeApi(client: ApiClient) {
+  return {
+    /** Start a new narrative session */
+    start: (payload: import("../types/narrative").NarrativeStartRequest) =>
+      client.post<import("../types/narrative").NarrativeStartResponse>(
+        API_ROUTES.NARRATIVE_START,
+        payload,
+      ),
+
+    /** Log a narrative event */
+    event: (payload: import("../types/narrative").NarrativeEventRequest) =>
+      client.post<{ ok: boolean }>(API_ROUTES.NARRATIVE_EVENT, payload),
+
+    /** Mark session complete or abandoned */
+    end: (payload: import("../types/narrative").NarrativeEndRequest) =>
+      client.post<{ ok: boolean }>(API_ROUTES.NARRATIVE_END, payload),
+
+    /** Submit convergence-point qualitative feedback */
+    feedback: (payload: import("../types/narrative").NarrativeFeedbackRequest) =>
+      client.post<{ ok: boolean }>(API_ROUTES.NARRATIVE_FEEDBACK, payload),
+
+    /** Admin: get aggregated Phase 0 metrics */
+    stats: () =>
+      client.get<import("../types/narrative").NarrativeStats>(API_ROUTES.NARRATIVE_STATS),
+  };
+}
+
+// ============================================================
+// Act 1 State Machine API (GDD §5.1)
+// ============================================================
+export function createAct1Api(client: ApiClient) {
+  return {
+    /** Initialize Act 1 session with a domain */
+    init: (payload: import("../types/narrative").Act1InitRequest) =>
+      client.post<import("../types/narrative").Act1SessionState>(
+        API_ROUTES.ACT1_INIT,
+        payload,
+      ),
+
+    /** Get current Act 1 state */
+    state: (sessionId: string) =>
+      client.get<import("../types/narrative").Act1SessionState>(
+        `${API_ROUTES.ACT1_STATE}?session_id=${encodeURIComponent(sessionId)}`,
+      ),
+
+    /** Advance to next step */
+    advance: (sessionId: string) =>
+      client.post<import("../types/narrative").Act1AdvanceResponse>(
+        API_ROUTES.ACT1_ADVANCE,
+        { session_id: sessionId },
+      ),
+
+    /** Make a choice at step 3 */
+    choice: (payload: import("../types/narrative").Act1ChoiceRequest) =>
+      client.post<import("../types/narrative").Act1ChoiceResponse>(
+        API_ROUTES.ACT1_CHOICE,
+        payload,
+      ),
+
+    /** Reset session (hard=true clears domain) */
+    reset: (sessionId: string, hard = false) =>
+      client.post<{ ok: boolean }>(
+        API_ROUTES.ACT1_RESET,
+        { session_id: sessionId, hard },
+      ),
+
+    /** Get Act 1 content library */
+    content: (domain?: string) =>
+      client.get<import("../types/narrative").Act1ContentResponse>(
+        domain
+          ? `${API_ROUTES.ACT1_CONTENT}?domain=${encodeURIComponent(domain)}`
+          : API_ROUTES.ACT1_CONTENT,
+      ),
+  };
+}
+
+// ============================================================
+// Payment API
+// ============================================================
+export function createPaymentApi(client: ApiClient) {
+  return {
+    /** List available pricing plans */
+    plans: () => client.get<import("../types/payment").PlansResponse>(API_ROUTES.PAYMENT_PLANS),
+
+    /** Get current user subscription status */
+    status: () => client.get<import("../types/payment").PaymentStatus>(API_ROUTES.PAYMENT_STATUS),
+
+    /** Upgrade tier (stub: no real payment) */
+    upgrade: (tier: "supporter" | "pro") =>
+      client.post<import("../types/payment").UpgradeResponse>(API_ROUTES.PAYMENT_UPGRADE, { tier }),
   };
 }
 

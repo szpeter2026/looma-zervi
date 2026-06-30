@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { usePlanetXStore, IDENTITY_LABELS } from '../auth/planetxAuthStore'
 import type { Identity } from '../auth/planetxAuthStore'
 
@@ -6,10 +7,10 @@ import type { Identity } from '../auth/planetxAuthStore'
  */
 export default function OnboardingScreen() {
   const { setIdentity, setScreen } = usePlanetXStore()
+  const navigate = useNavigate()
 
   const handleEnterTSpace = () => {
-    const saasUrl = import.meta.env.VITE_SAAS_URL || '/tspace/'
-    window.location.href = saasUrl
+    navigate('/tspace')
   }
 
   const handleSelect = (type: Identity) => {

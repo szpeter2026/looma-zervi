@@ -1,6 +1,7 @@
 services:
   # ============================================
   # Looma Backend (Flask)
+  # 镜像首次手动 docker compose build，后续 CI 只重启容器加载新代码
   # ============================================
   backend:
     build:
@@ -13,9 +14,12 @@ services:
     env_file:
       - ../backend/.env
     volumes:
-      - ../backend:/app                         # 代码 bind mount，rsync 后 restart 即生效
+      # 代码 bind mount：rsync 后 restart 即生效，不需 rebuild
+      - ../backend:/app
       - backend-data:/app/data
       - chroma-data:/app/chroma_data
+      - poetry-data:/app/poetry_data
+      - ../data/chroma_models:/root/.cache/chroma/onnx_models
     networks:
       - looma-net
 
@@ -36,30 +40,10 @@ services:
     networks:
       - looma-net
 
-  # ============================================
-  # Nginx (Reverse Proxy)
-  # ============================================
-  nginx:
-    image: nginx:alpine
-    container_name: looma-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/nginx/certs:ro
-      # 前端静态文件（由 CI/CD 部署到宿主机后挂载）
-      - /var/www/planetx/dist:/var/www/planetx/dist:ro
-      - /var/www/saas/dist:/var/www/saas/dist:ro
-    depends_on:
-      - backend
-    networks:
-      - looma-net
-
 volumes:
   backend-data:
   chroma-data:
+  poetry-data:
 
 networks:
   looma-net:

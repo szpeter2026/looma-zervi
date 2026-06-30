@@ -216,9 +216,18 @@ export default function Dashboard() {
                   }}
                 />
               </div>
-              <p className="text-xs mt-2" style={{ color: "var(--color-text-muted)" }}>
-                {quota.tier === "free" ? "免费版" : quota.tier === "supporter" ? "支持版" : "专业版"}
-              </p>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                  {quota.tier === "free" ? "免费版" : quota.tier === "supporter" ? "支持版" : "专业版"}
+                </p>
+                <a
+                  href="/pricing"
+                  className="text-xs no-underline hover:underline"
+                  style={{ color: "var(--color-primary)" }}
+                >
+                  升级 →
+                </a>
+              </div>
             </>
           ) : (
             <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>

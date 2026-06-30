@@ -28,7 +28,11 @@ export {
   createResumeApi,
   createJobsApi,
   createReportsApi,
+  createPaymentApi,
   createQuotaApi,
+  createNarrativeApi,
+  createAct1Api,
+  createCreditApi,
 } from "./api/createApi";
 
 // Types
@@ -90,10 +94,17 @@ export type {
   ResumeExperience,
   ResumeEducation,
   ResumeProject,
+  ResumeUploadResult,
   Job,
+  JobMatchItem,
   JobMatchResult,
   JobMatchRequest,
   JobMatchResponse,
+  ParsedJob,
+  JobUploadResult,
+  JobMatchScore,
+  CreditAnalysis,
+  CheckCompanyRequest,
 } from "./types/resume";
 
 export type {
@@ -117,10 +128,39 @@ export type {
 } from "./types/misc";
 
 export type {
+  PaymentPlan,
+  PlansResponse,
+  PaymentStatus,
+  UpgradeRequest,
+  UpgradeResponse,
+} from "./types/payment";
+
+export type {
   ApiResponse,
   Pagination,
   PaginatedResponse as CommonPaginatedResponse,
 } from "./types/common";
+
+export type {
+  NarrativeDomain,
+  NarrativeEventType,
+  NarrativeStartRequest,
+  NarrativeStartResponse,
+  NarrativeEventRequest,
+  NarrativeEndRequest,
+  NarrativeFeedbackRequest,
+  NarrativeStats,
+  Act1DomainSummary,
+  Act1Step,
+  ConvergenceTexture,
+  Act1ContentResponse,
+  Act1ChoiceOption,
+  Act1SessionState,
+  Act1AdvanceResponse,
+  Act1ChoiceRequest,
+  Act1ChoiceResponse,
+  Act1InitRequest,
+} from "./types/narrative";
 
 export {
   BRAND,

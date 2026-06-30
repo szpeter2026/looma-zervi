@@ -40,15 +40,42 @@ export const API_ROUTES = {
   // Jobs
   JOBS_LIST: "/v1/jobs/list",
   JOBS_MATCH: "/v1/jobs/match",
+  JOBS_UPLOAD: "/v1/jobs/upload",
+  JOBS_PARSE: "/v1/jobs/parse",
 
   // Resume
   RESUME_PARSE: "/v1/resume/parse",
   RESUME_UPLOAD: "/v1/resume/upload",
+  RESUME_IMPROVE: "/v1/resume/improve",
 
   // Reports
   REPORTS_GENERATE: "/v1/reports/generate",
   REPORTS_LIST: "/v1/reports/list",
 
+  // Payment
+  PAYMENT_PLANS: "/v1/payment/plans",
+  PAYMENT_STATUS: "/v1/payment/status",
+  PAYMENT_UPGRADE: "/v1/payment/upgrade",
+
+  // Credit (company evaluation — tripod leg 3: Resume → Job → Company)
+  CREDIT_ANALYZE: "/v1/credit/analyze",
+  CREDIT_CHECK_COMPANY: "/v1/credit/check-company",
+
   // Health
   HEALTH: "/health",
+
+  // Narrative (Phase 0 feedback collection)
+  NARRATIVE_START: "/v1/narrative/start",
+  NARRATIVE_EVENT: "/v1/narrative/event",
+  NARRATIVE_END: "/v1/narrative/end",
+  NARRATIVE_FEEDBACK: "/v1/narrative/feedback",
+  NARRATIVE_STATS: "/v1/narrative/stats",
+
+  // Act 1 State Machine (GDD §5.1)
+  ACT1_INIT: "/v1/narrative/engine/act1/init",
+  ACT1_STATE: "/v1/narrative/engine/act1/state",
+  ACT1_ADVANCE: "/v1/narrative/engine/act1/advance",
+  ACT1_CHOICE: "/v1/narrative/engine/act1/choice",
+  ACT1_RESET: "/v1/narrative/engine/act1/reset",
+  ACT1_CONTENT: "/v1/narrative/engine/act1/content",
 } as const;

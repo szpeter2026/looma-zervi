@@ -12,14 +12,18 @@ logger = logging.getLogger("looma.poetry")
 
 
 def search_poems(query: str, n_results: int = 3) -> list[dict]:
-    """Search poems by query text via ChromaDB.
+    """Search poems by query text via the dedicated poetry ChromaDB.
+
+    Uses an independent embedded PersistentClient so poetry search
+    works in both local dev and Docker production (where the main
+    ChromaDB may be in remote/server mode).
 
     Returns list of dicts with title, author, dynasty, content, theme.
     Falls back to pgvector if ChromaDB unavailable.
     """
     try:
-        from src.rag.chroma_client import search_chroma
-        results = search_chroma(query, n_results=n_results, collection="looma_poetry")
+        from src.rag.chroma_client import search_poetry_chroma
+        results = search_poetry_chroma(query, n_results=n_results)
         poems = []
         for r in results:
             meta = r.get("metadata", {})
@@ -32,7 +36,7 @@ def search_poems(query: str, n_results: int = 3) -> list[dict]:
             })
         return poems
     except Exception as e:
-        logger.warning(f"ChromaDB poetry search failed: {e}")
+        logger.warning(f"Poetry ChromaDB search failed: {e}")
 
     # Fallback: pgvector
     try:

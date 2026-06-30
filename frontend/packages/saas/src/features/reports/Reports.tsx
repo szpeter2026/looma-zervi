@@ -3,20 +3,12 @@
  * Owner: szbenyx
  *
  * Pure CSS + Tailwind (no tdesign-react).
- * Uses authStore for token, direct fetch for API calls.
+ * Uses shared-core typed API factories for backend contract alignment.
  */
 import { useState, useEffect } from "react";
-import { createApiClient, formatDate } from "@looma/shared-core";
+import { createApiClient, createReportsApi, type Report, type ReportType } from "@looma/shared-core";
+import { formatDate } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
-
-interface Report {
-  id: string;
-  title: string;
-  type: "daily" | "weekly" | "monthly";
-  content: string;
-  generated_at: string;
-  date_range: { start: string; end: string };
-}
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -29,7 +21,7 @@ const typeMap: Record<string, { label: string; emoji: string }> = {
 export default function Reports() {
   const { token } = useSaasAuthStore();
   const [reports, setReports] = useState<Report[]>([]);
-  const [type, setType] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [type, setType] = useState<ReportType>("daily");
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -37,11 +29,12 @@ export default function Reports() {
     baseURL: API_BASE,
     getToken: () => token,
   });
+  const reportsApi = createReportsApi(api);
 
   const fetchReports = async () => {
     try {
-      const data = await api.get<Report[]>("/v1/reports/daily");
-      setReports(data);
+      const res = await reportsApi.list();
+      setReports(res.reports);
     } catch {
       /* ignore */
     }
@@ -55,11 +48,11 @@ export default function Reports() {
     setGenerating(true);
     setMsg(null);
     try {
-      await api.post("/v1/reports/generate", { type });
+      await reportsApi.generate({ type });
       setMsg("报告生成成功");
       fetchReports();
     } catch {
-      setMsg("生成失败");
+      setMsg("生成失败，请检查后端服务");
     } finally {
       setGenerating(false);
     }
@@ -85,7 +78,7 @@ export default function Reports() {
         <div className="flex items-center gap-3">
           <select
             value={type}
-            onChange={(e) => setType(e.target.value as typeof type)}
+            onChange={(e) => setType(e.target.value as ReportType)}
             className="border rounded-lg px-3 py-2 text-sm outline-none"
             style={{
               borderColor: "#e0e0e0",
@@ -128,7 +121,7 @@ export default function Reports() {
         ) : (
           reports.map((r) => (
             <div
-              key={r.id}
+              key={r.path}
               className="rounded-lg p-5 transition-shadow hover:shadow-sm"
               style={{
                 backgroundColor: "var(--color-bg-card)",
@@ -140,21 +133,27 @@ export default function Reports() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-medium" style={{ color: "var(--color-text-primary)" }}>
-                      {r.title}
+                      {typeMap[r.type]?.label ?? r.type}报告
                     </h3>
                     <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                      {formatDate(r.generated_at)}
+                      {r.generated_at ? formatDate(r.generated_at) : ""}
                     </span>
                   </div>
                   <p
-                    className="text-sm line-clamp-3"
+                    className="text-sm line-clamp-1"
                     style={{ color: "var(--color-text-secondary)" }}
                   >
-                    {r.content}
+                    {r.path}
                   </p>
-                  <p className="text-xs mt-2" style={{ color: "var(--color-text-muted)" }}>
-                    {r.date_range.start} ~ {r.date_range.end}
-                  </p>
+                  <span
+                    className="text-xs px-2 py-0.5 rounded mt-2 inline-block"
+                    style={{
+                      backgroundColor: r.status === "generated" ? "#e8f5e9" : "#fff3e0",
+                      color: r.status === "generated" ? "#2e7d32" : "#e65100",
+                    }}
+                  >
+                    {r.status === "generated" ? "已生成" : r.status}
+                  </span>
                 </div>
               </div>
             </div>
