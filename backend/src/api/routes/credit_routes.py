@@ -56,6 +56,7 @@ def _parse_credit_text(text: str) -> dict | None:
 # ---- Routes ----
 
 @credit_bp.route("/analyze", methods=["POST"])
+@require_consent("credit_analyze")
 def analyze():
     """Parse raw credit / company info text via LLM.
 

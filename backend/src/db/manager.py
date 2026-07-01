@@ -473,9 +473,9 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_time ON audit_logs(created_at);
 
 -- ============================================
--- Analytics: analytics_events (joint — PII-whitelisted)
+-- Analytics: product_events (joint — PII-whitelisted)
 -- ============================================
-CREATE TABLE IF NOT EXISTS analytics_events (
+CREATE TABLE IF NOT EXISTS product_events (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     event_name      TEXT NOT NULL,
     user_id         TEXT DEFAULT '',
@@ -483,8 +483,8 @@ CREATE TABLE IF NOT EXISTS analytics_events (
     created_at      TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_analytics_events_name ON analytics_events(event_name);
-CREATE INDEX IF NOT EXISTS idx_analytics_events_time ON analytics_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_product_events_name ON product_events(event_name);
+CREATE INDEX IF NOT EXISTS idx_product_events_time ON product_events(created_at);
 """
 
 
