@@ -463,6 +463,62 @@ CREATE TABLE IF NOT EXISTS act1_sessions (
     updated_at      TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (session_id) REFERENCES narrative_sessions(id)
 );
+
+-- ============================================
+-- Compliance: consents (joint — PIPL consent)
+-- ============================================
+CREATE TABLE IF NOT EXISTS consents (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    scope           TEXT NOT NULL,              -- e.g. 'resume_upload', 'credit_query'
+    purpose         TEXT DEFAULT '',            -- human-readable purpose
+    status          TEXT DEFAULT 'granted',     -- granted | revoked | expired
+    ip              TEXT DEFAULT '',
+    user_agent      TEXT DEFAULT '',
+    granted_at      TEXT DEFAULT (datetime('now')),
+    revoked_at      TEXT DEFAULT NULL,
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(user_id, scope, status)             -- one active grant per scope per user
+);
+
+CREATE INDEX IF NOT EXISTS idx_consents_user ON consents(user_id);
+CREATE INDEX IF NOT EXISTS idx_consents_scope ON consents(scope);
+
+-- ============================================
+-- Compliance: audit_logs (joint — immutable audit trail)
+-- ============================================
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id              TEXT PRIMARY KEY,
+    actor           TEXT NOT NULL,              -- user_id performing the action
+    action          TEXT NOT NULL,              -- e.g. 'resume_parse', 'credit_check'
+    resource_type   TEXT NOT NULL,              -- e.g. 'resume', 'job', 'consent'
+    resource_id     TEXT DEFAULT '',
+    consent_id      TEXT DEFAULT '',            -- associated consent record
+    metadata        TEXT DEFAULT '{}',          -- JSON, NO PII
+    ip              TEXT DEFAULT '',
+    user_agent      TEXT DEFAULT '',
+    created_at      TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_time ON audit_logs(created_at);
+
+-- ============================================
+-- Analytics: product_events (joint — PII-whitelisted)
+-- ============================================
+CREATE TABLE IF NOT EXISTS product_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_name      TEXT NOT NULL,
+    user_id         TEXT DEFAULT '',
+    properties      TEXT DEFAULT '{}',
+    created_at      TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_events_name ON product_events(event_name);
+CREATE INDEX IF NOT EXISTS idx_product_events_time ON product_events(created_at);
 """
 
 

@@ -14,7 +14,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createApiClient } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 interface Poem {
   id: number;

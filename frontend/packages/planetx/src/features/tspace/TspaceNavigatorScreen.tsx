@@ -109,7 +109,7 @@ export default function TspaceNavigatorScreen() {
   const [showFeedback, setShowFeedback] = useState(false)
   const [comparisonData, setComparisonData] = useState<ConvergenceTexture[]>([])
 
-  const apiBase = useRef(import.meta.env.VITE_API_BASE || '/api')
+  const apiBase = useRef(import.meta.env.VITE_API_BASE ?? '')
   const steps = hasCrossDomain ? CROSS_STEPS : SINGLE_STEPS
   const finalStep = steps.length - 1  // last step = 完成
   const isComplete = step >= finalStep && step >= 0

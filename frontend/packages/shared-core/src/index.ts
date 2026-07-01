@@ -35,6 +35,7 @@ export {
   createAct1Api,
   createCreditApi,
   createAnalyticsApi,
+  createComplianceApi,
 } from "./api/createApi";
 
 // Types
@@ -234,3 +235,24 @@ export {
   trackEvent,
   flushEvents,
 } from "./analytics/track";
+
+export type {
+  ConsentScope,
+  ConsentRecord,
+  ConsentStatusResponse,
+  ConsentGrantResponse,
+  ConsentRequiredResponse,
+  ConsentRequiredError,
+} from "./types/compliance";
+
+export {
+  CONSENT_SCOPE_LABELS,
+  CONSENT_SCOPE_DESCRIPTIONS,
+} from "./constants/compliance";
+
+export {
+  ensureConsent,
+  grantConsent,
+  hasConsent,
+  isConsentRequiredError,
+} from "./compliance/ensureConsent";

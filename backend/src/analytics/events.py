@@ -3,7 +3,6 @@ Product analytics — server-side event logging for closed-loop funnel.
 """
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -18,6 +17,28 @@ EVENT_CANDIDATE_IMPORTED = "candidate_imported"
 EVENT_CANDIDATE_IMPORT_DUPLICATE = "candidate_import_duplicate"
 EVENT_TRIAL_STARTED = "trial_started"
 EVENT_TRIAL_FAILED = "trial_failed"
+
+FORBIDDEN_PROPERTY_KEYS = frozenset({
+    "email", "user_email", "phone", "mobile", "user_phone", "name", "user_name",
+    "real_name", "contact_name", "id_card", "id_number", "passport", "ssn",
+    "address", "home_address", "ip_address", "wechat_openid", "openid",
+    "password", "token", "secret", "api_key",
+})
+
+
+def sanitize_event_properties(properties: dict[str, Any] | None) -> dict[str, Any]:
+    """Strip known PII keys before persisting analytics properties."""
+    if not properties:
+        return {}
+    safe: dict[str, Any] = {}
+    for key, value in properties.items():
+        if key.lower() in FORBIDDEN_PROPERTY_KEYS:
+            logger.warning("Analytics PII blocked: key=%s", key)
+            continue
+        if isinstance(value, str) and len(value) > 500:
+            value = value[:500]
+        safe[key] = value
+    return safe
 
 
 def log_product_event(
@@ -42,7 +63,7 @@ def log_product_event(
             share_code=share_code,
             source=source,
             success=success,
-            properties=properties,
+            properties=sanitize_event_properties(properties),
         )
     except Exception as e:
         logger.warning("log_product_event failed: %s %s", event_name, e)

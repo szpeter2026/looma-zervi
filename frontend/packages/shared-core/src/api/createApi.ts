@@ -445,3 +445,38 @@ export function createAnalyticsApi(client: ApiClient) {
       client.post<{ ok: boolean; id: number }>(API_ROUTES.FEEDBACK_MICRO, payload),
   };
 }
+
+// ============================================================
+// Compliance API (PIPL consent gate)
+// ============================================================
+export function createComplianceApi(client: ApiClient) {
+  return {
+    grant: (scope: import("../types/compliance").ConsentScope, purpose?: string) =>
+      client.post<import("../types/compliance").ConsentGrantResponse>(
+        API_ROUTES.COMPLIANCE_CONSENT_GRANT,
+        { scope, purpose },
+      ),
+
+    grantBatch: (scopes: import("../types/compliance").ConsentScope[]) =>
+      client.post<import("../types/compliance").ConsentGrantResponse>(
+        API_ROUTES.COMPLIANCE_CONSENT_GRANT,
+        { scopes },
+      ),
+
+    revoke: (scope: import("../types/compliance").ConsentScope) =>
+      client.post<{ revoked: boolean; consent_id?: string; reason?: string }>(
+        API_ROUTES.COMPLIANCE_CONSENT_REVOKE,
+        { scope },
+      ),
+
+    status: () =>
+      client.get<import("../types/compliance").ConsentStatusResponse>(
+        API_ROUTES.COMPLIANCE_CONSENT_STATUS,
+      ),
+
+    required: () =>
+      client.get<import("../types/compliance").ConsentRequiredResponse>(
+        API_ROUTES.COMPLIANCE_CONSENT_REQUIRED,
+      ),
+  };
+}

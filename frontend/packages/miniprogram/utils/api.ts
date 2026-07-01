@@ -257,10 +257,31 @@ export function createMiniReferralApi(c: MiniApiClient) {
   }
 }
 
+// ============================================================
+// Compliance API (PIPL consent)
+// ============================================================
+
+export function createMiniComplianceApi(c: MiniApiClient) {
+  return {
+    grant(scope: string) {
+      return c.post('/v1/compliance/consent/grant', { scope })
+    },
+
+    status() {
+      return c.get('/v1/compliance/consent/status')
+    },
+
+    required() {
+      return c.get('/v1/compliance/consent/required', true)
+    },
+  }
+}
+
 export const authApi = createMiniAuthApi(client)
 export const gameApi = createMiniGameApi(client)
 export const askApi = createMiniChatApi(client)
 export const quotaApi = createMiniQuotaApi(client)
 export const referralApi = createMiniReferralApi(client)
+export const complianceApi = createMiniComplianceApi(client)
 
 export { API_BASE }

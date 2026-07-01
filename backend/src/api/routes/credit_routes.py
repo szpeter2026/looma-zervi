@@ -12,9 +12,11 @@ import json
 import logging
 import re
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 
+from src.api.auth.decorators import require_auth
 from src.agents.central_brain import _call_llm
+from src.compliance.consent import require_consent
 
 logger = logging.getLogger("looma.credit_routes")
 
@@ -55,6 +57,8 @@ def _parse_credit_text(text: str) -> dict | None:
 # ---- Routes ----
 
 @credit_bp.route("/analyze", methods=["POST"])
+@require_auth
+@require_consent("credit_analyze")
 def analyze():
     """Parse raw credit / company info text via LLM.
 
@@ -74,13 +78,15 @@ def analyze():
 
 
 @credit_bp.route("/check-company", methods=["POST"])
+@require_auth
+@require_consent("credit_query")
 def check_company():
     """Evaluate a company's credit / business status by name.
 
     Body: { "company_name": "XX科技", "location"?: "深圳", "industry"?: "互联网" }
 
     The LLM draws on its training knowledge to produce an assessment.
-    Returns: { "extracted": { entity_name, report_type, summary } }
+    Returns: { "extracted": { entity_name, report_type, summary }, "warning": "..." }
     """
     body = request.get_json(silent=True) or {}
     company_name = (body.get("company_name") or "").strip()
@@ -107,4 +113,11 @@ def check_company():
     if not extracted.get("entity_name"):
         extracted["entity_name"] = company_name
 
-    return jsonify(extracted=extracted)
+    return jsonify(
+        extracted=extracted,
+        warning=(
+            "⚠️ AI 训练知识评估，非正式征信数据源。"
+            "本评估基于大语言模型训练数据，不可作为正式征信/风控依据。"
+            "正式征信数据源对接中（CreditProviderPort），届时将提供可溯源的权威数据。"
+        ),
+    )

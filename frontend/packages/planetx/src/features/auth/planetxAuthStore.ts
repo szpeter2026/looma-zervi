@@ -61,8 +61,8 @@ export function getRankName(level: number): RankName {
 }
 
 // ============ API Client 初始化 ============
-const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || 'http://1.14.202.161'
-const SAAS_BASE = import.meta.env.VITE_SAAS_URL || 'http://localhost:5174'
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_API_BASE ?? 'http://1.14.202.161'
+const SAAS_BASE = import.meta.env.VITE_SAAS_URL ?? 'http://localhost:5174'
 
 const MISSION_XP: Record<MissionId, number> = {
   personality: 50,
@@ -71,7 +71,7 @@ const MISSION_XP: Record<MissionId, number> = {
   match: 40,
 }
 
-function getApiClient(): ApiClient {
+export function getApiClient(): ApiClient {
   return createApiClient({
     baseURL: API_BASE,
     getToken: () => usePlanetXStore.getState().token,

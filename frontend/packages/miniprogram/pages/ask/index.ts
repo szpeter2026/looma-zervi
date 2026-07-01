@@ -4,6 +4,7 @@
 import { eventBus } from '../../utils/event-bus'
 import { store } from '../../utils/store'
 import { askApi } from '../../utils/api'
+import { ensureConsent } from '../../utils/consent'
 import type { ChatMessage } from '../../types/index'
 
 interface AskMeta {
@@ -51,6 +52,12 @@ Page({
     const token = store.get('token')
     if (!token) {
       wx.showToast({ title: '请先登录', icon: 'none' })
+      return
+    }
+
+    const allowed = await ensureConsent('ask_rag')
+    if (!allowed) {
+      wx.showToast({ title: '需要授权后才能使用 AI 问答', icon: 'none' })
       return
     }
 

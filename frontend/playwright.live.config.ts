@@ -38,6 +38,11 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
     {
+      name: "live-consent",
+      testMatch: "**/consent.live.spec.ts",
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
       name: "live-planetx",
       testMatch: "**/planetx-share.live.spec.ts",
       use: {

@@ -133,3 +133,31 @@ def test_game_profile_returns_mission_ids(client):
     data = profile_resp.get_json()
     assert data["missions_completed"] == ["personality"]
     assert data["xp"] >= 50
+
+
+def test_credit_check_requires_consent_then_succeeds(client):
+    """Compliance + closed-loop: credit_query consent gate on check-company."""
+    token = _register(client, "credit@test.com")
+
+    denied = client.post(
+        "/v1/credit/check-company",
+        headers=_auth_headers(token),
+        json={"company_name": "测试科技"},
+    )
+    assert denied.status_code == 403
+    assert denied.get_json()["error"] == "consent_required"
+
+    grant = client.post(
+        "/v1/compliance/consent/grant",
+        headers=_auth_headers(token),
+        json={"scope": "credit_query"},
+    )
+    assert grant.status_code == 200
+
+    ok = client.post(
+        "/v1/credit/check-company",
+        headers=_auth_headers(token),
+        json={"company_name": "测试科技"},
+    )
+    assert ok.status_code == 200
+    assert ok.get_json().get("warning")

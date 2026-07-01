@@ -79,4 +79,40 @@ export function uniqueHrEmail(suffix = String(Date.now())): string {
   return `e2e-hr-${suffix}@test.local`;
 }
 
+export async function registerAndGetToken(
+  email: string,
+  password = TEST_PASS,
+  name = "E2EUser",
+): Promise<string> {
+  const reg = await apiJson<{ access_token: string }>("/v1/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, name }),
+  });
+  return reg.access_token;
+}
+
+export async function grantConsent(token: string, scope: string): Promise<void> {
+  await apiJson("/v1/compliance/consent/grant", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ scope }),
+  });
+}
+
+export async function checkCompanyCredit(
+  token: string,
+  companyName: string,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const resp = await fetch(`${API_BASE}/v1/credit/check-company`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ company_name: companyName }),
+  });
+  const body = (await resp.json()) as Record<string, unknown>;
+  return { status: resp.status, body };
+}
+
 export { TEST_PASS };

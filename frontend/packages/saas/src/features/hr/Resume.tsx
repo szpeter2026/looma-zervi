@@ -5,11 +5,12 @@
  * Pure CSS + Tailwind (no tdesign-react).
  * Uses authStore for token, direct fetch for file upload.
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { createApiClient, createResumeApi, type ParsedResume } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
+import { useConsent } from "../../compliance/useConsent";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export default function Resume() {
   const { token } = useSaasAuthStore();
@@ -19,13 +20,19 @@ export default function Resume() {
   const [msg, setMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const api = createApiClient({
+  const api = useMemo(() => createApiClient({
     baseURL: API_BASE,
     getToken: () => token,
-  });
+  }), [token]);
   const resumeApi = createResumeApi(api);
+  const { ensureConsent, consentPrompt } = useConsent(() => api);
 
   const handleUpload = async (file: File) => {
+    const allowed = await ensureConsent("resume_upload");
+    if (!allowed) {
+      setMsg("需要授权后才能上传简历");
+      return;
+    }
     setParsing(true);
     setMsg(null);
     setResume(null);
@@ -59,6 +66,8 @@ export default function Resume() {
   };
 
   return (
+    <>
+    {consentPrompt}
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6" style={{ color: "var(--color-text-primary)" }}>
         简历解析
@@ -254,5 +263,6 @@ export default function Resume() {
         </div>
       )}
     </div>
+    </>
   );
 }

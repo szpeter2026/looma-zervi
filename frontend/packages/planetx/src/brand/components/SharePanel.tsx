@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
-import { usePlanetXStore, getShareText } from '../../features/auth/planetxAuthStore'
+import { usePlanetXStore, getShareText, getApiClient } from '../../features/auth/planetxAuthStore'
 import { CLOSED_LOOP_EVENTS, trackEvent } from '@looma/shared-core'
+import { useConsent } from '../../compliance/useConsent'
 
 type SharePlatform = 'wechat' | 'xiaohongshu' | 'weibo' | 'copy'
 
@@ -29,6 +30,8 @@ export default function SharePanel() {
     getHrShareUrl,
   } = usePlanetXStore()
 
+  const { ensureConsent, consentPrompt } = useConsent(getApiClient)
+
   const p = personalityType ?? { name: '未知', emoji: '🌌', tagline: '', desc: '', traits: [] }
 
   useEffect(() => {
@@ -54,6 +57,11 @@ export default function SharePanel() {
   }, [p, inviteUrl, getInviteUrl, setToast, completeMission])
 
   const handleCopyHrLink = useCallback(async () => {
+    const allowed = await ensureConsent('profile_share')
+    if (!allowed) {
+      setToast('需要授权后才能分享 HR 画像链接')
+      return
+    }
     await ensureProfileShareCode()
     const url = getHrShareUrl()
     setHrUrl(url)
@@ -69,10 +77,12 @@ export default function SharePanel() {
         properties: { channel: 'hr_link' },
       })
     }).catch(() => {})
-  }, [ensureProfileShareCode, getHrShareUrl, setToast])
+  }, [ensureConsent, ensureProfileShareCode, getHrShareUrl, setToast])
 
   if (!show) {
     return (
+      <>
+      {consentPrompt}
       <div style={{ textAlign: 'center', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
         <button
           onClick={() => setShow(true)}
@@ -107,10 +117,13 @@ export default function SharePanel() {
           👔 分享给 HR（画像链接）
         </button>
       </div>
+      </>
     )
   }
 
   return (
+    <>
+    {consentPrompt}
     <div
       style={{
         background: '#0D0D1A',
@@ -193,5 +206,6 @@ export default function SharePanel() {
         </pre>
       </div>
     </div>
+    </>
   )
 }

@@ -11,9 +11,10 @@
  * Pure CSS + Tailwind (no tdesign-react).
  * Uses shared-core typed API factories for backend contract alignment.
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createApiClient, createJobsApi, createCreditApi, type Job, type JobMatchItem, type CreditAnalysis } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
+import { useConsent } from "../../compliance/useConsent";
 
 // ── Types ──
 
@@ -29,7 +30,7 @@ interface ParsedJobData {
 
 type TabId = "browse" | "upload";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 // ── Helpers ──
 
@@ -74,12 +75,13 @@ export default function Jobs() {
   const dropRef = useRef<HTMLDivElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const api = createApiClient({
+  const api = useMemo(() => createApiClient({
     baseURL: API_BASE,
     getToken: () => token,
-  });
+  }), [token]);
   const jobsApi = createJobsApi(api);
   const creditApi = createCreditApi(api);
+  const { ensureConsent, consentPrompt } = useConsent(() => api);
 
   // Load job list
   const loadJobs = useCallback(() => {
@@ -174,6 +176,11 @@ export default function Jobs() {
 
   const handleCheckCredit = async (companyName: string) => {
     if (!companyName) return;
+    const allowed = await ensureConsent("credit_query");
+    if (!allowed) {
+      setMsg("需要授权后才能查询企业征信");
+      return;
+    }
     setCreditLoading((prev) => ({ ...prev, [companyName]: true }));
     try {
       const result = await creditApi.checkCompany({ company_name: companyName }) as any;
@@ -226,6 +233,8 @@ export default function Jobs() {
   // ── Render ──
 
   return (
+    <>
+    {consentPrompt}
     <div className="max-w-5xl mx-auto">
       <h1
         className="text-2xl font-bold mb-6"
@@ -707,5 +716,6 @@ export default function Jobs() {
         </div>
       )}
     </div>
+    </>
   );
 }

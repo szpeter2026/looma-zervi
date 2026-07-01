@@ -10,7 +10,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { createApiClient, createAuthApi, createQuotaApi, type UserProfile, type QuotaResponse } from "@looma/shared-core";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export type QuotaInfo = QuotaResponse;
 

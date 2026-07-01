@@ -91,4 +91,10 @@ export const API_ROUTES = {
   ANALYTICS_EVENTS: "/v1/analytics/events",
   ANALYTICS_FUNNEL: "/v1/analytics/funnel",
   FEEDBACK_MICRO: "/v1/feedback/micro",
+
+  // Compliance (PIPL consent gate)
+  COMPLIANCE_CONSENT_GRANT: "/v1/compliance/consent/grant",
+  COMPLIANCE_CONSENT_REVOKE: "/v1/compliance/consent/revoke",
+  COMPLIANCE_CONSENT_STATUS: "/v1/compliance/consent/status",
+  COMPLIANCE_CONSENT_REQUIRED: "/v1/compliance/consent/required",
 } as const;
