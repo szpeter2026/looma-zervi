@@ -54,6 +54,13 @@ class TestRedactPii:
         findings = detect_pii("身份证 110101199001011234")
         assert any(f["type"] == "cn_id_card" for f in findings)
 
+    def test_redact_cn_name(self):
+        text = "我叫张三，请帮我看看简历"
+        safe, mapping = redact_pii(text)
+        assert "张三" not in safe
+        assert "PII_NAME_" in safe
+        assert len(mapping) >= 1
+
 
 class TestAuditLogger:
     def test_anonymize_ip(self):
