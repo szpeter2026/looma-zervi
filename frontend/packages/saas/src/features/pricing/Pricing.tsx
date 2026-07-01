@@ -1,8 +1,18 @@
 /**
- * Pricing Page — 套餐对比展示页
- * 对内测用户免费开放，暗示未来收费，不挡人。
+ * Pricing Page — 套餐对比 + 内测 Stub 试用
  */
-import { BRAND_SAAS } from "@looma/shared-core";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  BRAND_SAAS,
+  createApiClient,
+  createPaymentApi,
+  CLOSED_LOOP_EVENTS,
+  trackEvent,
+} from "@looma/shared-core";
+import { useSaasAuthStore } from "../auth/authStore";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 interface PlanCard {
   tier: string;
@@ -12,6 +22,8 @@ interface PlanCard {
   features: string[];
   highlight: boolean;
   badge?: string;
+  actionable?: boolean;
+  actionLabel?: string;
 }
 
 const plans: PlanCard[] = [
@@ -23,27 +35,28 @@ const plans: PlanCard[] = [
     highlight: false,
     badge: "内测中",
     features: [
-      "每日 10 次智能问答",
+      "每日 30 次智能问答",
+      "每日 5 次职位匹配",
       "每日 3 次简历解析",
-      "每日 3 次职位匹配",
-      "基础报告生成",
+      "求职者画像导入",
       "诗词文库浏览",
     ],
   },
   {
     tier: "pro",
     name: "专业版",
-    price: "¥99/月",
+    price: "¥29.9/月",
     desc: "深度使用，释放 AI 全部能力",
     highlight: true,
-    badge: "推荐",
+    badge: "7 天试用",
+    actionable: true,
+    actionLabel: "开始 7 天试用",
     features: [
-      "每日 100 次智能问答",
-      "每日 50 次简历解析",
-      "每日 50 次职位匹配",
-      "企业征信查证",
+      "AI 对话不限",
+      "全功能岗位匹配",
+      "简历解析不限",
+      "求职者画像管理",
       "高级数据分析报告",
-      "PDF / Word 报告导出",
       "优先客服支持",
     ],
   },
@@ -59,33 +72,51 @@ const plans: PlanCard[] = [
       "专属知识库训练",
       "批量简历处理",
       "API 接口对接",
-      "私有化部署可选",
-      "定制化数据报告",
       "7×24 专属技术支持",
     ],
   },
 ];
 
 export default function Pricing() {
+  const { isAuthenticated, token, fetchQuota } = useSaasAuthStore();
+  const navigate = useNavigate();
+  const [upgrading, setUpgrading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const handleTrial = async () => {
+    if (!isAuthenticated || !token) {
+      navigate("/register?from=pricing");
+      return;
+    }
+    setUpgrading(true);
+    setMessage(null);
+    trackEvent(CLOSED_LOOP_EVENTS.TRIAL_CLICKED);
+    try {
+      const client = createApiClient({
+        baseURL: API_BASE,
+        getToken: () => useSaasAuthStore.getState().token,
+      });
+      await createPaymentApi(client).upgrade("pro");
+      await fetchQuota();
+      setMessage("已开通 Pro 试用（内测 Stub，无需真实支付）");
+    } catch {
+      setMessage("升级失败，可能已是 Pro 用户");
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto" style={{ paddingTop: "1rem" }}>
-      {/* 页头 */}
       <div className="text-center mb-10">
-        <h1
-          className="text-3xl font-bold mb-3"
-          style={{ color: "var(--color-text-primary)" }}
-        >
+        <h1 className="text-3xl font-bold mb-3" style={{ color: "var(--color-text-primary)" }}>
           选择适合你的方案
         </h1>
-        <p
-          className="text-sm max-w-md mx-auto"
-          style={{ color: "var(--color-text-secondary)", lineHeight: 1.8 }}
-        >
+        <p className="text-sm max-w-md mx-auto" style={{ color: "var(--color-text-secondary)", lineHeight: 1.8 }}>
           {BRAND_SAAS.slogan}
         </p>
       </div>
 
-      {/* 三栏套餐 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
         {plans.map((plan) => (
           <div
@@ -93,105 +124,84 @@ export default function Pricing() {
             className="rounded-xl p-6 flex flex-col relative transition-shadow hover:shadow-lg"
             style={{
               backgroundColor: "var(--color-bg-card)",
-              boxShadow: plan.highlight
-                ? "0 0 0 2px var(--color-primary), var(--shadow-md)"
-                : "var(--shadow-sm)",
+              boxShadow: plan.highlight ? "0 0 0 2px var(--color-primary), var(--shadow-md)" : "var(--shadow-sm)",
               transform: plan.highlight ? "scale(1.03)" : "scale(1)",
             }}
           >
-            {/* Badge */}
             {plan.badge && (
               <span
                 className="absolute -top-3 left-6 px-3 py-0.5 rounded-full text-xs font-medium text-white"
-                style={{
-                  backgroundColor: plan.highlight
-                    ? "var(--color-primary)"
-                    : "var(--color-text-muted)",
-                }}
+                style={{ backgroundColor: plan.highlight ? "var(--color-primary)" : "var(--color-text-muted)" }}
               >
                 {plan.badge}
               </span>
             )}
 
-            {/* 套餐名 + 价格 */}
-            <h3
-              className="text-lg font-bold mb-1"
-              style={{ color: "var(--color-text-primary)" }}
-            >
+            <h3 className="text-lg font-bold mb-1" style={{ color: "var(--color-text-primary)" }}>
               {plan.name}
             </h3>
             <div className="flex items-baseline gap-1 mb-3">
-              <span
-                className="text-3xl font-bold"
-                style={{ color: "var(--color-primary)" }}
-              >
+              <span className="text-3xl font-bold" style={{ color: "var(--color-primary)" }}>
                 {plan.price}
               </span>
             </div>
-            <p
-              className="text-xs mb-5"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              {plan.desc}
-            </p>
+            <p className="text-xs mb-5" style={{ color: "var(--color-text-muted)" }}>{plan.desc}</p>
 
-            {/* 分隔线 */}
-            <div
-              className="mb-5"
-              style={{
-                height: 1,
-                backgroundColor: "var(--color-border)",
-              }}
-            />
+            <div className="mb-5" style={{ height: 1, backgroundColor: "var(--color-border)" }} />
 
-            {/* 功能列表 */}
             <ul className="flex-1 space-y-3 mb-6">
               {plan.features.map((f) => (
-                <li
-                  key={f}
-                  className="flex items-start gap-2 text-sm"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
+                <li key={f} className="flex items-start gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
                   <span style={{ color: "var(--color-success)", flexShrink: 0 }}>✓</span>
                   {f}
                 </li>
               ))}
             </ul>
 
-            {/* CTA */}
-            <button
-              disabled
-              className="w-full py-2.5 text-sm rounded-lg font-medium cursor-not-allowed opacity-50"
-              style={{
-                backgroundColor: plan.highlight
-                  ? "var(--color-primary)"
-                  : "var(--color-bg-surface)",
-                color: plan.highlight ? "#fff" : "var(--color-text-secondary)",
-              }}
-            >
-              即将开放
-            </button>
+            {plan.actionable ? (
+              <button
+                onClick={() => void handleTrial()}
+                disabled={upgrading}
+                className="w-full py-2.5 text-sm rounded-lg font-medium text-white disabled:opacity-60"
+                style={{ backgroundColor: "var(--color-primary)" }}
+              >
+                {upgrading ? "处理中…" : plan.actionLabel}
+              </button>
+            ) : (
+              <button
+                disabled
+                className="w-full py-2.5 text-sm rounded-lg font-medium cursor-not-allowed opacity-50"
+                style={{
+                  backgroundColor: "var(--color-bg-surface)",
+                  color: "var(--color-text-secondary)",
+                }}
+              >
+                {plan.tier === "free" ? "当前默认" : "即将开放"}
+              </button>
+            )}
           </div>
         ))}
       </div>
 
-      {/* 底部暗示 */}
+      {message && (
+        <p className="text-center text-sm mb-4" style={{ color: "var(--color-success)" }}>{message}</p>
+      )}
+
       <div
         className="text-center rounded-xl p-6"
-        style={{
-          backgroundColor: "var(--color-bg-card)",
-          boxShadow: "var(--shadow-sm)",
-        }}
+        style={{ backgroundColor: "var(--color-bg-card)", boxShadow: "var(--shadow-sm)" }}
       >
-        <p
-          className="text-sm font-medium mb-1"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          🚀 内测期间，所有功能免费开放
+        <p className="text-sm font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
+          🚀 内测期间，核心功能免费开放
         </p>
-        <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-          尽情体验全部能力，正式上线后我们将保留你的使用记录和偏好设置
+        <p className="text-xs mb-3" style={{ color: "var(--color-text-muted)" }}>
+          Pro 试用为 Stub 升级，备案后将接入真实支付
         </p>
+        {!isAuthenticated && (
+          <Link to="/register" className="text-sm" style={{ color: "var(--color-primary)" }}>
+            还没有账号？立即注册 →
+          </Link>
+        )}
       </div>
     </div>
   );

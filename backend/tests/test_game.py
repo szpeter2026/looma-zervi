@@ -139,7 +139,7 @@ def test_get_game_profile_after_sync(authed_client):
     assert data["personality_type"] == "ENFP"
     assert data["xp"] == 0
     assert data["level"] == 1
-    assert data["missions_completed"] == 0
+    assert data["missions_completed"] == []
 
 
 def test_profile_requires_auth(client):
@@ -415,7 +415,7 @@ def test_full_game_flow(authed_client, second_authed_client):
     resp = authed_client.get("/v1/game/profile")
     data = resp.get_json()
     assert data["xp"] >= 150
-    assert data["missions_completed"] == 3
+    assert len(data["missions_completed"]) == 3
 
     # 4. Create fleet
     resp = authed_client.post("/v1/game/fleet/create", json={

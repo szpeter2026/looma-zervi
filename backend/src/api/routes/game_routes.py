@@ -47,6 +47,16 @@ def sync_personality():
     db = _get_db()
     db.upsert_game_profile(g.user_id, personality_type, personality_detail)
 
+    from src.analytics.events import log_product_event, platform_from_request
+    log_product_event(
+        db,
+        "quiz_complete",
+        user_id=g.user_id,
+        platform=platform_from_request(request),
+        source="server",
+        properties={"personality_type": personality_type},
+    )
+
     # Return the full profile after sync (so frontend gets XP/level too)
     profile = db.get_game_profile(g.user_id)
     return jsonify(
@@ -73,7 +83,7 @@ def get_game_profile():
             xp=0,
             level=1,
             xp_to_next=100,
-            missions_completed=0,
+            missions_completed=[],
             total_mission_xp=0,
             updated_at=None,
         )
@@ -84,18 +94,22 @@ def get_game_profile():
         db.update_level(g.user_id, computed_level)
         profile["level"] = computed_level
 
-    # Count completed missions
     missions = db.get_user_missions(g.user_id)
+    mission_ids = [m["mission_id"] for m in missions]
     total_mission_xp = sum(m["xp_reward"] for m in missions)
+    xp = profile["xp"]
+    level = profile["level"]
+    xp_to_next = max(100, (level ** 2) * 100 - xp)
 
     return jsonify(
         id=profile["id"],
         user_id=profile["user_id"],
         personality_type=profile["personality_type"],
         personality_detail=profile["personality_detail"],
-        xp=profile["xp"],
-        level=profile["level"],
-        missions_completed=len(missions),
+        xp=xp,
+        level=level,
+        xp_to_next=xp_to_next,
+        missions_completed=mission_ids,
         total_mission_xp=total_mission_xp,
         updated_at=profile["updated_at"],
     )

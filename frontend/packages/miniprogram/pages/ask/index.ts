@@ -1,11 +1,16 @@
 /**
- * Ask Page - TabBar AI Q&A (index 1)
- * Basic chat interface for AI career questions.
+ * Ask Page - TabBar AI Q&A with intent confidence display
  */
 import { eventBus } from '../../utils/event-bus'
 import { store } from '../../utils/store'
 import { askApi } from '../../utils/api'
 import type { ChatMessage } from '../../types/index'
+
+interface AskMeta {
+  intent?: string
+  intent_confidence?: number
+  source_scores?: string
+}
 
 Page({
   data: {
@@ -15,6 +20,7 @@ Page({
         content: '你好，探索者！我是你的星际导航员。关于求职、职业规划、简历优化，有什么想问的？',
       },
     ] as ChatMessage[],
+    metas: [] as (AskMeta | null)[],
     inputText: '',
     loading: false,
     scrollIntoView: '',
@@ -31,49 +37,61 @@ Page({
     this.setData({ inputText: e.detail.value })
   },
 
+  formatSourceScores(sources?: Array<{ score?: number | null }>): string {
+    if (!sources?.length) return '无检索片段'
+    return sources
+      .map((s, i) => `#${i + 1}:${s.score != null ? s.score.toFixed(3) : 'n/a'}`)
+      .join(' ')
+  },
+
   async onSend() {
     const text = this.data.inputText.trim()
     if (!text || this.data.loading) return
 
-    // Check auth
     const token = store.get('token')
     if (!token) {
       wx.showToast({ title: '请先登录', icon: 'none' })
       return
     }
 
-    // Add user message
     const userMsg: ChatMessage = { role: 'user', content: text, timestamp: Date.now().toString() }
     const messages = [...this.data.messages, userMsg]
-    this.setData({
-      messages,
-      inputText: '',
-      loading: true,
-    })
+    const metas = [...this.data.metas, null]
+    this.setData({ messages, metas, inputText: '', loading: true })
     this.scrollToBottom()
 
     try {
-      const resp = await askApi.ask(text, this.sessionHistory)
+      const resp = await askApi.ask(text, this.sessionHistory) as {
+        answer?: string
+        intent?: string
+        intent_confidence?: number
+        sources?: Array<{ score?: number | null }>
+      }
       const aiMsg: ChatMessage = {
         role: 'assistant',
         content: resp.answer || '抱歉，我没能理解你的问题。',
-        sources: resp.sources,
+        sources: resp.sources as any,
         timestamp: Date.now().toString(),
       }
+      const meta: AskMeta = {
+        intent: resp.intent,
+        intent_confidence: resp.intent_confidence,
+        source_scores: this.formatSourceScores(resp.sources),
+      }
       this.sessionHistory = [...this.sessionHistory, userMsg, aiMsg]
-      this.setData({
-        messages: [...this.data.messages, aiMsg],
-        loading: false,
-      })
+      const newMessages = [...this.data.messages, aiMsg]
+      const newMetas = [...this.data.metas, meta]
+      this.setData({ messages: newMessages, metas: newMetas, loading: false })
       this.scrollToBottom()
     } catch (err: any) {
       const errMsg: ChatMessage = {
         role: 'assistant',
-        content: '网络波动，请稍后重试。',
+        content: err?.message?.includes('配额') ? '今日配额已用尽' : '网络波动，请稍后重试。',
         timestamp: Date.now().toString(),
       }
       this.setData({
         messages: [...this.data.messages, errMsg],
+        metas: [...this.data.metas, null],
         loading: false,
       })
       this.scrollToBottom()
@@ -87,9 +105,10 @@ Page({
   },
 
   onShareAppMessage() {
+    const ref = wx.getStorageSync('pending_ref') || ''
     return {
       title: 'PlanetX - AI 星际问答，你的职业导航员',
-      path: '/pages/splash/index',
+      path: ref ? `/pages/splash/index?ref=${ref}` : '/pages/splash/index',
     }
   },
 })

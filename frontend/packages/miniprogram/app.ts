@@ -6,7 +6,7 @@
 
 import { eventBus } from './utils/event-bus'
 import { store } from './utils/store'
-import { authApi, gameApi, API_BASE } from './utils/api'
+import { authApi, gameApi, API_BASE, referralApi } from './utils/api'
 import { getDeviceInfo } from './utils/device'
 
 App({
@@ -86,6 +86,15 @@ App({
 
             // Load full game profile
             this.loadProfile()
+
+            // Consume pending referral code from share link
+            const pendingRef = wx.getStorageSync('pending_ref')
+            if (pendingRef) {
+              referralApi.use(String(pendingRef)).then(() => {
+                wx.removeStorageSync('pending_ref')
+                console.log('[App] Referral code consumed:', pendingRef)
+              }).catch(() => {})
+            }
           } else {
             console.error('[App] auth failed: no access_token in response')
             eventBus.emit('auth:login', { success: false, error: 'no_token' })

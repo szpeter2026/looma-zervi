@@ -421,6 +421,40 @@ CREATE INDEX IF NOT EXISTS idx_domain_visits_user ON domain_visits(user_id);
 CREATE INDEX IF NOT EXISTS idx_domain_visits_session ON domain_visits(session_id);
 
 -- ============================================
+-- Product analytics: closed-loop funnel (内测)
+-- ============================================
+CREATE TABLE IF NOT EXISTS product_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_name      TEXT NOT NULL,
+    user_id         TEXT DEFAULT NULL,
+    session_id      TEXT DEFAULT NULL,
+    platform        TEXT DEFAULT 'unknown',
+    share_code      TEXT DEFAULT NULL,
+    source          TEXT DEFAULT 'client',
+    success         INTEGER NOT NULL DEFAULT 1,
+    properties_json TEXT DEFAULT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_events_name ON product_events(event_name);
+CREATE INDEX IF NOT EXISTS idx_product_events_created ON product_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_product_events_share ON product_events(share_code);
+
+CREATE TABLE IF NOT EXISTS micro_feedback (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    context         TEXT NOT NULL,
+    score           INTEGER NOT NULL,
+    optional_text   TEXT DEFAULT NULL,
+    user_id         TEXT DEFAULT NULL,
+    session_id      TEXT DEFAULT NULL,
+    platform        TEXT DEFAULT 'unknown',
+    share_code      TEXT DEFAULT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_micro_feedback_context ON micro_feedback(context);
+
+-- ============================================
 -- Narrative: Act 1 state persistence
 -- ============================================
 CREATE TABLE IF NOT EXISTS act1_sessions (
@@ -1391,3 +1425,131 @@ class DatabaseManager:
                 (user_id, limit),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ============================================
+    # Product analytics (内测闭环漏斗)
+    # ============================================
+    def log_product_event(
+        self,
+        event_name: str,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        platform: str = "unknown",
+        share_code: str | None = None,
+        source: str = "client",
+        success: bool = True,
+        properties: dict | None = None,
+    ) -> int:
+        with self.get_conn() as conn:
+            cur = conn.execute(
+                """INSERT INTO product_events
+                   (event_name, user_id, session_id, platform, share_code, source, success, properties_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    event_name,
+                    user_id,
+                    session_id,
+                    platform,
+                    share_code,
+                    source,
+                    1 if success else 0,
+                    json.dumps(properties or {}, ensure_ascii=False),
+                ),
+            )
+            return cur.lastrowid
+
+    def log_product_events_batch(self, events: list[dict]) -> int:
+        count = 0
+        for ev in events:
+            self.log_product_event(
+                event_name=ev["event_name"],
+                user_id=ev.get("user_id"),
+                session_id=ev.get("session_id"),
+                platform=ev.get("platform", "unknown"),
+                share_code=ev.get("share_code"),
+                source=ev.get("source", "client"),
+                success=ev.get("success", True),
+                properties=ev.get("properties"),
+            )
+            count += 1
+        return count
+
+    def submit_micro_feedback(
+        self,
+        context: str,
+        score: int,
+        optional_text: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        platform: str = "unknown",
+        share_code: str | None = None,
+    ) -> int:
+        with self.get_conn() as conn:
+            cur = conn.execute(
+                """INSERT INTO micro_feedback
+                   (context, score, optional_text, user_id, session_id, platform, share_code)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (context, score, optional_text, user_id, session_id, platform, share_code),
+            )
+            return cur.lastrowid
+
+    def get_funnel_stats(self, days: int = 30) -> dict:
+        """Aggregate closed-loop funnel counts for internal beta reporting."""
+        funnel_events = [
+            "quiz_complete",
+            "share_code_created",
+            "share_link_copied",
+            "profile_view_public",
+            "hr_register_from_share",
+            "candidate_imported",
+            "trial_started",
+        ]
+        since = f"-{int(days)} days"
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT event_name, COUNT(*) as cnt
+                   FROM product_events
+                   WHERE created_at >= datetime('now', ?)
+                   GROUP BY event_name""",
+                (since,),
+            ).fetchall()
+            counts = {r["event_name"]: r["cnt"] for r in rows}
+
+            fb_rows = conn.execute(
+                """SELECT context, COUNT(*) as cnt, AVG(score) as avg_score
+                   FROM micro_feedback
+                   WHERE created_at >= datetime('now', ?)
+                   GROUP BY context""",
+                (since,),
+            ).fetchall()
+            feedback = [
+                {
+                    "context": r["context"],
+                    "count": r["cnt"],
+                    "avg_score": round(r["avg_score"], 2) if r["avg_score"] is not None else None,
+                }
+                for r in fb_rows
+            ]
+
+        steps = {name: counts.get(name, 0) for name in funnel_events}
+
+        def rate(a: int, b: int) -> float | None:
+            if b <= 0:
+                return None
+            return round(a / b, 4)
+
+        conversion = {
+            "share_after_quiz": rate(steps["share_code_created"], steps["quiz_complete"]),
+            "view_after_share": rate(steps["profile_view_public"], steps["share_code_created"]),
+            "import_after_view": rate(steps["candidate_imported"], steps["profile_view_public"]),
+            "trial_after_import": rate(steps["trial_started"], steps["candidate_imported"]),
+        }
+        return {
+            "days": days,
+            "steps": steps,
+            "conversion": conversion,
+            "micro_feedback": feedback,
+            "other_events": {
+                k: v for k, v in counts.items() if k not in funnel_events
+            },
+        }

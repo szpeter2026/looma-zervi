@@ -1,0 +1,178 @@
+/**
+ * Enterprise candidates list — import from PlanetX share codes.
+ */
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  createApiClient,
+  createEnterpriseApi,
+  type Candidate,
+  type EnterpriseProfile,
+} from "@looma/shared-core";
+import { useSaasAuthStore } from "../auth/authStore";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+function getEnterpriseApi() {
+  return createEnterpriseApi(
+    createApiClient({
+      baseURL: API_BASE,
+      getToken: () => useSaasAuthStore.getState().token,
+      onUnauthorized: () => useSaasAuthStore.getState().logout(),
+    }),
+  );
+}
+
+export default function Candidates() {
+  const { user } = useSaasAuthStore();
+  const [enterprise, setEnterprise] = useState<EnterpriseProfile | null>(null);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [shareCode, setShareCode] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [needsEnterprise, setNeedsEnterprise] = useState(false);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const api = getEnterpriseApi();
+    try {
+      const profile = await api.profile();
+      setEnterprise(profile);
+      setNeedsEnterprise(false);
+      const list = await api.candidates();
+      setCandidates(list.candidates ?? []);
+    } catch {
+      setNeedsEnterprise(true);
+      setEnterprise(null);
+      setCandidates([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const handleCreateEnterprise = async () => {
+    const name = user?.name || user?.email?.split("@")[0] || "我的企业";
+    try {
+      await getEnterpriseApi().create({ name });
+      setMessage("企业已创建");
+      await loadData();
+    } catch {
+      setMessage("创建企业失败，请重试");
+    }
+  };
+
+  const handleImport = async () => {
+    const code = shareCode.trim().toUpperCase();
+    if (!code) return;
+    setImporting(true);
+    setMessage(null);
+    try {
+      const result = await getEnterpriseApi().importFromShare(code);
+      setMessage(result.imported === false ? "该候选人已在列表中" : "导入成功");
+      setShareCode("");
+      await loadData();
+    } catch {
+      setMessage("导入失败：分享码无效或用户未完成测试");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  if (loading) {
+    return <p style={{ color: "var(--color-text-muted)" }}>加载候选人…</p>;
+  }
+
+  if (needsEnterprise) {
+    return (
+      <div className="max-w-xl">
+        <h1 className="text-2xl font-bold mb-4" style={{ color: "var(--color-text-primary)" }}>
+          求职者画像
+        </h1>
+        <p className="text-sm mb-4" style={{ color: "var(--color-text-secondary)" }}>
+          请先创建企业空间，才能导入 PlanetX 分享的候选人。
+        </p>
+        <button
+          onClick={() => void handleCreateEnterprise()}
+          className="px-4 py-2 rounded-lg text-sm text-white"
+          style={{ backgroundColor: "var(--color-primary)" }}
+        >
+          创建企业（一键）
+        </button>
+        {message && <p className="text-sm mt-3" style={{ color: "var(--color-text-muted)" }}>{message}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl">
+      <h1 className="text-2xl font-bold mb-1" style={{ color: "var(--color-text-primary)" }}>
+        求职者画像
+      </h1>
+      <p className="text-sm mb-6" style={{ color: "var(--color-text-muted)" }}>
+        {enterprise?.name} · 粘贴 PlanetX 分享码导入候选人
+      </p>
+
+      <div
+        className="flex gap-2 mb-6 p-4 rounded-xl"
+        style={{ backgroundColor: "var(--color-bg-card)", boxShadow: "var(--shadow-sm)" }}
+      >
+        <input
+          type="text"
+          value={shareCode}
+          onChange={(e) => setShareCode(e.target.value.toUpperCase())}
+          placeholder="粘贴分享码，如 A1B2C3D4"
+          className="flex-1 px-3 py-2 rounded-lg text-sm border"
+          style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-bg-surface)" }}
+        />
+        <button
+          onClick={() => void handleImport()}
+          disabled={importing || !shareCode.trim()}
+          className="px-4 py-2 rounded-lg text-sm text-white disabled:opacity-50"
+          style={{ backgroundColor: "var(--color-primary)" }}
+        >
+          {importing ? "导入中…" : "导入"}
+        </button>
+      </div>
+
+      {message && (
+        <p className="text-sm mb-4" style={{ color: "var(--color-success)" }}>{message}</p>
+      )}
+
+      {candidates.length === 0 ? (
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+          暂无候选人。让求职者在 PlanetX 完成测试后，点击「分享给 HR」复制链接或分享码。
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {candidates.map((c) => {
+            const profile = c.profile_data as { personality_type?: string; personality_detail?: { emoji?: string; name?: string } } | undefined;
+            const emoji = profile?.personality_detail?.emoji ?? "🪐";
+            const typeName = profile?.personality_detail?.name ?? profile?.personality_type ?? "未知";
+            return (
+              <li key={c.id}>
+                <Link
+                  to={`/candidates/${c.id}`}
+                  className="flex items-center gap-4 p-4 rounded-xl no-underline transition-shadow hover:shadow-md"
+                  style={{ backgroundColor: "var(--color-bg-card)", boxShadow: "var(--shadow-sm)" }}
+                >
+                  <span className="text-3xl">{emoji}</span>
+                  <div>
+                    <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{c.name}</p>
+                    <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                      {typeName} · {c.status ?? "new"}
+                    </p>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}

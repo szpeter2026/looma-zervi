@@ -8,7 +8,12 @@
       class="msg-item {{item.role === 'user' ? 'msg-user' : 'msg-ai'}}"
     >
       <view class="msg-avatar">{{item.role === 'user' ? '🧑‍🚀' : '🤖'}}</view>
-      <view class="msg-bubble">{{item.content}}</view>
+      <view class="msg-col">
+        <view class="msg-bubble">{{item.content}}</view>
+        <view wx:if="{{metas[index] && metas[index].intent}}" class="msg-meta">
+          intent: {{metas[index].intent}} · conf: {{metas[index].intent_confidence}} · {{metas[index].source_scores}}
+        </view>
+      </view>
     </view>
 
     <view wx:if="{{loading}}" class="msg-item msg-ai">

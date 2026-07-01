@@ -94,10 +94,11 @@ def ask_question():
     if cached is not None:
         logger.info(f"[cache HIT] {query[:50]!r}")
         return jsonify(
-            answer=cached["answer"],
-            intent=cached["intent"],
-            sources=cached["sources"],
-        )
+        answer=cached["answer"],
+        intent=cached["intent"],
+        intent_confidence=cached.get("intent_confidence"),
+        sources=cached["sources"],
+    )
 
     t0 = time.time()
     _timing: dict[str, int] = {}
@@ -142,7 +143,12 @@ def ask_question():
     extracted = result.get("extracted")
 
     # Cache the result
-    _cache_set(query, {"intent": intent_str, "answer": answer, "sources": sources})
+    _cache_set(query, {
+        "intent": intent_str,
+        "intent_confidence": confidence,
+        "answer": answer,
+        "sources": sources,
+    })
 
     # Log query for data flywheel
     try:
@@ -161,6 +167,7 @@ def ask_question():
     return jsonify(
         answer=answer,
         intent=intent_str,
+        intent_confidence=round(confidence, 3),
         sources=sources,
         tokens_used=elapsed,
         extracted=extracted,

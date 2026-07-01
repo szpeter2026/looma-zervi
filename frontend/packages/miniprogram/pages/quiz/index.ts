@@ -5,6 +5,7 @@
 import { QUIZ_QUESTIONS, computePersonality } from '../../constants/quiz'
 import { store } from '../../utils/store'
 import { gameApi } from '../../utils/api'
+import { MISSION_XP } from '../../utils/config'
 import type { TraitKey } from '../../types/index'
 
 Page({
@@ -18,11 +19,9 @@ Page({
   traitCounts: {} as Partial<Record<TraitKey, number>>,
 
   onLoad() {
-    // Initialize progress array
     this.setData({
       progress: new Array(QUIZ_QUESTIONS.length).fill(false),
     })
-    // Reset quiz state
     this.traitCounts = {}
     store.set('quizStep', 0)
     store.set('quizTraitCounts', {})
@@ -33,18 +32,14 @@ Page({
     const option = this.data.currentQuestion.options[idx]
     const trait = option.trait as TraitKey
 
-    // Record trait count
     this.traitCounts[trait] = (this.traitCounts[trait] || 0) + 1
 
-    // Update progress
     const progress = [...this.data.progress]
     progress[this.data.step] = true
     this.setData({ progress })
 
-    // Move to next question or finish
     const nextStep = this.data.step + 1
     if (nextStep >= QUIZ_QUESTIONS.length) {
-      // Quiz complete
       this.finishQuiz()
     } else {
       setTimeout(() => {
@@ -59,24 +54,27 @@ Page({
   finishQuiz() {
     const personality = computePersonality(this.traitCounts)
 
-    // Update store
     store.set('personalityType', personality)
     store.set('quizTraitCounts', this.traitCounts)
     store.completeMission('personality')
-    store.addXP(50)
     store.setAchievement({
       title: '🔮 星际人格觉醒！',
       desc: `你被认证为「${personality.name}」`,
     })
 
-    // Sync to backend (best-effort)
+    const xpReward = MISSION_XP.personality
+
     gameApi.syncProfile({
       personality_type: personality.name,
+      personality_detail: JSON.stringify(personality),
     }).catch(() => {})
 
-    gameApi.completeMission('personality').catch(() => {})
+    gameApi.completeMission('personality', xpReward).then((data: any) => {
+      if (data?.total_xp != null) {
+        store.applyGameProfile({ xp: data.total_xp, level: data.level })
+      }
+    }).catch(() => {})
 
-    // Navigate to result page
     setTimeout(() => {
       wx.redirectTo({ url: '/pages/result/index' })
     }, 500)

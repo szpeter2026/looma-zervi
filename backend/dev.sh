@@ -27,7 +27,9 @@ log_step()  { echo -e "${CYAN}[dev.sh]${NC} $1"; }
 # 切换到 backend 目录
 cd "$(dirname "$0")"
 BACKEND_DIR=$(pwd)
+REPO_ROOT="$(cd .. && pwd)"
 log_info "工作目录: $BACKEND_DIR"
+log_info "仓库根目录: $REPO_ROOT"
 
 # ============================================
 # Step 1: 检测 Python
@@ -87,7 +89,7 @@ fi
 # ============================================
 if [ ! -f ".env" ]; then
     log_warn ".env 文件不存在，正在创建默认配置..."
-    cat > .env << 'EOF'
+    cat > .env << EOF
 # looma 后端环境配置（开发用）
 # 生产环境请替换为真实值
 
@@ -97,6 +99,16 @@ FLASK_PORT=5200
 
 # Database
 DATABASE_PATH=./data/looma.db
+
+# Poetry ChromaDB（58k 诗词向量，位于仓库根 data/poetry_full）
+POETRY_CHROMA_PATH=$REPO_ROOT/data/poetry_full
+
+# pgvector Docker（looma-pgvector，端口 5433）
+PG_HOST=127.0.0.1
+PG_PORT=5433
+PG_USER=jason
+PG_PASSWORD=ServBay.dev
+PG_DATABASE=looma
 
 # JWT
 JWT_SECRET=dev-secret-change-in-production
@@ -136,15 +148,38 @@ log_info "data/ 目录已就绪"
 export WECHAT_DEV_MODE=${WECHAT_DEV_MODE:-true}
 # Flask 监听端口（需与前端 API 地址一致）
 export FLASK_PORT=${FLASK_PORT:-5200}
-# 加载 .env 文件
-set -a; source .env; set +a 2>/dev/null || true
+# 加载 backend/.env，再叠加仓库根 .env（API key / pgvector 等）
+if [ -f .env ]; then
+  set -a; source .env; set +a
+fi
+if [ -f "$REPO_ROOT/.env" ]; then
+  set -a; source "$REPO_ROOT/.env"; set +a
+fi
+
+# 真实数据路径优先（根 .env 里相对路径 ./data/poetry_full 会解析错误）
+export DATABASE_PATH="${DATABASE_PATH:-./data/looma.db}"
+if [[ "$POETRY_CHROMA_PATH" != /* ]] || [ ! -d "$POETRY_CHROMA_PATH" ]; then
+  export POETRY_CHROMA_PATH="$REPO_ROOT/data/poetry_full"
+fi
+export PG_HOST="${PG_HOST:-127.0.0.1}"
+export PG_PORT="${PG_PORT:-5433}"
+export PG_USER="${PG_USER:-jason}"
+export PG_PASSWORD="${PG_PASSWORD:-ServBay.dev}"
+export PG_DATABASE="${PG_DATABASE:-looma}"
+
+if [ ! -d "$POETRY_CHROMA_PATH" ]; then
+  log_warn "诗词向量库不存在: $POETRY_CHROMA_PATH（RAG 诗词检索将降级）"
+fi
 
 echo ""
 log_info "============================================"
 log_info "  looma 后端启动中..."
-log_info "  WECHAT_DEV_MODE = $WECHAT_DEV_MODE"
-log_info "  FLASK_PORT      = $FLASK_PORT"
-log_info "  FLASK_ENV       = ${FLASK_ENV:-development}"
+log_info "  WECHAT_DEV_MODE     = $WECHAT_DEV_MODE"
+log_info "  FLASK_PORT          = $FLASK_PORT"
+log_info "  FLASK_ENV           = ${FLASK_ENV:-development}"
+log_info "  DATABASE_PATH       = $DATABASE_PATH"
+log_info "  POETRY_CHROMA_PATH  = $POETRY_CHROMA_PATH"
+log_info "  PG                  = $PG_HOST:$PG_PORT/$PG_DATABASE"
 log_info "  访问地址: http://localhost:${FLASK_PORT:-5200}"
 log_info "============================================"
 echo ""

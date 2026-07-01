@@ -20,6 +20,7 @@ const navItems: NavItem[] = [
   { path: "/", label: "仪表盘", icon: "◉" },
   { path: "/query", label: "智能问答", icon: "◈" },
   { path: "/poetry", label: "诗词文库", icon: "◇" },
+  { path: "/candidates", label: "求职者画像", icon: "◎" },
   { path: "/jobs", label: "职位匹配", icon: "◈" },
   { path: "/resume", label: "简历解析", icon: "◈" },
   { path: "/reports", label: "报告中心", icon: "◆" },
@@ -34,8 +35,9 @@ export default function Sidebar() {
     navigate("/login");
   };
 
-  const usagePercent = quota
-    ? Math.round(((quota.daily_limit - quota.remaining) / quota.daily_limit) * 100)
+  const askRecord = quota?.records?.find((r) => r.resource === "ask");
+  const usagePercent = askRecord && askRecord.daily_limit > 0
+    ? Math.round((askRecord.used / askRecord.daily_limit) * 100)
     : 0;
 
   return (
@@ -81,7 +83,9 @@ export default function Sidebar() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-white/40">今日配额</span>
             <span className="text-xs text-white/70">
-              {quota.remaining}/{quota.daily_limit}
+              {askRecord
+                ? `${askRecord.daily_limit - askRecord.used}/${askRecord.daily_limit}`
+                : "—"}
             </span>
           </div>
           <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">

@@ -14,6 +14,7 @@ import { PlanetXAuthGuard } from './features/auth/PlanetXAuthGuard'
 import ErrorBoundary from './brand/components/ErrorBoundary'
 import PlanetXHome from './features/PlanetXHome'
 import TspaceNavigatorScreen from './features/tspace/TspaceNavigatorScreen'
+import { usePlanetXAnalytics } from './analytics/usePlanetXAnalytics'
 
 /** 轻量 ErrorBoundary 包装器，用于隔离单个功能的崩溃 */
 function FeatureGuard({ children }: { children: React.ReactNode }) {
@@ -21,6 +22,7 @@ function FeatureGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  usePlanetXAnalytics()
   return (
     <ErrorBoundary>
       <BrowserRouter>

@@ -4,15 +4,15 @@ import { defineConfig, devices } from "@playwright/test";
  * Playwright e2e test config for Looma-Zervi frontend monorepo.
  *
  * Usage:
- *   pnpm exec playwright test          — run all e2e tests
- *   pnpm exec playwright test --ui     — interactive UI mode
- *   pnpm exec playwright test e2e/poetry — run only Poetry tests
+ *   pnpm exec playwright test          — run mocked e2e (poetry page)
+ *   pnpm e2e:live                      — run live-backend closed loop
  *
- * The SaaS dev server auto-starts on port 5174.
- * Backend API is mocked via Playwright route interception.
+ * Mocked tests: SaaS dev server on :5174, API intercepted in spec.
+ * Live tests: see playwright.live.config.ts
  */
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "**/*.live.spec.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

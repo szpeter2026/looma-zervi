@@ -6,6 +6,7 @@
 
 import { eventBus } from './event-bus'
 import type { User, GameProfile, Identity, PersonalityType, MissionId, Fleet } from '../types/index'
+import { hydratePersonality } from '../constants/quiz'
 
 interface StoreState {
   // Auth
@@ -60,19 +61,24 @@ export const store = {
   },
 
   /** Update game profile from backend response */
-  applyGameProfile(data: Partial<GameProfile>) {
+  applyGameProfile(data: Partial<GameProfile> & { personality_detail?: string }) {
     if (data.identity !== undefined) state.identity = data.identity
     if (data.level !== undefined) state.level = data.level
     if (data.xp !== undefined) state.xp = data.xp
     if (data.xp_to_next !== undefined) state.xpToNext = data.xp_to_next
-    if (data.personality_type !== undefined) {
-      // Backend returns "" for no personality; treat as undefined
-      const pt = data.personality_type as any
-      state.personalityType = (pt && typeof pt === 'object') ? pt : undefined
+
+    const personality = hydratePersonality(
+      typeof data.personality_type === 'string' ? data.personality_type : undefined,
+      data.personality_detail,
+    )
+    if (personality) {
+      state.personalityType = personality
+    } else if (data.personality_type === '' || data.personality_type === null) {
+      state.personalityType = undefined
     }
+
     if (data.missions_completed !== undefined) {
-      // Backend may return a count (number) or an array; ensure array
-      const mc = data.missions_completed as any
+      const mc = data.missions_completed as MissionId[] | number
       state.missionsCompleted = Array.isArray(mc) ? mc : []
     }
     if (data.fleet !== undefined) state.fleet = data.fleet

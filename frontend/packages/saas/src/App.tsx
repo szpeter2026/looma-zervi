@@ -26,6 +26,10 @@ import Jobs from "./features/hr/Jobs";
 import Resume from "./features/hr/Resume";
 import Reports from "./features/reports/Reports";
 import Pricing from "./features/pricing/Pricing";
+import CandidateShare from "./features/candidates/CandidateShare";
+import Candidates from "./features/candidates/Candidates";
+import CandidateDetail from "./features/candidates/CandidateDetail";
+import { useSaasAnalytics } from "./analytics/useSaasAnalytics";
 
 /** 轻量 ErrorBoundary 包装器，用于隔离单个功能的崩溃 */
 function FeatureGuard({ children }: { children: React.ReactNode }) {
@@ -34,6 +38,7 @@ function FeatureGuard({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const tryAutoLogin = useSaasAuthStore((s) => s.tryAutoLogin);
+  useSaasAnalytics();
 
   // 挂载时尝试从 PlanetX 共享 token 自动登录（C→B 互通）
   useEffect(() => {
@@ -52,6 +57,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<FeatureGuard><Dashboard /></FeatureGuard>} />
             <Route path="/pricing" element={<FeatureGuard><Pricing /></FeatureGuard>} />
+            <Route path="/candidate/share/:code" element={<FeatureGuard><CandidateShare /></FeatureGuard>} />
           </Route>
 
           {/* Protected routes (需要登录的功能页) */}
@@ -62,6 +68,8 @@ export default function App() {
               <Route path="/jobs" element={<FeatureGuard><Jobs /></FeatureGuard>} />
               <Route path="/resume" element={<FeatureGuard><Resume /></FeatureGuard>} />
               <Route path="/reports" element={<FeatureGuard><Reports /></FeatureGuard>} />
+              <Route path="/candidates" element={<FeatureGuard><Candidates /></FeatureGuard>} />
+              <Route path="/candidates/:id" element={<FeatureGuard><CandidateDetail /></FeatureGuard>} />
             </Route>
           </Route>
 

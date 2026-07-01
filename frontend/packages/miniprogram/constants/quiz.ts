@@ -136,3 +136,22 @@ export function computePersonality(traitCounts: Partial<Record<TraitKey, number>
 export function getShareText(p: PersonalityType, inviteUrl: string): string {
   return `🪐 我的星际人格是「${p.name}」！\n"${p.tagline}"\n\n👉 测测你的是什么星球身份？\n${inviteUrl}`
 }
+
+/** Restore full PersonalityType from backend name / JSON detail. */
+export function hydratePersonality(
+  typeName?: string,
+  detailRaw?: string,
+): PersonalityType | undefined {
+  if (detailRaw) {
+    try {
+      const parsed = JSON.parse(detailRaw) as PersonalityType
+      if (parsed?.name) return parsed
+    } catch { /* ignore */ }
+  }
+  if (typeof typeName === 'string' && typeName) {
+    for (const p of Object.values(PERSONALITY_MAP)) {
+      if (p.name === typeName) return p
+    }
+  }
+  return undefined
+}

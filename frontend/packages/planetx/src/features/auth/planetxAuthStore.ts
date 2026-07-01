@@ -4,7 +4,7 @@
  * Owner: Jason
  */
 import { create } from 'zustand'
-import { createApiClient, createAuthApi, type User } from '@looma/shared-core'
+import { createApiClient, createAuthApi, createReferralApi, type ApiClient, type User } from '@looma/shared-core'
 
 // ============ 类型定义（内联以保持 store 自包含） ============
 export type Identity = 'explorer' | 'captain' | 'wanderer'
@@ -62,8 +62,16 @@ export function getRankName(level: number): RankName {
 
 // ============ API Client 初始化 ============
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || 'http://1.14.202.161'
+const SAAS_BASE = import.meta.env.VITE_SAAS_URL || 'http://localhost:5174'
 
-function getApiClient() {
+const MISSION_XP: Record<MissionId, number> = {
+  personality: 50,
+  share: 30,
+  team: 80,
+  match: 40,
+}
+
+function getApiClient(): ApiClient {
   return createApiClient({
     baseURL: API_BASE,
     getToken: () => usePlanetXStore.getState().token,
@@ -73,6 +81,26 @@ function getApiClient() {
 
 function getAuthApi() {
   return createAuthApi(getApiClient())
+}
+
+/** Restore full PersonalityType from backend name / JSON detail. */
+function hydratePersonality(
+  typeName?: string | PersonalityType,
+  detailRaw?: string,
+): PersonalityType | undefined {
+  if (detailRaw) {
+    try {
+      const parsed = JSON.parse(detailRaw) as PersonalityType
+      if (parsed?.name) return parsed
+    } catch { /* ignore */ }
+  }
+  if (typeof typeName === 'object' && typeName?.name) return typeName
+  if (typeof typeName === 'string' && typeName) {
+    for (const p of Object.values(PERSONALITY_MAP)) {
+      if (p.name === typeName) return p
+    }
+  }
+  return undefined
 }
 
 // ============ 题库 ============
@@ -254,6 +282,7 @@ interface PlanetXState {
 
   // 分享
   refCode: string
+  profileShareCode: string
 
   // 提示
   toast: string | null
@@ -284,6 +313,9 @@ interface PlanetXState {
   loadFleetData: () => Promise<void>
 
   getInviteUrl: () => string
+  getHrShareUrl: () => string
+  ensureProfileShareCode: () => Promise<string>
+  ensureReferralCode: () => Promise<string>
 }
 
 export const usePlanetXStore = create<PlanetXState>((set, get) => ({
@@ -314,6 +346,7 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
   quizFinished: false,
 
   refCode: '',
+  profileShareCode: '',
   toast: null,
   achievement: null,
 
@@ -346,10 +379,19 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
     if (missionsCompleted.includes(id)) return
     set({ missionsCompleted: [...missionsCompleted, id] })
 
-    // 同步到后端
     const { token } = get()
     if (token) {
-      getApiClient().post('/v1/game/mission-complete', { mission_id: id }).catch(() => {})
+      getApiClient()
+        .post<{ total_xp?: number; level?: number }>('/v1/game/mission-complete', {
+          mission_id: id,
+          xp_reward: MISSION_XP[id] ?? 10,
+        })
+        .then((data) => {
+          if (data?.total_xp != null) {
+            set({ xp: data.total_xp, level: data.level ?? get().level })
+          }
+        })
+        .catch(() => {})
     }
     get().syncProfile()
   },
@@ -368,7 +410,6 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
     const personality = computePersonality(quizTraitCounts as Record<TraitKey, number>)
     set({ personalityType: personality, quizFinished: true })
     get().completeMission('personality')
-    get().addXP(50)
     get().setAchievement({ title: '🔮 星际人格觉醒！', desc: `你被认证为「${personality.name}」` })
     get().syncProfile()
     return personality
@@ -464,21 +505,30 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
         level?: number
         xp?: number
         xp_to_next?: number
-        personality_type?: PersonalityType
-        missions_completed?: MissionId[]
+        personality_type?: string
+        personality_detail?: string
+        missions_completed?: MissionId[] | number
         fleet?: Fleet
         team_size?: number
         fleet_members?: string[]
       }>('/v1/game/profile')
 
       if (data) {
+        const missions = Array.isArray(data.missions_completed)
+          ? data.missions_completed
+          : []
+        const personality = hydratePersonality(
+          data.personality_type,
+          data.personality_detail,
+        )
         set({
           identity: data.identity ?? undefined,
           level: data.level ?? 1,
           xp: data.xp ?? 0,
           xpToNext: data.xp_to_next ?? 100,
-          personalityType: data.personality_type ?? undefined,
-          missionsCompleted: data.missions_completed ?? [],
+          personalityType: personality,
+          quizFinished: !!personality,
+          missionsCompleted: missions as MissionId[],
           fleet: data.fleet ?? null,
           teamSize: data.team_size ?? 0,
           fleetMembers: data.fleet_members ?? [],
@@ -495,16 +545,13 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
   },
 
   syncProfile: async () => {
-    const { token, identity, level, xp, xpToNext, personalityType } = get()
+    const { token, personalityType } = get()
     if (!token) return
     try {
       const client = getApiClient()
       await client.post('/v1/game/profile-sync', {
-        identity,
-        level,
-        xp,
-        xp_to_next: xpToNext,
-        personality_type: personalityType?.name ?? personalityType,
+        personality_type: personalityType?.name ?? '',
+        personality_detail: personalityType ? JSON.stringify(personalityType) : '',
       })
     } catch { /* best-effort */ }
   },
@@ -577,14 +624,41 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
     } catch { /* no fleet */ }
   },
 
-  getInviteUrl: () => {
-    const { refCode, token } = get()
-    let code = refCode
-    if (!code) {
-      code = token
-        ? 'PX-' + token.substring(0, 8).toUpperCase()
-        : 'PX-' + Math.random().toString(36).substring(2, 10).toUpperCase()
+  ensureProfileShareCode: async () => {
+    const { profileShareCode, token } = get()
+    if (profileShareCode) return profileShareCode
+    if (!token) return ''
+    try {
+      const resp = await createReferralApi(getApiClient()).create({ purpose: 'profile_share' })
+      set({ profileShareCode: resp.code })
+      return resp.code
+    } catch {
+      return ''
     }
-    return window.location.origin + window.location.pathname + '?ref=' + code
+  },
+
+  ensureReferralCode: async () => {
+    const { refCode, token } = get()
+    if (refCode) return refCode
+    if (!token) return ''
+    try {
+      const resp = await createReferralApi(getApiClient()).create({ purpose: 'referral' })
+      set({ refCode: resp.code })
+      return resp.code
+    } catch {
+      return ''
+    }
+  },
+
+  getInviteUrl: () => {
+    const { refCode } = get()
+    const base = window.location.origin + window.location.pathname
+    return refCode ? `${base}?ref=${refCode}` : base
+  },
+
+  getHrShareUrl: () => {
+    const { profileShareCode } = get()
+    const base = SAAS_BASE.replace(/\/$/, '')
+    return profileShareCode ? `${base}/candidate/share/${profileShareCode}` : base
   },
 }))

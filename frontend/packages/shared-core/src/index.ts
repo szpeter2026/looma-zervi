@@ -25,6 +25,7 @@ export {
   createChatApi,
   createGameApi,
   createEnterpriseApi,
+  createReferralApi,
   createResumeApi,
   createJobsApi,
   createReportsApi,
@@ -33,6 +34,7 @@ export {
   createNarrativeApi,
   createAct1Api,
   createCreditApi,
+  createAnalyticsApi,
 } from "./api/createApi";
 
 // Types
@@ -115,6 +117,16 @@ export type {
   AddCandidateRequest,
   AddCandidateResponse,
 } from "./types/enterprise";
+
+export type {
+  CreateReferralRequest,
+  CreateReferralResponse,
+  UseReferralRequest,
+  UseReferralResponse,
+  ReferralCodeEntry,
+  ProfileShareView,
+  ImportShareRequest,
+} from "./types/referral";
 
 export type {
   Report,
@@ -200,3 +212,25 @@ export {
   isValidPhone,
   isValidUrl,
 } from "./utils/validation";
+
+export type {
+  AnalyticsPlatform,
+  ClosedLoopEventName,
+  ProductEventPayload,
+  MicroFeedbackContext,
+  MicroFeedbackRequest,
+  FunnelStatsResponse,
+} from "./types/analytics";
+
+export {
+  CLOSED_LOOP_EVENTS,
+  MICRO_FEEDBACK_CONTEXT,
+  ANALYTICS_SESSION_KEY,
+} from "./constants/analytics";
+
+export {
+  initAnalytics,
+  getAnalyticsSessionId,
+  trackEvent,
+  flushEvents,
+} from "./analytics/track";

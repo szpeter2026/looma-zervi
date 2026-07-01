@@ -25,8 +25,10 @@ export interface Candidate {
   email?: string;
   phone?: string;
   status?: string;
-  profile_data?: Record<string, any>;
+  user_id?: string;
+  profile_data?: Record<string, unknown>;
   created_at?: string;
+  imported?: boolean;
 }
 
 export interface AddCandidateRequest {

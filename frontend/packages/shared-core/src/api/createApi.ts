@@ -212,6 +212,48 @@ export function createEnterpriseApi(client: ApiClient) {
     /** Add a candidate to the enterprise */
     addCandidate: (payload: AddCandidateRequest) =>
       client.post<AddCandidateResponse>(API_ROUTES.ENTERPRISE_CANDIDATES_ADD, payload),
+
+    /** Get candidate detail by ID */
+    getCandidate: (candidateId: string) =>
+      client.get<Candidate>(`${API_ROUTES.ENTERPRISE_CANDIDATE}/${candidateId}`),
+
+    /** Import candidate from PlanetX profile share code */
+    importFromShare: (shareCode: string) =>
+      client.post<Candidate>(API_ROUTES.ENTERPRISE_CANDIDATES_IMPORT_SHARE, {
+        share_code: shareCode,
+      }),
+  };
+}
+
+// ============================================================
+// Referral API (growth + profile share)
+// ============================================================
+export function createReferralApi(client: ApiClient) {
+  return {
+    /** Create invite or profile share code */
+    create: (payload?: import("../types/referral").CreateReferralRequest) =>
+      client.post<import("../types/referral").CreateReferralResponse>(
+        API_ROUTES.REFERRAL_CREATE,
+        payload ?? {},
+      ),
+
+    /** Consume a referral invite code (not profile_share) */
+    use: (code: string) =>
+      client.post<import("../types/referral").UseReferralResponse>(API_ROUTES.REFERRAL_USE, {
+        code,
+      }),
+
+    /** List codes created by current user */
+    myCodes: () =>
+      client.get<{ codes: import("../types/referral").ReferralCodeEntry[] }>(
+        API_ROUTES.REFERRAL_MY_CODES,
+      ),
+
+    /** Public: view personality profile by share code (no auth required) */
+    profileView: (code: string) =>
+      client.get<import("../types/referral").ProfileShareView>(
+        `${API_ROUTES.REFERRAL_PROFILE_VIEW}/${encodeURIComponent(code)}`,
+      ),
   };
 }
 
@@ -382,5 +424,24 @@ export function createQuotaApi(client: ApiClient) {
   return {
     /** Get current quota usage (new path /v1/quota) */
     get: () => client.get<QuotaResponse>(API_ROUTES.QUOTA),
+  };
+}
+
+// ============================================================
+// Analytics API (内测闭环漏斗)
+// ============================================================
+export function createAnalyticsApi(client: ApiClient) {
+  return {
+    logEvents: (events: import("../types/analytics").ProductEventPayload[]) =>
+      client.post<{ ok: boolean; ingested: number }>(API_ROUTES.ANALYTICS_EVENTS, { events }),
+
+    funnel: (days = 30) =>
+      client.get<import("../types/analytics").FunnelStatsResponse>(
+        API_ROUTES.ANALYTICS_FUNNEL,
+        { days },
+      ),
+
+    microFeedback: (payload: import("../types/analytics").MicroFeedbackRequest) =>
+      client.post<{ ok: boolean; id: number }>(API_ROUTES.FEEDBACK_MICRO, payload),
   };
 }

@@ -25,12 +25,20 @@ export const API_ROUTES = {
   GAME_FLEET_MINE: "/v1/game/fleet/mine",
   GAME_FLEET_LEAVE: "/v1/game/fleet/leave",
 
+  // Referral / growth
+  REFERRAL_CREATE: "/v1/referral/create",
+  REFERRAL_USE: "/v1/referral/use",
+  REFERRAL_MY_CODES: "/v1/referral/my-codes",
+  REFERRAL_PROFILE_VIEW: "/v1/referral/profile-view",
+
   // Enterprise (T空间 B-end)
   ENTERPRISE_CREATE: "/v1/enterprise/create",
   ENTERPRISE_JOIN: "/v1/enterprise/join",
   ENTERPRISE_PROFILE: "/v1/enterprise/profile",
   ENTERPRISE_CANDIDATES: "/v1/enterprise/candidates",
+  ENTERPRISE_CANDIDATE: "/v1/enterprise/candidate",
   ENTERPRISE_CANDIDATES_ADD: "/v1/enterprise/candidates/add",
+  ENTERPRISE_CANDIDATES_IMPORT_SHARE: "/v1/enterprise/candidates/import-share",
 
   // Ask / RAG / Feedback
   ASK: "/v1/ask",
@@ -78,4 +86,9 @@ export const API_ROUTES = {
   ACT1_CHOICE: "/v1/narrative/engine/act1/choice",
   ACT1_RESET: "/v1/narrative/engine/act1/reset",
   ACT1_CONTENT: "/v1/narrative/engine/act1/content",
+
+  // Analytics (内测闭环漏斗)
+  ANALYTICS_EVENTS: "/v1/analytics/events",
+  ANALYTICS_FUNNEL: "/v1/analytics/funnel",
+  FEEDBACK_MICRO: "/v1/feedback/micro",
 } as const;

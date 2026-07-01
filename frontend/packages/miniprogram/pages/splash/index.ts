@@ -20,7 +20,11 @@ Page({
   _expiredHandler: null as any,
   _timer: null as number | null,
 
-  onLoad() {
+  onLoad(options?: Record<string, string>) {
+    if (options?.ref) {
+      wx.setStorageSync('pending_ref', options.ref)
+      console.log('[Splash] Saved pending ref:', options.ref)
+    }
     console.log('[Splash] onLoad - starting auth flow')
     
     // Listen for auth events

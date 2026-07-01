@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { usePlanetXStore } from '../auth/planetxAuthStore'
 import SharePanel from '../../brand/components/SharePanel'
+import PlanetXMicroFeedback from '../../brand/components/PlanetXMicroFeedback'
 
 /**
  * 测评结果屏幕 — 人格类型展示 + 多平台分享 + 卡片导出
@@ -198,6 +199,7 @@ export default function ResultScreen() {
       </div>
 
       <SharePanel />
+      <PlanetXMicroFeedback />
     </div>
   )
 }

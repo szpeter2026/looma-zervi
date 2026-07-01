@@ -9,9 +9,15 @@ Endpoints:
 
 For production, replace stub logic with WeChat Pay / Alipay integration.
 """
-from flask import Blueprint, jsonify, g, request
+from flask import Blueprint, jsonify, g, request, current_app
 
 from src.api.auth.decorators import require_auth
+from src.analytics.events import (
+    log_product_event,
+    platform_from_request,
+    EVENT_TRIAL_STARTED,
+    EVENT_TRIAL_FAILED,
+)
 
 payment_bp = Blueprint("payment", __name__)
 
@@ -93,19 +99,33 @@ def upgrade_tier():
     # Tier downgrade not allowed via this endpoint
     tier_order = {"free": 0, "supporter": 1, "pro": 2}
     if tier_order.get(new_tier, 0) <= tier_order.get(current_tier, 0):
+        log_product_event(
+            current_app._db,
+            EVENT_TRIAL_FAILED,
+            user_id=g.user_id,
+            platform=platform_from_request(request),
+            source="server",
+            success=False,
+            properties={"reason": "downgrade", "current_tier": current_tier, "requested": new_tier},
+        )
         return jsonify(
             error="bad_request",
             message=f"Cannot downgrade from {current_tier} to {new_tier}",
         ), 400
 
     # --- Stub: directly update tier in DB (no payment) ---
-    from flask import current_app
     db = current_app._db
-    db.execute(
-        "UPDATE users SET tier = ?, updated_at = datetime('now') WHERE id = ?",
-        [new_tier, g.user_id],
-    )
-    db.commit()
+    db.update_user_tier(g.user_id, new_tier)
+
+    if new_tier == "pro":
+        log_product_event(
+            db,
+            EVENT_TRIAL_STARTED,
+            user_id=g.user_id,
+            platform=platform_from_request(request),
+            source="server",
+            properties={"from_tier": current_tier},
+        )
 
     plan = PLANS[new_tier]
     return jsonify(

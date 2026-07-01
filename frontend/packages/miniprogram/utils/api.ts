@@ -10,6 +10,7 @@
 
 import { eventBus } from './event-bus'
 import { store } from './store'
+import { API_BASE } from './config'
 
 // ============================================================
 // MiniApiClient — wx.request-based transport
@@ -103,8 +104,8 @@ export class MiniApiClient {
   }
 
   /** GET request */
-  get<T = any>(url: string): Promise<T> {
-    return this.request<T>('GET', url)
+  get<T = any>(url: string, skipAuth = false): Promise<T> {
+    return this.request<T>('GET', url, undefined, skipAuth)
   }
 
   /** POST request.
@@ -134,8 +135,6 @@ export class MiniApiClient {
 // ============================================================
 // Singleton client (shared by all API modules)
 // ============================================================
-
-const API_BASE = 'http://1.14.202.161'
 
 const client = new MiniApiClient({
   baseURL: API_BASE,
@@ -185,8 +184,11 @@ export function createMiniGameApi(c: MiniApiClient) {
     },
 
     /** Complete a mission and earn XP */
-    completeMission(missionId: string) {
-      return c.post('/v1/game/mission-complete', { mission_id: missionId })
+    completeMission(missionId: string, xpReward = 10) {
+      return c.post('/v1/game/mission-complete', {
+        mission_id: missionId,
+        xp_reward: xpReward,
+      })
     },
 
     /** Create a fleet */
@@ -236,12 +238,29 @@ export function createMiniQuotaApi(c: MiniApiClient) {
 }
 
 // ============================================================
-// Backward-compatible named exports
+// Referral API
 // ============================================================
+
+export function createMiniReferralApi(c: MiniApiClient) {
+  return {
+    create(purpose: 'referral' | 'profile_share' = 'referral') {
+      return c.post<{ code: string; purpose?: string }>('/v1/referral/create', { purpose })
+    },
+
+    use(code: string) {
+      return c.post('/v1/referral/use', { code: code.toUpperCase() })
+    },
+
+    profileView(code: string) {
+      return c.get(`/v1/referral/profile-view/${encodeURIComponent(code)}`, true)
+    },
+  }
+}
 
 export const authApi = createMiniAuthApi(client)
 export const gameApi = createMiniGameApi(client)
 export const askApi = createMiniChatApi(client)
 export const quotaApi = createMiniQuotaApi(client)
+export const referralApi = createMiniReferralApi(client)
 
 export { API_BASE }

@@ -8,16 +8,11 @@
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { createApiClient, createAuthApi, type UserProfile } from "@looma/shared-core";
+import { createApiClient, createAuthApi, createQuotaApi, type UserProfile, type QuotaResponse } from "@looma/shared-core";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-export interface QuotaInfo {
-  tier: string;
-  records: number;
-  remaining: number;
-  daily_limit: number;
-}
+export type QuotaInfo = QuotaResponse;
 
 /** Creates an ApiClient bound to the current auth store token. */
 function getClient() {
@@ -66,6 +61,7 @@ export const useSaasAuthStore = create<AuthState>()(
         getClient().setToken(resp.access_token);
         // 登录后拉取完整 profile（含 is_early_adopter / created_at）
         await get().fetchProfile();
+        await get().fetchQuota();
       },
 
       register: async (email, password, name) => {
@@ -75,6 +71,7 @@ export const useSaasAuthStore = create<AuthState>()(
         set({ token: resp.access_token, user: resp.user as UserProfile, isAuthenticated: true, isLoading: false });
         getClient().setToken(resp.access_token);
         await get().fetchProfile();
+        await get().fetchQuota();
       },
 
       logout: () => {
@@ -97,13 +94,13 @@ export const useSaasAuthStore = create<AuthState>()(
       },
 
       fetchQuota: async () => {
-        if (!get().isAuthenticated) return;
+        if (!get().token) return;
         try {
-          const client = getClient();
-          const data = await client.get<QuotaInfo>("/v1/quota");
+          const api = createQuotaApi(getClient());
+          const data = await api.get();
           set({ quota: data });
         } catch {
-          // Silently ignore quota fetch failures
+          /* ignore */
         }
       },
 

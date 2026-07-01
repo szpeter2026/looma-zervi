@@ -30,6 +30,7 @@ def create_app(env="development"):
     from src.api.routes.payment_routes import payment_bp
     from src.api.routes.poetry_routes import poetry_bp
     from src.api.routes.narrative_routes import narrative_bp
+    from src.api.routes.analytics_routes import analytics_bp
 
     app.register_blueprint(auth_bp, url_prefix="/v1/auth")
     app.register_blueprint(game_bp, url_prefix="/v1/game")
@@ -44,6 +45,7 @@ def create_app(env="development"):
     app.register_blueprint(payment_bp, url_prefix="/v1")
     app.register_blueprint(poetry_bp, url_prefix="/v1/poetry")
     app.register_blueprint(narrative_bp, url_prefix="/v1/narrative")
+    app.register_blueprint(analytics_bp, url_prefix="/v1")
 
     # --- Health check ---
     @app.route("/health", methods=["GET"])

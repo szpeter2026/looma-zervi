@@ -22,8 +22,12 @@ interface HealthStatus {
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 export default function Dashboard() {
-  const { user, quota, token, isAuthenticated } = useSaasAuthStore();
+  const { user, quota, token, isAuthenticated, fetchQuota } = useSaasAuthStore();
   const [health, setHealth] = useState<HealthStatus | null>(null);
+
+  useEffect(() => {
+    if (isAuthenticated) void fetchQuota();
+  }, [isAuthenticated, fetchQuota]);
 
   useEffect(() => {
     createApiClient({
@@ -35,8 +39,9 @@ export default function Dashboard() {
       .catch(() => {});
   }, [token]);
 
-  const usagePercent = quota
-    ? Math.round(((quota.daily_limit - quota.remaining) / quota.daily_limit) * 100)
+  const askRecord = quota?.records?.find((r) => r.resource === "ask");
+  const usagePercent = askRecord && askRecord.daily_limit > 0
+    ? Math.round((askRecord.used / askRecord.daily_limit) * 100)
     : 0;
 
   const handleQuickQuery = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -190,17 +195,17 @@ export default function Dashboard() {
           <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
             今日配额
           </h3>
-          {quota ? (
+          {quota && askRecord ? (
             <>
               <div className="flex items-baseline gap-1 mb-3">
                 <span
                   className="text-3xl font-bold"
                   style={{ color: "var(--color-primary)" }}
                 >
-                  {quota.remaining}
+                  {askRecord.daily_limit - askRecord.used}
                 </span>
                 <span style={{ color: "var(--color-text-muted)" }}>
-                  / {quota.daily_limit} 次
+                  / {askRecord.daily_limit} 次
                 </span>
               </div>
               <div

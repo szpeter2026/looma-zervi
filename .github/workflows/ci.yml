@@ -48,6 +48,77 @@ jobs:
         run: pnpm --filter @looma/saas typecheck
 
   # ============================================
+  # 前端：单元测试（shared-core + saas 纯函数）
+  # ============================================
+  frontend-unit:
+    name: "Frontend Unit Tests"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run vitest
+        run: pnpm test
+
+  # ============================================
+  # 前端：Playwright E2E（真实后端闭环，可选较慢）
+  # ============================================
+  frontend-e2e-live:
+    name: "Frontend E2E Live"
+    runs-on: ubuntu-latest
+    needs: [backend-test]
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Run live closed-loop E2E
+        env:
+          CI: "true"
+          DEEPSEEK_API_KEY: skip
+        run: pnpm e2e:live
+
+  # ============================================
   # 后端：单元测试
   # ============================================
   backend-test:

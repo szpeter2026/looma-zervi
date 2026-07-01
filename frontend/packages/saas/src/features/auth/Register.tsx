@@ -7,11 +7,14 @@
  * Brand: T空间.
  */
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { BRAND_SAAS } from "@looma/shared-core";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { BRAND_SAAS, CLOSED_LOOP_EVENTS, trackEvent } from "@looma/shared-core";
 import { useSaasAuthStore } from "./authStore";
 
 export default function Register() {
+  const [searchParams] = useSearchParams();
+  const fromShare = searchParams.get("from") === "share";
+  const shareCode = searchParams.get("code") || undefined;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -44,6 +47,12 @@ export default function Register() {
     setErrorMsg("");
     try {
       await register(email, password, name.trim() || undefined);
+      if (fromShare) {
+        trackEvent(CLOSED_LOOP_EVENTS.HR_REGISTER_FROM_SHARE, {
+          share_code: shareCode,
+          properties: { from: searchParams.get("from") },
+        });
+      }
       navigate("/", { replace: true });
     } catch (err) {
       const msg = (err as { detail?: string })?.detail ?? "注册失败，请稍后再试";

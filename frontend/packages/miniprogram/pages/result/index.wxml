@@ -18,8 +18,14 @@
     </view>
 
     <view class="btn-actions">
-      <button class="btn-secondary" bindtap="handleShare" open-type="share">
-        📢 分享给好友
+      <button class="btn-secondary" bindtap="handleShare">
+        📋 复制分享文案
+      </button>
+      <button class="btn-secondary" bindtap="handleCopyHrLink">
+        👔 复制 HR 画像链接
+      </button>
+      <button class="btn-secondary" open-type="share">
+        📢 微信分享给好友
       </button>
       <view class="btn-primary" bindtap="handleBack">
         🚀 返回母舰 · 继续探险

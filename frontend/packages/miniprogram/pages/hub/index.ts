@@ -109,7 +109,11 @@ Page({
     } else if (id === 'match') {
       wx.showToast({ title: '匹配功能即将上线', icon: 'none' })
     } else if (id === 'share') {
-      wx.showToast({ title: '分享功能即将上线', icon: 'none' })
+      if (!this.data.personalityName && !this.data.missionsCompleted.includes('personality')) {
+        wx.showToast({ title: '请先完成人格测试', icon: 'none' })
+        return
+      }
+      wx.navigateTo({ url: '/pages/result/index' })
     }
   },
 })
