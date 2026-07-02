@@ -17,6 +17,7 @@ from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify, current_app, g
 
 from src.api.auth.decorators import require_auth, optional_auth
+from src.compliance.consent import require_consent
 from src.utils.quota import consume_with_boost, RESOURCE_JOB_MATCH, build_upgrade_hint
 
 logger = logging.getLogger("looma.jobs")
@@ -217,6 +218,7 @@ def parse_job():
 
 @jobs_bp.route("/match", methods=["POST"])
 @optional_auth
+@require_consent("job_match")
 def job_match():
     """Match a resume to job listings via multi-dimension LLM scoring.
 

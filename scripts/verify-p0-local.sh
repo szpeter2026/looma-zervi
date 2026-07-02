@@ -53,7 +53,40 @@ if [ "$CODE" != "200" ] && [ "$CODE" != "422" ]; then
   exit 1
 fi
 
-echo "==> 6. Closed-loop smoke (seeker → share → HR import)"
+echo "==> 6. Resume/Ask/Jobs consent enforcement"
+# resume/parse blocked without consent
+CODE=$(curl -s -o /tmp/p0-resume-parse.json -w '%{http_code}' -X POST "$API_BASE/v1/resume/parse" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"test resume"}')
+test "$CODE" = "403"
+python3 -c "import json; d=json.load(open('/tmp/p0-resume-parse.json')); assert d.get('error')=='consent_required'"
+
+# /ask blocked without ask_rag consent
+CODE=$(curl -s -o /tmp/p0-ask.json -w '%{http_code}' -X POST "$API_BASE/v1/ask" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"test question"}')
+test "$CODE" = "403"
+python3 -c "import json; d=json.load(open('/tmp/p0-ask.json')); assert d.get('error')=='consent_required'"
+
+# jobs/match blocked without job_match consent
+CODE=$(curl -s -o /tmp/p0-jobs-match.json -w '%{http_code}' -X POST "$API_BASE/v1/jobs/match" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"resume_text":"test resume"}')
+test "$CODE" = "403"
+python3 -c "import json; d=json.load(open('/tmp/p0-jobs-match.json')); assert d.get('error')=='consent_required'"
+
+echo "==> 7. MCP Sidecar health check (:8999)"
+MCP_URL="${MCP_URL:-http://localhost:8999}"
+if curl -sf --max-time 3 "$MCP_URL/sse" -o /dev/null 2>&1; then
+  echo "   MCP SSE port reachable"
+else
+  echo "   ⚠ MCP :8999 not reachable (skip if MCP not running locally)"
+fi
+
+echo "==> 8. Closed-loop smoke (seeker → share → HR import)"
 bash "$(dirname "$0")/verify-closed-loop.sh"
 
 echo ""

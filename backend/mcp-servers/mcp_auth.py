@@ -66,14 +66,25 @@ def verify_bearer_token(token: str) -> dict:
 def verify_bearer_token_inline(
     token: str,
     user_id: str | None = None,
+    require_db_user: bool = False,
 ) -> dict:
     """
     Convenience wrapper: verify token, optionally check user_id consistency.
+
+    Parameters
+    ----------
+    token : str
+        Looma JWT bearer token.
+    user_id : str | None
+        If provided, cross-check against token 'sub'.
+    require_db_user : bool
+        If True, also verify the user exists in the DB (aligns with require_auth).
 
     Returns the decoded payload.
 
     Raises:
         MCPAuthError: verification failed
+        MCPForbiddenError: user not found in DB
     """
     payload = verify_bearer_token(token)
 
@@ -83,4 +94,42 @@ def verify_bearer_token_inline(
             f"Token subject ({payload['sub']}) does not match user_id ({user_id})"
         )
 
+    # Optional DB user existence check (aligns with require_auth)
+    if require_db_user:
+        uid = payload["sub"]
+        try:
+            if not _user_exists_in_db(uid):
+                raise MCPForbiddenError(
+                    f"User '{uid}' not found in database — please register first"
+                )
+        except MCPForbiddenError:
+            raise
+        except Exception as e:
+            logger.warning(f"DB user check skipped (DB unavailable): {e}")
+
     return payload
+
+
+def _user_exists_in_db(user_id: str) -> bool:
+    """Check if a user exists in the looma database.
+    
+    Uses sqlite3 directly (no Flask app context needed for MCP sidecar).
+    """
+    import sqlite3
+    import os
+
+    db_path = os.getenv(
+        "DATABASE_PATH",
+        os.path.join(os.path.dirname(__file__), "..", "data", "looma.db"),
+    )
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT id FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        conn.close()
+        return row is not None
+    except Exception as e:
+        logger.warning(f"_user_exists_in_db failed: {e}")
+        raise

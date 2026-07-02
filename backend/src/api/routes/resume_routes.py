@@ -16,6 +16,7 @@ from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify, current_app, g
 
 from src.api.auth.decorators import require_auth, optional_auth
+from src.compliance.consent import require_consent
 from src.utils.quota import consume_with_boost, QUOTA_LIMITS, RESOURCE_RESUME_PARSE, get_remaining, build_upgrade_hint
 
 logger = logging.getLogger("looma.resume")
@@ -36,6 +37,7 @@ def _quota_exceeded_response(tier: str):
 
 @resume_bp.route("/parse", methods=["POST"])
 @optional_auth
+@require_consent("resume_parse")
 def parse_resume():
     """Parse resume text to structured data."""
     data = request.get_json() or {}
@@ -64,6 +66,7 @@ def parse_resume():
 
 @resume_bp.route("/upload", methods=["POST"])
 @optional_auth
+@require_consent("resume_upload")
 def upload_resume():
     """Upload resume file (PDF/DOCX/Word) for AI parsing.
 
@@ -166,6 +169,7 @@ def upload_resume():
 
 @resume_bp.route("/improve", methods=["POST"])
 @optional_auth
+@require_consent("resume_parse")
 def improve_resume():
     """Generate AI-powered improvement suggestions for a resume.
 

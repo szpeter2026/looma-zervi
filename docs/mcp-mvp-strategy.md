@@ -160,9 +160,11 @@ edd9b91 feat: 内测闭环埋点、SaaS 候选者链路与架构审议文档    
 
 ### MVP 上线前
 
-- [ ] JWT 认证接入 — 3 个 MCP 工具添加 token 验证
-- [ ] Health Check 端点 — 暴露 `health://status` resource
-- [ ] `verify-p0-local.sh` 加入 MCP health check 步骤
+- [x] JWT 认证接入 — 3 个 MCP 工具添加 token 验证
+- [x] Health Check 端点 — 暴露 `health://status` resource
+- [x] `verify-p0-local.sh` 加入 MCP health check 步骤
+- [x] Consent 后端 enforce — resume/upload, ask, jobs/match 挂 `@require_consent`
+- [x] MCP `parse_resume` 对齐 `resume_upload` consent
 
 ### 内测后
 

@@ -135,7 +135,7 @@ def match_jobs(resume_text: str, token: str = "", user_id: str = "", top_k: int 
 
 @mcp.tool(
     name="parse_resume",
-    description="Parse resume text into structured JSON (requires JWT token)",
+    description="Parse resume text into structured JSON (requires JWT token + consent)",
 )
 def parse_resume(resume_text: str, token: str = "", user_id: str = "") -> dict:
     """Parse unstructured resume text into structured JSON fields.
@@ -150,9 +150,19 @@ def parse_resume(resume_text: str, token: str = "", user_id: str = "") -> dict:
         Authenticated user id (optional, cross-checked against token).
     """
     try:
-        _auth_guard(token, user_id)
+        payload = _auth_guard(token, user_id)
     except MCPAuthError as e:
         return _error_dict(str(e))
+
+    # Consent gate: align with resume_upload consent enforcement
+    uid = payload["sub"]
+    try:
+        from src.compliance.consent import get_consent_manager
+        cm = get_consent_manager()
+        if not cm.check(uid, "resume_upload"):
+            return _error_dict("Consent required: resume_upload (请先授权简历上传)", "consent_required")
+    except Exception as e:
+        logger.warning(f"Consent check skipped (DB unavailable): {e}")
 
     try:
         from src.agents.document_agents import run_document_analysis

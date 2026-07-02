@@ -16,6 +16,7 @@ from collections import OrderedDict
 from flask import Blueprint, request, jsonify, current_app, g
 
 from src.api.auth.decorators import require_auth, optional_auth
+from src.compliance.consent import require_consent
 from src.utils.quota import (
     consume_with_boost, get_remaining, build_upgrade_hint,
     QUOTA_LIMITS, RESOURCE_ASK,
@@ -57,6 +58,7 @@ def _cache_set(query: str, result: dict) -> None:
 
 @ask_bp.route("/ask", methods=["POST"])
 @optional_auth
+@require_consent("ask_rag")
 def ask_question():
     """
     Ask a question → intent dispatch → RAG/poetry/MBTI/job match etc.
@@ -94,11 +96,11 @@ def ask_question():
     if cached is not None:
         logger.info(f"[cache HIT] {query[:50]!r}")
         return jsonify(
-        answer=cached["answer"],
-        intent=cached["intent"],
-        intent_confidence=cached.get("intent_confidence"),
-        sources=cached["sources"],
-    )
+            answer=cached["answer"],
+            intent=cached["intent"],
+            intent_confidence=cached.get("intent_confidence"),
+            sources=cached["sources"],
+        )
 
     t0 = time.time()
     _timing: dict[str, int] = {}
