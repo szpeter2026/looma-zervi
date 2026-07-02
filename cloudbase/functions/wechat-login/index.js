@@ -12,7 +12,8 @@
 
 const https = require("https");
 
-const LOOMA_API_BASE = "https://api.genz.ltd";
+// TODO: ICP 备案后替换为正式 API 域名
+const LOOMA_API_BASE = "https://your-domain.com";
 
 exports.main = async (event, context) => {
   const { code } = event;

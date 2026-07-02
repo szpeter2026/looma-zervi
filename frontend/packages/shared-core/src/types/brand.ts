@@ -18,7 +18,7 @@ export const BRAND_PLANETX: BrandConfig = {
   name: "PlanetX",
   slogan: "你的职业飞行器",
   primaryColor: "#6C63FF",
-  domain: "planetx.genz.ltd",
+  domain: "127.0.0.1",  // TODO: ICP 备案后替换为正式域名
 };
 
 export const BRAND_SAAS: BrandConfig = {
@@ -26,7 +26,7 @@ export const BRAND_SAAS: BrandConfig = {
   name: "T空间",
   slogan: "让 AI 成为你的招聘合伙人",
   primaryColor: "#1a6ff5",
-  domain: "t.genz.ltd",
+  domain: "127.0.0.1",  // TODO: ICP 备案后替换为正式域名
 };
 
 export const BRAND = {

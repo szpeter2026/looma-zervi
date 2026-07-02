@@ -36,7 +36,7 @@ describe("validation", () => {
   });
 
   it("isValidUrl validates absolute URLs", () => {
-    expect(isValidUrl("https://api.genz.ltd/v1/health")).toBe(true);
+    expect(isValidUrl("https://example.com/v1/health")).toBe(true);
     expect(isValidUrl("not-a-url")).toBe(false);
   });
 });

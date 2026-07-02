@@ -8,7 +8,7 @@
 #
 # 示例:
 #   ./scripts/verify-deployment.sh 123.45.67.89
-#   ./scripts/verify-deployment.sh api.genz.ltd
+#   ./scripts/verify-deployment.sh 47.115.168.107
 #
 # 验证清单:
 #   1. 基础设施 — Nginx / Backend 存活
