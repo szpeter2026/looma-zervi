@@ -1,51 +1,101 @@
-﻿所在位置 行:1 字符: 1
-+ from __future__ import annotations
-+ ~~~~
-此语言版本中不支持“from”关键字。
-所在位置 行:3 字符: 1
-+ from unittest.mock import MagicMock
-+ ~~~~
-此语言版本中不支持“from”关键字。
-所在位置 行:4 字符: 1
-+ from src.compliance.consent import Con
-sentManager, ALL_SCOPES
-+ ~~~~
-此语言版本中不支持“from”关键字。
-所在位置 行:5 字符: 1
-+ from src.compliance.redact import reda
-ct_pii, detect_pii
-+ ~~~~
-此语言版本中不支持“from”关键字。
-所在位置 行:6 字符: 1
-+ from src.compliance.audit import Audit
-Logger, _anonymize_ip
-+ ~~~~
-此语言版本中不支持“from”关键字。
-所在位置 行:9 字符: 8
-+     def test_grant_new(self):
-+        ~
-缺少“class”正文(在“class”声明中)。
-所在位置 行:10 字符: 24
-+         db = MagicMock()
-+                        ~
-“(”后面应为表达式。
-所在位置 行:11 字符: 26
-+         conn = MagicMock()
-+                          ~
-“(”后面应为表达式。
-所在位置 行:20 字符: 24
-+         db = MagicMock()
-+                        ~
-“(”后面应为表达式。
-所在位置 行:21 字符: 26
-+         conn = MagicMock()
-+                          ~
-“(”后面应为表达式。
-并未报告所有分析错误。请更正报告的错误并
-重试。
-    + CategoryInfo          : ParserErr 
-   or: (:) [], ParentContainsErrorReco  
-  rdException
-    + FullyQualifiedErrorId : ReservedK 
-   eywordNotAllowed
- 
+"""Tests for Compliance Gate modules."""
+import json
+import pytest
+from unittest.mock import MagicMock
+from src.compliance.consent import ConsentManager, ALL_SCOPES
+from src.compliance.redact import redact_pii, detect_pii
+from src.compliance.audit import AuditLogger, _anonymize_ip
+
+
+class TestConsentManager:
+    def test_grant_new(self):
+        db = MagicMock()
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = None
+        db.get_conn.return_value.__enter__.return_value = conn
+        cm = ConsentManager(db=db)
+        r = cm.grant("user-1", "resume_upload")
+        assert r["already_granted"] is False
+        assert r["consent_id"]
+
+    def test_grant_duplicate(self):
+        db = MagicMock()
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = {"id": "ex1"}
+        db.get_conn.return_value.__enter__.return_value = conn
+        cm = ConsentManager(db=db)
+        r = cm.grant("user-1", "resume_upload")
+        assert r["already_granted"] is True
+
+    def test_check_true(self):
+        db = MagicMock()
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = {"id": "c1"}
+        db.get_conn.return_value.__enter__.return_value = conn
+        cm = ConsentManager(db=db)
+        assert cm.check("user-1", "resume_upload") is True
+
+    def test_check_false(self):
+        db = MagicMock()
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = None
+        db.get_conn.return_value.__enter__.return_value = conn
+        cm = ConsentManager(db=db)
+        assert cm.check("user-1", "credit_query") is False
+
+    def test_revoke(self):
+        db = MagicMock()
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = {"id": "c1"}
+        db.get_conn.return_value.__enter__.return_value = conn
+        cm = ConsentManager(db=db)
+        r = cm.revoke("user-1", "resume_upload")
+        assert r["revoked"] is True
+
+
+class TestRedaction:
+    def test_redact_mobile(self):
+        safe, reds = redact_pii("我叫张三，手机号13812345678")
+        assert "13812345678" not in safe
+        assert "[PII_PHONE_" in safe
+        assert len(reds) == 1
+
+    def test_redact_email(self):
+        safe, reds = redact_pii("邮箱：zhangsan@example.com")
+        assert "zhangsan@example.com" not in safe
+        assert "[PII_EMAIL_" in safe
+
+    def test_no_pii(self):
+        safe, reds = redact_pii("今天天气真好")
+        assert safe == "今天天气真好"
+        assert len(reds) == 0
+
+    def test_detect_pii(self):
+        findings = detect_pii("电话13800001111")
+        assert any(f["type"] == "cn_mobile" for f in findings)
+
+
+class TestAuditLogger:
+    def test_log(self):
+        db = MagicMock()
+        conn = MagicMock()
+        db.get_conn.return_value.__enter__.return_value = conn
+        audit = AuditLogger(db=db)
+        eid = audit.log(actor="user-1", action="resume_parse", resource_type="resume")
+        assert eid
+        conn.execute.assert_called_once()
+
+    def test_log_no_db(self):
+        audit = AuditLogger(db=None)
+        assert audit.log(actor="u1", action="x", resource_type="y") == ""
+
+
+class TestIPAnonymization:
+    def test_mask_last_octet(self):
+        assert _anonymize_ip("192.168.1.100") == "192.168.1.0"
+
+    def test_localhost(self):
+        assert _anonymize_ip("127.0.0.1") == "127.0.0.0"
+
+    def test_malformed(self):
+        assert _anonymize_ip("not-an-ip") == ""
