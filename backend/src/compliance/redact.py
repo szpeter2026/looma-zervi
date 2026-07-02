@@ -12,10 +12,10 @@ logger = logging.getLogger("looma.compliance.redact")
 
 REDACTION_RULES: list[tuple[str, str, str]] = [
     ("cn_id_card",
-     r"\b\d{6}(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]\b",
+     r"(?<!\d)\d{6}(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx](?!\d)",
      "[PII_ID_{token}]"),
     ("cn_mobile",
-     r"(?<![0-9])1[3-9]\d{9}(?![0-9])",
+     r"(?<!\d)1[3-9]\d{9}(?!\d)",
      "[PII_PHONE_{token}]"),
     ("cn_name",
      r"(?:名叫|叫|姓名[：:]?\s*|名字[：:]?\s*|我是|我是叫)\s*([\u4e00-\u9fff]{2,4})",

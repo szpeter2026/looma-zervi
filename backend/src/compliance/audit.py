@@ -6,16 +6,14 @@ logger = logging.getLogger('looma.compliance.audit')
 
 def _now_iso(): return datetime.now().isoformat()
 
+_UNSET = object()
+
 class AuditLogger:
-    def __init__(self, db=None): self._db = db
+    def __init__(self, db=_UNSET): self._db = db
     @property
     def db(self):
-        if self._db is not None:
-            return self._db
-        try:
-            return getattr(current_app, '_db', None) or getattr(g, '_db', None)
-        except RuntimeError:
-            return None
+        if self._db is not _UNSET: return self._db
+        return getattr(current_app, '_db', None) or getattr(g, '_db', None)
     def log(self, *, actor, action, resource_type, resource_id='', consent_id='', metadata=None, ip='', user_agent=''):
         db = self.db
         if not db: return ''
@@ -49,10 +47,10 @@ def _anonymize_ip(ip):
     return ''
 
 _al = None
-def get_audit_logger(db=None):
+def get_audit_logger(db=_UNSET):
     global _al
     if _al is None: _al = AuditLogger(db=db)
-    elif db and not _al._db: _al._db = db
+    elif db is not _UNSET and _al._db is _UNSET: _al._db = db
     return _al
 def reset_audit_logger():
     global _al; _al = None
