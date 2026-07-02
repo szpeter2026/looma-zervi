@@ -14,7 +14,7 @@ Endpoints:
 import bcrypt
 from flask import Blueprint, request, jsonify, current_app, g
 
-from src.api.auth.jwt_handler import sign_token, verify_token, get_current_user_id
+from src.api.auth.jwt_handler import sign_token, verify_token, get_current_user_id, sign_token_for_user
 from src.api.auth.decorators import require_auth
 from src.api.auth.wechat_auth import code2session
 
@@ -218,9 +218,7 @@ def refresh_token():
     if not user:
         return jsonify(error="not_found", message="user not found"), 404
 
-    token = sign_token(user["id"], extra_claims={
-        "tier": user.get("tier", "free"),
-    })
+    token = sign_token_for_user(db, g.user_id)
     return jsonify(
         access_token=token,
         token_type="bearer",

@@ -6,11 +6,9 @@
  * Uses shared-core typed API factories for backend contract alignment.
  */
 import { useState, useEffect } from "react";
-import { createApiClient, createReportsApi, type Report, type ReportType } from "@looma/shared-core";
+import { createReportsApi, type Report, type ReportType } from "@looma/shared-core";
 import { formatDate } from "@looma/shared-core";
-import { useSaasAuthStore } from "../auth/authStore";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+import { createSaasApiClient } from "../../api/saasApiClient";
 
 const typeMap: Record<string, { label: string; emoji: string }> = {
   daily: { label: "日报", emoji: "📊" },
@@ -19,16 +17,12 @@ const typeMap: Record<string, { label: string; emoji: string }> = {
 };
 
 export default function Reports() {
-  const { token } = useSaasAuthStore();
   const [reports, setReports] = useState<Report[]>([]);
   const [type, setType] = useState<ReportType>("daily");
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const api = createApiClient({
-    baseURL: API_BASE,
-    getToken: () => token,
-  });
+  const api = createSaasApiClient();
   const reportsApi = createReportsApi(api);
 
   const fetchReports = async () => {

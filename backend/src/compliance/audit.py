@@ -10,8 +10,12 @@ class AuditLogger:
     def __init__(self, db=None): self._db = db
     @property
     def db(self):
-        if self._db: return self._db
-        return getattr(current_app, '_db', None) or getattr(g, '_db', None)
+        if self._db is not None:
+            return self._db
+        try:
+            return getattr(current_app, '_db', None) or getattr(g, '_db', None)
+        except RuntimeError:
+            return None
     def log(self, *, actor, action, resource_type, resource_id='', consent_id='', metadata=None, ip='', user_agent=''):
         db = self.db
         if not db: return ''

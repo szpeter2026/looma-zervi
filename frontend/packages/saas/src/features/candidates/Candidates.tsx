@@ -4,23 +4,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  createApiClient,
   createEnterpriseApi,
   type Candidate,
   type EnterpriseProfile,
 } from "@looma/shared-core";
+import { createSaasApiClient } from "../../api/saasApiClient";
 import { useSaasAuthStore } from "../auth/authStore";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-
 function getEnterpriseApi() {
-  return createEnterpriseApi(
-    createApiClient({
-      baseURL: API_BASE,
-      getToken: () => useSaasAuthStore.getState().token,
-      onUnauthorized: () => useSaasAuthStore.getState().logout(),
-    }),
-  );
+  return createEnterpriseApi(createSaasApiClient());
 }
 
 export default function Candidates() {

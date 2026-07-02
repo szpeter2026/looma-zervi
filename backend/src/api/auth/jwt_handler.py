@@ -7,6 +7,18 @@ import time
 from flask import current_app, g
 
 
+def sign_token_for_user(db, user_id: str) -> str:
+    """Issue a JWT from the current DB user record (tier/email synced)."""
+    user = db.get_user_by_id(user_id)
+    if not user:
+        raise ValueError("user not found")
+    extra = {"tier": user.get("tier", "free")}
+    email = user.get("email")
+    if email:
+        extra["email"] = email
+    return sign_token(user_id, extra_claims=extra)
+
+
 def sign_token(user_id: str, extra_claims: dict = None) -> str:
     """
     Sign a looma JWT for the given user_id.

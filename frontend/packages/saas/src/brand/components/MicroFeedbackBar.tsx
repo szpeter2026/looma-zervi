@@ -3,13 +3,11 @@
  */
 import { useState } from "react";
 import {
-  createApiClient,
   createAnalyticsApi,
   getAnalyticsSessionId,
   type MicroFeedbackContext,
 } from "@looma/shared-core";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+import { createSaasApiClient } from "../../api/saasApiClient";
 
 interface Props {
   context: MicroFeedbackContext;
@@ -30,10 +28,9 @@ export function MicroFeedbackBar({
 
   const submit = async (score: number) => {
     try {
-      const client = createApiClient({
-        baseURL: API_BASE,
-        getToken: getToken ?? (() => null),
-      });
+      const client = createSaasApiClient(
+        getToken ? { getToken } : undefined,
+      );
       await createAnalyticsApi(client).microFeedback({
         context,
         score,

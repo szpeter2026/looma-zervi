@@ -15,6 +15,7 @@ import uuid
 from flask import Blueprint, request, jsonify, current_app, g
 
 from src.api.auth.decorators import require_auth
+from src.api.auth.jwt_handler import sign_token_for_user
 from src.analytics.events import (
     log_product_event,
     platform_from_request,
@@ -147,13 +148,23 @@ def use_code():
             )
 
             tier_grant = invite.get("tier_grant") or "free"
+            tier_updated = False
             if tier_grant not in ("free", PROFILE_SHARE_GRANT):
                 conn.execute(
                     "UPDATE users SET tier = ?, updated_at = datetime('now') WHERE id = ?",
                     (tier_grant, g.user_id),
                 )
+                tier_updated = True
 
-        return jsonify(consumed=True, code=code, tier_granted=invite.get("tier_grant", "free"))
+        payload = {"consumed": True, "code": code, "tier_granted": invite.get("tier_grant", "free")}
+        if tier_updated:
+            access_token = sign_token_for_user(db, g.user_id)
+            payload.update(
+                access_token=access_token,
+                token_type="bearer",
+                expires_in=current_app.config["JWT_EXPIRY_HOURS"] * 3600,
+            )
+        return jsonify(payload)
     except Exception as e:
         return jsonify(error="use_failed", message=str(e)), 500
 

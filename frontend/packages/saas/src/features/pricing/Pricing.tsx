@@ -5,14 +5,13 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   BRAND_SAAS,
-  createApiClient,
+  createAuthApi,
   createPaymentApi,
   CLOSED_LOOP_EVENTS,
   trackEvent,
 } from "@looma/shared-core";
+import { createSaasApiClient } from "../../api/saasApiClient";
 import { useSaasAuthStore } from "../auth/authStore";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 interface PlanCard {
   tier: string;
@@ -78,7 +77,7 @@ const plans: PlanCard[] = [
 ];
 
 export default function Pricing() {
-  const { isAuthenticated, token, fetchQuota } = useSaasAuthStore();
+  const { isAuthenticated, token, applySessionToken } = useSaasAuthStore();
   const navigate = useNavigate();
   const [upgrading, setUpgrading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -92,12 +91,14 @@ export default function Pricing() {
     setMessage(null);
     trackEvent(CLOSED_LOOP_EVENTS.TRIAL_CLICKED);
     try {
-      const client = createApiClient({
-        baseURL: API_BASE,
-        getToken: () => useSaasAuthStore.getState().token,
-      });
-      await createPaymentApi(client).upgrade("pro");
-      await fetchQuota();
+      const client = createSaasApiClient();
+      const resp = await createPaymentApi(client).upgrade("pro");
+      if (resp.access_token) {
+        await applySessionToken(resp.access_token);
+      } else {
+        const refreshed = await createAuthApi(client).refresh();
+        await applySessionToken(refreshed.access_token);
+      }
       setMessage("已开通 Pro 试用（内测 Stub，无需真实支付）");
     } catch {
       setMessage("升级失败，可能已是 Pro 用户");

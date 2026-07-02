@@ -30,14 +30,14 @@ def _parse_credit_text(text: str) -> dict | None:
     prompt = (
         "你是一个企业征信评估专家。根据以下文本，提取并评估该企业的信用状况，"
         "输出 JSON 格式：\n"
-        "{\n"
+        "{{\n"
         '  "entity_name": "企业名称",\n'
         '  "report_type": "报告类型（如：企业信用报告/经营风险评估/工商信息摘要）",\n'
         '  "summary": "信用评估摘要（200字以内，包含经营状态、风险提示、信用等级评估）"\n'
-        "}\n\n"
+        "}}\n\n"
         "只输出 JSON，不要任何解释或前缀。\n\n"
-        "待评估文本：\n{text}"
-    ).format(text=text[:4000])
+        f"待评估文本：\n{text[:4000]}"
+    )
 
     try:
         response = _call_llm(prompt)

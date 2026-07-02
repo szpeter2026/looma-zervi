@@ -118,3 +118,47 @@ def test_bridge_not_implemented(client):
     """Supabase bridge should return 501 in MVP."""
     resp = client.post("/v1/auth/bridge", json={})
     assert resp.status_code == 501
+
+
+def test_require_auth_rejects_unknown_user(client):
+    """JWT for deleted user should return 401 on protected routes."""
+    resp = client.post("/v1/auth/register", json={
+        "email": "ghost@test.com",
+        "password": "password123",
+    })
+    token = resp.get_json()["access_token"]
+    user_id = resp.get_json()["user"]["id"]
+
+    db = client.application._db
+    with db.get_conn() as conn:
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+    resp = client.get("/v1/auth/profile", headers={
+        "Authorization": f"Bearer {token}",
+    })
+    assert resp.status_code == 401
+
+
+def test_payment_upgrade_returns_fresh_token(client):
+    """Upgrade should return access_token with updated tier claim."""
+    resp = client.post("/v1/auth/register", json={
+        "email": "upgrade@test.com",
+        "password": "password123",
+    })
+    token = resp.get_json()["access_token"]
+
+    resp = client.post(
+        "/v1/payment/upgrade",
+        json={"tier": "pro"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert "access_token" in data
+    assert data["tier"] == "pro"
+
+    resp = client.get("/v1/payment/status", headers={
+        "Authorization": f"Bearer {data['access_token']}",
+    })
+    assert resp.status_code == 200
+    assert resp.get_json()["tier"] == "pro"

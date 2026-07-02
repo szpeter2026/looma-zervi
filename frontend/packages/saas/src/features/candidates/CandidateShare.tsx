@@ -5,15 +5,13 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   BRAND_SAAS,
-  createApiClient,
   createReferralApi,
   type ProfileShareView,
 } from "@looma/shared-core";
+import { createSaasApiClient } from "../../api/saasApiClient";
 import { parsePersonalityDetail } from "./personalityDetail";
 import { MicroFeedbackBar } from "../../brand/components/MicroFeedbackBar";
 import { MICRO_FEEDBACK_CONTEXT } from "@looma/shared-core";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 export default function CandidateShare() {
   const { code } = useParams<{ code: string }>();
@@ -28,7 +26,7 @@ export default function CandidateShare() {
       setLoading(false);
       return;
     }
-    const client = createApiClient({ baseURL: API_BASE });
+    const client = createSaasApiClient();
     const api = createReferralApi(client);
     api
       .profileView(code.toUpperCase())

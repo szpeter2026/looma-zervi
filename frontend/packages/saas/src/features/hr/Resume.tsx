@@ -6,24 +6,18 @@
  * Uses authStore for token, direct fetch for file upload.
  */
 import { useState, useRef, useMemo } from "react";
-import { createApiClient, createResumeApi, type ParsedResume } from "@looma/shared-core";
-import { useSaasAuthStore } from "../auth/authStore";
+import { createResumeApi, type ParsedResume } from "@looma/shared-core";
+import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
-
 export default function Resume() {
-  const { token } = useSaasAuthStore();
   const [resume, setResume] = useState<ParsedResume | null>(null);
   const [parsing, setParsing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const api = useMemo(() => createApiClient({
-    baseURL: API_BASE,
-    getToken: () => token,
-  }), [token]);
+  const api = useMemo(() => createSaasApiClient(), []);
   const resumeApi = createResumeApi(api);
   const { ensureConsent, consentPrompt } = useConsent(() => api);
 

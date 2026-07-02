@@ -12,6 +12,7 @@ For production, replace stub logic with WeChat Pay / Alipay integration.
 from flask import Blueprint, jsonify, g, request, current_app
 
 from src.api.auth.decorators import require_auth
+from src.api.auth.jwt_handler import sign_token_for_user
 from src.analytics.events import (
     log_product_event,
     platform_from_request,
@@ -128,9 +129,13 @@ def upgrade_tier():
         )
 
     plan = PLANS[new_tier]
+    access_token = sign_token_for_user(db, g.user_id)
     return jsonify(
         tier=new_tier,
         plan=plan,
         status="active",
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=current_app.config["JWT_EXPIRY_HOURS"] * 3600,
         message="[STUB] Tier upgraded without real payment. Replace with WeChat Pay for production.",
     )

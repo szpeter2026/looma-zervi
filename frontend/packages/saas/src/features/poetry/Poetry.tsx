@@ -11,10 +11,7 @@
  * Uses SaaS brand tokens + Tailwind utility classes.
  */
 import { useState, useEffect, useCallback } from "react";
-import { createApiClient } from "@looma/shared-core";
-import { useSaasAuthStore } from "../auth/authStore";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+import { createSaasApiClient } from "../../api/saasApiClient";
 
 interface Poem {
   id: number;
@@ -55,8 +52,6 @@ interface PoetryStats {
 type ViewMode = "browse" | "search" | "discover";
 
 export default function Poetry() {
-  const { token } = useSaasAuthStore();
-
   // Core state
   const [mode, setMode] = useState<ViewMode>("browse");
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,12 +74,8 @@ export default function Poetry() {
   const [loading, setLoading] = useState(false);
 
   const api = useCallback(
-    () =>
-      createApiClient({
-        baseURL: API_BASE,
-        getToken: () => token,
-      }),
-    [token]
+    () => createSaasApiClient(),
+    [],
   );
 
   // Load stats on mount

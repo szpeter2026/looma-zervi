@@ -479,14 +479,24 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
   },
 
   checkSession: async () => {
-    // 检查 localStorage 中是否有 token（由 createApiClient 的 getToken 返回）
     const state = get()
-    if (!state.token) {
+    let token = state.token
+    if (!token) {
+      try {
+        token = localStorage.getItem("looma_token")
+      } catch {
+        token = null
+      }
+    }
+    if (!token) {
       setTimeout(() => set({ screen: 'auth' }), 2000)
       return
     }
+    if (token !== state.token) {
+      set({ token })
+      getApiClient().setToken(token)
+    }
     try {
-      // 验证 token + 加载 profile
       await get().loadProfile()
       setTimeout(() => set({ screen: get().identity ? 'hub' : 'onboarding' }), 1500)
     } catch {

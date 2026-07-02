@@ -1,25 +1,17 @@
 import { useState } from "react";
 import {
-  createApiClient,
   createAnalyticsApi,
   getAnalyticsSessionId,
   MICRO_FEEDBACK_CONTEXT,
 } from "@looma/shared-core";
-import { usePlanetXStore } from "../../features/auth/planetxAuthStore";
-
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "http://127.0.0.1:5200";
+import { getApiClient } from "../../features/auth/planetxAuthStore";
 
 export default function PlanetXMicroFeedback() {
   const [done, setDone] = useState(false);
-  const token = usePlanetXStore((s) => s.token);
 
   const submit = async (score: number) => {
     try {
-      const client = createApiClient({
-        baseURL: API_BASE,
-        getToken: () => token,
-      });
+      const client = getApiClient();
       await createAnalyticsApi(client).microFeedback({
         context: MICRO_FEEDBACK_CONTEXT.PLANETX_RESULT,
         score,

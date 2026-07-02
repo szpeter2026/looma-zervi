@@ -17,9 +17,8 @@
  *   />
  */
 import { useState } from 'react'
-import { createApiClient, createNarrativeApi } from '@looma/shared-core'
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? ''
+import { createNarrativeApi } from '@looma/shared-core'
+import { getApiClient } from '../auth/planetxAuthStore'
 
 interface Props {
   sessionId: string
@@ -53,7 +52,7 @@ export default function FeedbackSurvey({ sessionId, domain, onDismiss }: Props) 
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
 
-  const api = createApiClient({ baseURL: API_BASE })
+  const api = getApiClient()
   const narrativeApi = createNarrativeApi(api)
 
   const submit = async () => {

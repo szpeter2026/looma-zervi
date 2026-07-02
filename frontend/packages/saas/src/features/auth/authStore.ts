@@ -8,19 +8,13 @@
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { createApiClient, createAuthApi, createQuotaApi, type UserProfile, type QuotaResponse } from "@looma/shared-core";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+import { createAuthApi, createQuotaApi, type UserProfile, type QuotaResponse } from "@looma/shared-core";
+import { createSaasApiClient } from "../../api/saasApiClient";
 
 export type QuotaInfo = QuotaResponse;
 
-/** Creates an ApiClient bound to the current auth store token. */
 function getClient() {
-  return createApiClient({
-    baseURL: API_BASE,
-    getToken: () => useSaasAuthStore.getState().token,
-    onUnauthorized: () => useSaasAuthStore.getState().logout(),
-  });
+  return createSaasApiClient();
 }
 
 function getAuthApi() {
@@ -39,6 +33,8 @@ interface AuthState {
   logout: () => void;
   fetchProfile: () => Promise<void>;
   fetchQuota: () => Promise<void>;
+  /** 写入新 JWT 并刷新 profile/quota（tier 升级等场景） */
+  applySessionToken: (accessToken: string) => Promise<void>;
   /** 从 PlanetX 共享的 looma_token 自动登录 */
   tryAutoLogin: () => Promise<void>;
 }
@@ -88,8 +84,7 @@ export const useSaasAuthStore = create<AuthState>()(
           const profile = await api.profile();
           set({ user: profile, isAuthenticated: true });
         } catch {
-          // Token expired/invalid -> logout
-          set({ token: null, user: null, isAuthenticated: false });
+          get().logout();
         }
       },
 
@@ -104,23 +99,29 @@ export const useSaasAuthStore = create<AuthState>()(
         }
       },
 
+      applySessionToken: async (accessToken: string) => {
+        getClient().setToken(accessToken);
+        set({ token: accessToken, isAuthenticated: true });
+        await get().fetchProfile();
+        await get().fetchQuota();
+      },
+
       /** 从 PlanetX 共享的 looma_token 自动登录（C→B 互通核心） */
       tryAutoLogin: async () => {
         const state = get();
-        // 已有有效 token，跳过
         if (state.token && state.isAuthenticated) return;
+
+        const sharedToken = localStorage.getItem("looma_token") || state.token;
+        if (!sharedToken) return;
+
+        set({ token: sharedToken, isLoading: true });
         try {
-          const sharedToken = localStorage.getItem("looma_token");
-          if (!sharedToken) return;
-          // 避免重复水合
-          if (state.token === sharedToken && state.isAuthenticated) return;
-          set({ token: sharedToken, isLoading: true });
           await get().fetchProfile();
           await get().fetchQuota();
         } catch {
-          // Token 无效，清除
-          localStorage.removeItem("looma_token");
-          set({ token: null, user: null, isLoading: false });
+          get().logout();
+        } finally {
+          set({ isLoading: false });
         }
       },
     }),

@@ -32,15 +32,16 @@ log_info "工作目录: $BACKEND_DIR"
 log_info "仓库根目录: $REPO_ROOT"
 
 # ============================================
-# Step 1: 检测 Python
+# Step 1: 检测 Python（markitdown 等依赖要求 3.10+）
 # ============================================
 PYTHON=""
-for candidate in python3.11 python3.10 python3.9 python3; do
+MIN_MINOR=10
+for candidate in python3.12 python3.11 python3.10 python3; do
     if command -v "$candidate" &>/dev/null; then
         version=$("$candidate" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
         major=$("$candidate" -c 'import sys; print(sys.version_info.major)')
         minor=$("$candidate" -c 'import sys; print(sys.version_info.minor)')
-        if [ "$major" -ge 3 ] && [ "$minor" -ge 9 ]; then
+        if [ "$major" -ge 3 ] && [ "$minor" -ge "$MIN_MINOR" ]; then
             PYTHON="$candidate"
             log_info "检测到 Python $version ($PYTHON)"
             break
@@ -49,7 +50,9 @@ for candidate in python3.11 python3.10 python3.9 python3; do
 done
 
 if [ -z "$PYTHON" ]; then
-    log_error "未找到 Python 3.9+，请安装后再试"
+    log_error "未找到 Python 3.10+（markitdown / 文档解析需要）"
+    log_error "macOS 安装: brew install python@3.12"
+    log_error "然后删除旧 venv 再启动: rm -rf venv && bash dev.sh"
     exit 1
 fi
 
@@ -64,6 +67,16 @@ if [ ! -d "venv" ]; then
 else
     log_info "虚拟环境已存在"
     VENV_FRESH=false
+    VENV_PY=$(venv/bin/python -c 'import sys; print(sys.version_info.minor)' 2>/dev/null || echo "0")
+    WANT_PY=$("$PYTHON" -c 'import sys; print(sys.version_info.minor)')
+    if [ "$VENV_PY" -lt 10 ] 2>/dev/null || [ "$VENV_PY" != "$WANT_PY" ]; then
+        log_warn "现有 venv 为 Python 3.$VENV_PY，需要 3.$WANT_PY+（markitdown 要求 3.10+）"
+        log_step "正在用 $PYTHON 重建虚拟环境..."
+        rm -rf venv
+        $PYTHON -m venv venv
+        VENV_FRESH=true
+        log_info "虚拟环境已重建"
+    fi
 fi
 
 # 激活虚拟环境

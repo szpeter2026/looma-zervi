@@ -12,8 +12,8 @@
  * Uses shared-core typed API factories for backend contract alignment.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { createApiClient, createJobsApi, createCreditApi, type Job, type JobMatchItem, type CreditAnalysis } from "@looma/shared-core";
-import { useSaasAuthStore } from "../auth/authStore";
+import { createJobsApi, createCreditApi, type Job, type JobMatchItem, type CreditAnalysis } from "@looma/shared-core";
+import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
 
 // ── Types ──
@@ -29,8 +29,6 @@ interface ParsedJobData {
 }
 
 type TabId = "browse" | "upload";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 // ── Helpers ──
 
@@ -54,7 +52,6 @@ const SCORE_LABELS: Record<string, string> = {
 // ── Component ──
 
 export default function Jobs() {
-  const { token } = useSaasAuthStore();
   const [tab, setTab] = useState<TabId>("browse");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [matches, setMatches] = useState<JobMatchItem[] | null>(null);
@@ -75,10 +72,7 @@ export default function Jobs() {
   const dropRef = useRef<HTMLDivElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const api = useMemo(() => createApiClient({
-    baseURL: API_BASE,
-    getToken: () => token,
-  }), [token]);
+  const api = useMemo(() => createSaasApiClient(), []);
   const jobsApi = createJobsApi(api);
   const creditApi = createCreditApi(api);
   const { ensureConsent, consentPrompt } = useConsent(() => api);

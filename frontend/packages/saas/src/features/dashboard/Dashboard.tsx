@@ -6,7 +6,6 @@
  * Uses authStore for user/quota, ApiClient for health check.
  */
 import { useEffect, useState } from "react";
-import { createApiClient } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
 import { BRAND_SAAS } from "@looma/shared-core";
 
@@ -22,7 +21,7 @@ interface HealthStatus {
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export default function Dashboard() {
-  const { user, quota, token, isAuthenticated, fetchQuota } = useSaasAuthStore();
+  const { user, quota, isAuthenticated, fetchQuota } = useSaasAuthStore();
   const [health, setHealth] = useState<HealthStatus | null>(null);
 
   useEffect(() => {
@@ -30,14 +29,12 @@ export default function Dashboard() {
   }, [isAuthenticated, fetchQuota]);
 
   useEffect(() => {
-    createApiClient({
-      baseURL: API_BASE,
-      getToken: () => token,
-    })
-      .get<HealthStatus>("/health")
-      .then(setHealth)
+    if (!API_BASE) return;
+    fetch(`${API_BASE.replace(/\/$/, "")}/health`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setHealth(data))
       .catch(() => {});
-  }, [token]);
+  }, []);
 
   const askRecord = quota?.records?.find((r) => r.resource === "ask");
   const usagePercent = askRecord && askRecord.daily_limit > 0

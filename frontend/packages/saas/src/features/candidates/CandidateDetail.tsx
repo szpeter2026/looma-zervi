@@ -3,10 +3,8 @@
  */
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { createApiClient, createEnterpriseApi, type Candidate } from "@looma/shared-core";
-import { useSaasAuthStore } from "../auth/authStore";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+import { createEnterpriseApi, type Candidate } from "@looma/shared-core";
+import { createSaasApiClient } from "../../api/saasApiClient";
 
 export default function CandidateDetail() {
   const { id } = useParams<{ id: string }>();
@@ -15,11 +13,7 @@ export default function CandidateDetail() {
 
   useEffect(() => {
     if (!id) return;
-    const client = createApiClient({
-      baseURL: API_BASE,
-      getToken: () => useSaasAuthStore.getState().token,
-      onUnauthorized: () => useSaasAuthStore.getState().logout(),
-    });
+    const client = createSaasApiClient();
     createEnterpriseApi(client)
       .getCandidate(id)
       .then(setCandidate)

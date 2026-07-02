@@ -2,7 +2,7 @@
 # verify-closed-loop.sh — 最小闭环 API 烟雾测试（备案前内测用）
 set -euo pipefail
 
-API_BASE="${API_BASE:-http://localhost:5000}"
+API_BASE="${API_BASE:-http://localhost:5200}"
 SEEKER_EMAIL="loop-seeker-$(date +%s)@test.local"
 HR_EMAIL="loop-hr-$(date +%s)@test.local"
 PASS="loop-test-pass"

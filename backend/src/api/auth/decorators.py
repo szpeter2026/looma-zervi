@@ -3,14 +3,14 @@ Authentication decorators for route protection.
 Replaces the old AUTH_STUB with real JWT verification.
 """
 from functools import wraps
-from flask import request, jsonify, g
+from flask import request, jsonify, g, current_app
 from src.api.auth.jwt_handler import verify_token
 
 
 def require_auth(f):
     """
     Require a valid looma JWT in the Authorization header.
-    Sets g.user_id and g.user_tier for the handler.
+    Verifies token, loads user from DB, sets g.user_id / g.user_tier / g.user_role.
     """
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -24,8 +24,18 @@ def require_auth(f):
         except Exception as e:
             return jsonify(error="unauthorized", message=f"Invalid token: {str(e)}"), 401
 
-        g.user_id = payload["sub"]
-        g.user_tier = payload.get("tier", "free")
+        user_id = payload["sub"]
+        db = getattr(current_app, "_db", None)
+        if db is None:
+            return jsonify(error="server_error", message="database unavailable"), 500
+
+        user = db.get_user_by_id(user_id)
+        if not user:
+            return jsonify(error="unauthorized", message="user not found"), 401
+
+        g.user_id = user_id
+        g.user_tier = user.get("tier", "free")
+        g.user_role = user.get("role", "user")
         return f(*args, **kwargs)
 
     return decorated
