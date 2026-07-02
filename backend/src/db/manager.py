@@ -479,10 +479,11 @@ CREATE TABLE IF NOT EXISTS consents (
     revoked_at      TEXT DEFAULT NULL,
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    UNIQUE(user_id, scope, status)             -- one active grant per scope per user
+    FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+-- Only one active grant per (user_id, scope); multiple revoked records allowed for history
+CREATE UNIQUE INDEX IF NOT EXISTS idx_consents_active ON consents(user_id, scope) WHERE status='granted';
 CREATE INDEX IF NOT EXISTS idx_consents_user ON consents(user_id);
 CREATE INDEX IF NOT EXISTS idx_consents_scope ON consents(scope);
 

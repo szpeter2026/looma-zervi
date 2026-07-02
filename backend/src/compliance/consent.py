@@ -70,6 +70,11 @@ class ConsentManager:
             ).fetchone()
             if not row:
                 return {"revoked": False, "reason": "No active consent found"}
+            # Delete old revoked records to avoid UNIQUE(user_id, scope, status) violation
+            conn.execute(
+                "DELETE FROM consents WHERE user_id=? AND scope=? AND status='revoked'",
+                (user_id, scope),
+            )
             conn.execute(
                 "UPDATE consents SET status='revoked', revoked_at=?, updated_at=? WHERE id=?",
                 (now, now, row["id"]),
