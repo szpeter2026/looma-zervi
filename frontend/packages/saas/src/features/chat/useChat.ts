@@ -32,6 +32,8 @@ export interface ChatMessage {
 interface UseChatOptions {
   mode?: "chat" | "deepseek" | "fast";
   top_k?: number;
+  /** Pre-check / retry when backend returns consent_required */
+  ensureAskConsent?: () => Promise<boolean>;
 }
 
 const RETRY_DELAYS = [1000, 2000, 5000];
@@ -98,8 +100,21 @@ export function useChat(options: UseChatOptions = {}) {
           });
 
           if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error((err as { detail?: string })?.detail || `HTTP ${response.status}`);
+            const err = await response.json().catch(() => ({})) as {
+              error?: string;
+              message?: string;
+              detail?: string;
+            };
+            if (
+              response.status === 403
+              && err.error === "consent_required"
+              && options.ensureAskConsent
+            ) {
+              const allowed = await options.ensureAskConsent();
+              if (allowed) return attemptStream();
+              throw new Error(err.message || "需要授权后才能使用 AI 问答");
+            }
+            throw new Error(err.detail || err.message || `HTTP ${response.status}`);
           }
 
           const reader = response.body?.getReader();
@@ -177,7 +192,7 @@ export function useChat(options: UseChatOptions = {}) {
 
       await attemptStream();
     },
-    [messages, options.mode, options.top_k, getToken]
+    [messages, options.mode, options.top_k, options.ensureAskConsent, getToken]
   );
 
   const clear = useCallback(() => {

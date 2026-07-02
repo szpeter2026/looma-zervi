@@ -29,6 +29,7 @@ import Pricing from "./features/pricing/Pricing";
 import CandidateShare from "./features/candidates/CandidateShare";
 import Candidates from "./features/candidates/Candidates";
 import CandidateDetail from "./features/candidates/CandidateDetail";
+import ConsentSettings from "./features/settings/ConsentSettings";
 import { useSaasAnalytics } from "./analytics/useSaasAnalytics";
 
 /** 轻量 ErrorBoundary 包装器，用于隔离单个功能的崩溃 */
@@ -70,6 +71,7 @@ export default function App() {
               <Route path="/reports" element={<FeatureGuard><Reports /></FeatureGuard>} />
               <Route path="/candidates" element={<FeatureGuard><Candidates /></FeatureGuard>} />
               <Route path="/candidates/:id" element={<FeatureGuard><CandidateDetail /></FeatureGuard>} />
+              <Route path="/settings/consent" element={<FeatureGuard><ConsentSettings /></FeatureGuard>} />
             </Route>
           </Route>
 

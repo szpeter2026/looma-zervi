@@ -83,7 +83,7 @@ export default function Jobs() {
       .list()
       .then((res) => setJobs(res.jobs))
       .catch(() => setMsg("加载职位列表失败"));
-  }, [token]);
+  }, [jobsApi]);
 
   useEffect(() => {
     loadJobs();
@@ -152,6 +152,11 @@ export default function Jobs() {
 
   const handleMatch = async (jobId?: string) => {
     if (!resumeText.trim()) return;
+    const allowed = await ensureConsent("job_match");
+    if (!allowed) {
+      setMsg("需要授权后才能进行职位匹配");
+      return;
+    }
     setMatching(true);
     setMsg(null);
     try {

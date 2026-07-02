@@ -6,6 +6,7 @@ import { gameApi, referralApi } from '../../utils/api'
 import { getShareText } from '../../constants/quiz'
 import { SAAS_BASE } from '../../utils/config'
 import { trackMiniEvent } from '../../utils/analytics'
+import { ensureConsent } from '../../utils/consent'
 import type { PersonalityType } from '../../types/index'
 
 Page({
@@ -30,7 +31,7 @@ Page({
     const local = store.get('personalityType')
     if (local) {
       this.applyPersonality(local)
-      await this.ensureShareCodes()
+      await this.ensureReferralCode()
       this.setData({ loading: false })
       return
     }
@@ -41,7 +42,7 @@ Page({
       const hydrated = store.get('personalityType')
       if (hydrated) {
         this.applyPersonality(hydrated)
-        await this.ensureShareCodes()
+        await this.ensureReferralCode()
       }
     } catch {
       /* no backend profile */
@@ -60,21 +61,36 @@ Page({
     })
   },
 
-  async ensureShareCodes() {
+  async ensureReferralCode() {
     const token = store.get('token')
     if (!token || token === 'dev-mode-token') return
+    if (this.data.referralCode) return
 
     try {
-      const [refResp, profileResp] = await Promise.all([
-        referralApi.create('referral'),
-        referralApi.create('profile_share'),
-      ])
-      const referralCode = refResp.code
-      const profileShareCode = profileResp.code
-      const hrShareUrl = `${SAAS_BASE.replace(/\/$/, '')}/candidate/share/${profileShareCode}`
-      this.setData({ referralCode, profileShareCode, hrShareUrl })
+      const refResp = await referralApi.create('referral')
+      this.setData({ referralCode: refResp.code })
     } catch {
       /* best-effort */
+    }
+  },
+
+  async ensureProfileShareCode(): Promise<boolean> {
+    const token = store.get('token')
+    if (!token || token === 'dev-mode-token') return false
+
+    const allowed = await ensureConsent('profile_share')
+    if (!allowed) return false
+
+    if (this.data.profileShareCode) return true
+
+    try {
+      const profileResp = await referralApi.create('profile_share')
+      const profileShareCode = profileResp.code
+      const hrShareUrl = `${SAAS_BASE.replace(/\/$/, '')}/candidate/share/${profileShareCode}`
+      this.setData({ profileShareCode, hrShareUrl })
+      return true
+    } catch {
+      return false
     }
   },
 
@@ -115,11 +131,15 @@ Page({
     })
   },
 
-  handleCopyHrLink() {
+  async handleCopyHrLink() {
+    const ok = await this.ensureProfileShareCode()
+    if (!ok) {
+      wx.showToast({ title: '需要授权后才能分享 HR 画像链接', icon: 'none' })
+      return
+    }
     const url = this.data.hrShareUrl
     if (!url) {
-      wx.showToast({ title: '链接生成中，请稍候', icon: 'none' })
-      void this.ensureShareCodes()
+      wx.showToast({ title: '链接生成失败，请稍后重试', icon: 'none' })
       return
     }
     wx.setClipboardData({

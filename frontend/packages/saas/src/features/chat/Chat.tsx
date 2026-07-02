@@ -5,7 +5,9 @@
  * Pure CSS + Tailwind (no tdesign-react).
  * Uses local useChat hook with SSE streaming.
  */
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { createSaasApiClient } from "../../api/saasApiClient";
+import { useConsent } from "../../compliance/useConsent";
 import { useChat, type DocSource } from "./useChat";
 
 type ChatMode = "chat" | "deepseek" | "fast";
@@ -17,7 +19,16 @@ function truncate(s: string, maxLen: number): string {
 export default function Chat() {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<ChatMode>("chat");
-  const { messages, isStreaming, error, sendStream, clear } = useChat({ mode });
+  const api = useMemo(() => createSaasApiClient(), []);
+  const { ensureConsent, consentPrompt } = useConsent(() => api);
+  const ensureAskConsent = useCallback(
+    () => ensureConsent("ask_rag"),
+    [ensureConsent],
+  );
+  const { messages, isStreaming, error, sendStream, clear } = useChat({
+    mode,
+    ensureAskConsent,
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -25,14 +36,18 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const q = input.trim();
     if (!q || isStreaming) return;
+    const allowed = await ensureConsent("ask_rag");
+    if (!allowed) return;
     setInput("");
     sendStream(q);
-  }, [input, isStreaming, sendStream]);
+  }, [input, isStreaming, sendStream, ensureConsent]);
 
   return (
+    <>
+    {consentPrompt}
     <div className="max-w-4xl mx-auto flex flex-col" style={{ height: "calc(100vh - 120px)" }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4 shrink-0">
@@ -206,5 +221,6 @@ export default function Chat() {
         </div>
       </div>
     </div>
+    </>
   );
 }

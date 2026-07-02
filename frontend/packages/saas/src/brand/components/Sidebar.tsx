@@ -24,6 +24,7 @@ const navItems: NavItem[] = [
   { path: "/jobs", label: "职位匹配", icon: "◈" },
   { path: "/resume", label: "简历解析", icon: "◈" },
   { path: "/reports", label: "报告中心", icon: "◆" },
+  { path: "/settings/consent", label: "隐私授权", icon: "🛡" },
 ];
 
 export default function Sidebar() {
