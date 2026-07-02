@@ -28,7 +28,15 @@ from mcp_auth import MCPAuthError, verify_bearer_token_inline
 logger = logging.getLogger("looma.mcp")
 logging.basicConfig(level=logging.INFO)
 
-mcp = FastMCP("looma-zervi", description="Looma-Zervi MCP Sidecar (MVP)")
+_MCP_PORT = int(os.getenv("MCP_PORT", "8999"))
+_MCP_HOST = os.getenv("MCP_HOST", "127.0.0.1")
+
+mcp = FastMCP(
+    "looma-zervi",
+    instructions="Looma-Zervi MCP Sidecar (MVP)",
+    host=_MCP_HOST,
+    port=_MCP_PORT,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -182,6 +190,5 @@ if __name__ == "__main__":
         from dotenv import load_dotenv
 
         load_dotenv(env_file)
-    port = int(os.getenv("MCP_PORT", "8999"))
-    logger.info(f"Looma MCP Sidecar on :{port}")
-    mcp.run(transport="sse", host="127.0.0.1", port=port)
+    logger.info(f"Looma MCP Sidecar on {_MCP_HOST}:{_MCP_PORT} (SSE /sse)")
+    mcp.run(transport="sse")

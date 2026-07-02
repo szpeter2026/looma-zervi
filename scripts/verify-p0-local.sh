@@ -79,11 +79,12 @@ test "$CODE" = "403"
 python3 -c "import json; d=json.load(open('/tmp/p0-jobs-match.json')); assert d.get('error')=='consent_required'"
 
 echo "==> 7. MCP Sidecar health check (:8999)"
-MCP_URL="${MCP_URL:-http://localhost:8999}"
-if curl -sf --max-time 3 "$MCP_URL/sse" -o /dev/null 2>&1; then
-  echo "   MCP SSE port reachable"
+MCP_HOST="${MCP_HOST:-127.0.0.1}"
+MCP_PORT="${MCP_PORT:-8999}"
+if nc -z "$MCP_HOST" "$MCP_PORT" 2>/dev/null; then
+  echo "   MCP port $MCP_HOST:$MCP_PORT reachable (SSE /sse)"
 else
-  echo "   ⚠ MCP :8999 not reachable (skip if MCP not running locally)"
+  echo "   ⚠ MCP :$MCP_PORT not reachable (start: cd backend/mcp-servers && ../venv/bin/python3 server.py)"
 fi
 
 echo "==> 8. Closed-loop smoke (seeker → share → HR import)"
