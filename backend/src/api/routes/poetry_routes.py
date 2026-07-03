@@ -8,6 +8,7 @@ Endpoints:
   GET  /v1/poetry/:id      - Get single poem full content
   GET  /v1/poetry/random   - Discovery: random poems
   GET  /v1/poetry/stats    - Collection stats (total, dynasty/theme distribution)
+  GET  /v1/poetry/authors  - Distinct authors list with counts (pagination)
 """
 import logging
 from flask import Blueprint, request, jsonify, current_app
@@ -132,3 +133,22 @@ def poetry_stats():
     db = _get_db()
     stats = db.get_poetry_stats()
     return jsonify(stats)
+
+
+# ── Authors / poets ──
+
+@poetry_bp.route("/authors", methods=["GET"])
+@optional_auth
+def list_authors():
+    """List distinct authors with counts, sorted by poem count desc.
+
+    Query params: dynasty (optional filter), page (default 1), per_page (default 24, max 100).
+    """
+    dynasty = request.args.get("dynasty")
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 24))
+    per_page = min(per_page, 100)
+
+    db = _get_db()
+    result = db.get_authors(dynasty=dynasty, page=page, per_page=per_page)
+    return jsonify(result)
