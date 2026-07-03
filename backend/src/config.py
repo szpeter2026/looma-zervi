@@ -50,10 +50,10 @@ class Config:
     # SQLite — must be dynamic so tests can override per-fixture
     DATABASE_PATH = os.getenv("DATABASE_PATH", "data/looma.db")
 
-    # CORS
+    # CORS — portal :3000 local; production add szbolent.cn via CORS_ORIGINS env
     CORS_ORIGINS = os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://localhost:5174"
+        "http://localhost:5173,http://localhost:5174,http://localhost:3000",
     ).split(",")
 
     # Quota
@@ -125,7 +125,7 @@ def _refresh_config():
     Config.DATABASE_PATH = os.getenv("DATABASE_PATH", "data/looma.db")
     Config.CORS_ORIGINS = os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://localhost:5174"
+        "http://localhost:5173,http://localhost:5174,http://localhost:3000",
     ).split(",")
     Config.FREE_DAILY_LIMIT = int(os.getenv("FREE_DAILY_LIMIT", "30"))
     Config.LLM_PROVIDER_ORDER = os.getenv("LLM_PROVIDER_ORDER", "deepseek,ollama,openai")

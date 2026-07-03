@@ -38,6 +38,9 @@ looma-zervi/
 ├── cloudbase/        # CloudBase deployment config
 ├── docker/           # Docker + nginx deployment
 └── docs/             # Architecture docs
+    ├── DUAL_REPO_WORK_GUIDE.md   # 双仓协作工作指引（与 szbolent-portal 同文同步）
+    ├── PROJECTS_DIRECTORY_AUDIT.md   # Projects 目录勘查记录（暂留、未删）
+    └── TENCENT_CLOUD_COMMERCE.md   # 腾讯云备案 / 支付 / P0–P2
 ```
 
 ## Auth flow (MVP - no Supabase)

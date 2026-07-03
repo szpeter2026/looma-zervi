@@ -92,6 +92,39 @@ export type {
 
 export { RANK_NAMES, getRankName } from "./types/game";
 
+// PlanetX game (quiz / personality / identity) — canonical for planetx + miniprogram
+export type {
+  Identity as PlanetXIdentity,
+  TraitKey as PlanetXTraitKey,
+  PersonalityType as PlanetXPersonalityType,
+  QuizOption as PlanetXQuizOption,
+  QuizQuestion as PlanetXQuizQuestion,
+  PlanetXRankName,
+  PlanetXMissionId,
+  PlanetXGameScreen,
+  PlanetXFleet,
+} from "./types/planetx-game";
+
+export {
+  IDENTITY_LABELS,
+  getPlanetXRankName,
+} from "./types/planetx-game";
+
+export { QUIZ_QUESTIONS } from "./constants/quiz";
+
+export {
+  PERSONALITY_MAP,
+  PERSONALITY_FALLBACK_MAP,
+} from "./constants/personality";
+
+export { computePersonality, hydratePersonality } from "./utils/quiz";
+
+export { getShareText } from "./utils/share";
+export type { SharePlatform as PlanetXSharePlatform } from "./utils/share";
+
+/** JWT localStorage key — G2 aligned (planetx / saas / portal) */
+export const LOOMA_TOKEN_KEY = "looma_token";
+
 export type {
   ParsedResume,
   ResumeExperience,

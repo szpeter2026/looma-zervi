@@ -53,6 +53,15 @@ curl -sf -X POST "$API_BASE/v1/payment/upgrade" \
   -H "Content-Type: application/json" \
   -d '{"tier":"pro"}'
 
+echo "==> 8. 诗词 random"
+curl -sf "$API_BASE/v1/poetry/random?count=1" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('count',0)>=0"
+
+echo "==> 9. 诗词 browse"
+curl -sf "$API_BASE/v1/poetry/browse?page=1&per_page=5" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'items' in d and 'total' in d"
+
+echo "==> 10. 诗词 stats"
+curl -sf "$API_BASE/v1/poetry/stats" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'total' in d"
+
 echo ""
-echo "✅ 最小闭环 API 烟雾测试通过"
+echo "✅ 最小闭环 API 烟雾测试通过（含诗词 browse/random/stats）"
 echo "   HR 画像页: {T-space}/candidate/share/$SHARE_CODE"
