@@ -1084,6 +1084,45 @@ class DatabaseManager:
             "themes": [{"name": r["theme"], "count": r["cnt"]} for r in themes],
         }
 
+    def get_authors(self, dynasty: str | None = None,
+                    page: int = 1, per_page: int = 24) -> dict:
+        """List distinct authors with poem counts, sorted by count desc.
+        Returns {items: [{name, dynasty, count}], total: N, page: P, per_page: PP}."""
+        clauses = []
+        params = []
+        if dynasty:
+            clauses.append("dynasty = ?")
+            params.append(dynasty)
+
+        where = " AND ".join(clauses) if clauses else ""
+        where_sql = f"WHERE {where}" if where else ""
+        count_where = f"WHERE author != ''" + (f" AND {where}" if where else "")
+
+        with self.get_conn() as conn:
+            count_row = conn.execute(
+                f"SELECT COUNT(DISTINCT author) as cnt FROM poems {count_where}", params
+            ).fetchone()
+            total = count_row["cnt"] if count_row else 0
+
+            offset = (page - 1) * per_page
+            rows = conn.execute(
+                f"""SELECT author as name, dynasty,
+                           COUNT(*) as count
+                    FROM poems {where_sql}
+                    WHERE author != ''
+                    GROUP BY author
+                    ORDER BY count DESC
+                    LIMIT ? OFFSET ?""",
+                params + [per_page, offset]
+            ).fetchall()
+
+        return {
+            "items": [{"name": r["name"], "dynasty": r["dynasty"], "count": r["count"]} for r in rows],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }
+
     # ============================================
     # Document operations (szbenyx)
     # ============================================
