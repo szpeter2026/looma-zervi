@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>looma-zervi UI 组件库预览</title>
+<style>
+/* PlanetX Tokens */
+:root {
+  --px-color-primary: #6C63FF;
+  --px-color-primary-hover: #5A52E0;
+  --px-color-accent: #C8FF50;
+  --px-color-accent-hover: #B8EF40;
+  --px-color-gold: #FFD700;
+  --px-color-cyan: #00E5FF;
+  --px-color-pink: #FF2D95;
+  --px-color-success: #00D9A3;
+  --px-color-danger: #FF4757;
+  --px-color-warning: #FFA502;
+  --px-color-bg-deep: #0a0a1a;
+  --px-color-bg-page: #080810;
+  --px-color-bg-card: #0D0D1A;
+  --px-color-bg-surface: #1A1A2E;
+  --px-color-bg-elevated: #16213e;
+  --px-color-text: #e0e0ff;
+  --px-color-text-bright: #E8E8F0;
+  --px-color-text-muted: #B8B8C8;
+  --px-color-text-dim: #555577;
+  --px-radius-sm: 8px; --px-radius-md: 12px; --px-radius-lg: 16px; --px-radius-xl: 20px;
+  --px-shadow-glow: 0 0 20px rgba(108, 99, 255, 0.3);
+  --px-shadow-card: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --px-shadow-accent: 0 0 24px rgba(200, 255, 80, 0.15);
+  --px-shadow-gold: 0 0 60px rgba(255, 215, 0, 0.3);
+}
+
+/* SaaS Tokens */
+:root {
+  --color-primary: #1a6ff5;
+  --color-primary-hover: #155fd4;
+  --color-primary-light: #e8f0fe;
+  --color-success: #00b894;
+  --color-danger: #e74c3c;
+  --color-warning: #f39c12;
+  --color-info: #0984e3;
+  --color-bg-page: #f5f6fa;
+  --color-bg-sidebar: #0d1b2a;
+  --color-bg-card: #ffffff;
+  --color-bg-surface: #f8f9fa;
+  --color-bg-hover: #f0f0f5;
+  --color-text-primary: #2d3436;
+  --color-text-secondary: #636e72;
+  --color-text-muted: #b2bec3;
+  --color-border: #e0e0e0;
+  --color-border-light: #f0f0f0;
+  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+  --sidebar-width: 240px;
+  --header-height: 56px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: "Noto Sans SC", "Inter", -apple-system, sans-serif; }
+
+@keyframes starPulse { 0%,100%{opacity:.15;transform:scale(1)} 50%{opacity:.8;transform:scale(2.2)} }
+@keyframes xSpin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+@keyframes screenIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+@keyframes claimPulse { 0%{transform:scale(1);box-shadow:0 0 0 0 rgba(255,215,0,.5)} 50%{transform:scale(1.05);box-shadow:0 0 0 10px rgba(255,215,0,0)} 100%{transform:scale(1);box-shadow:0 0 0 0 rgba(255,215,0,0)} }
+@keyframes levelUp { 0%{transform:scale(.5) translateY(20px);opacity:0} 40%{transform:scale(1.2) translateY(-10px);opacity:1} 60%{transform:scale(.95)} 80%{transform:scale(1.05)} 100%{transform:scale(1);opacity:1} }
+@keyframes glowPulse { 0%,100%{box-shadow:0 0 8px rgba(200,255,80,.15)} 50%{box-shadow:0 0 24px rgba(200,255,80,.4)} }
+@keyframes bounceIn { 0%{transform:scale(.3);opacity:0} 50%{transform:scale(1.1);opacity:.8} 70%{transform:scale(.9)} 100%{transform:scale(1);opacity:1} }
+@keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+@keyframes particleFloat { 0%{transform:translateY(0);opacity:0} 10%{opacity:.6} 90%{opacity:.4} 100%{transform:translateY(-100vh);opacity:0} }
+@keyframes cursorBlink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+
+/* Layout */
+.page { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px; background: #111; color: #888; padding: 20px 0; position: fixed; top: 0; bottom: 0; left: 0;
+  border-right: 1px solid #222; overflow-y: auto;
+}
+.sidebar h2 { font-size: 14px; color: #fff; padding: 0 20px 12px; margin-bottom: 8px; border-bottom: 1px solid #222; }
+.sidebar a { display: block; padding: 8px 20px; color: #888; text-decoration: none; font-size: 13px; transition: .15s; }
+.sidebar a:hover { color: #fff; background: rgba(255,255,255,.05); }
+.sidebar a.active { color: var(--color-primary); background: rgba(26,111,245,.1); border-left: 3px solid var(--color-primary); }
+.main { flex: 1; margin-left: 220px; }
+
+/* Sections */
+.section { padding: 40px; border-bottom: 1px solid #1a1a2e; }
+.section-px { background: var(--px-color-bg-page); color: var(--px-color-text); }
+.section-saas { background: var(--color-bg-page); color: var(--color-text-primary); }
+.section h3 { font-size: 18px; margin-bottom: 20px; font-weight: 700; }
+.section-px h3 { color: var(--px-color-text-bright); }
+.section-saas h3 { color: var(--color-text-primary); }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.label { font-size: 12px; opacity: .6; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
+
+/* PlanetX Components */
+.px-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-weight: 700; border-radius: 12px; border: none; cursor: pointer;
+  transition: .15s; height: 40px; padding: 0 20px; font-size: 14px;
+}
+.px-btn-primary { background: var(--px-color-primary); color: #fff; box-shadow: var(--px-shadow-glow); }
+.px-btn-accent { background: var(--px-color-accent); color: #0a0a1a; box-shadow: var(--px-shadow-accent); }
+.px-btn-outline { background: transparent; color: var(--px-color-primary); border: 1.5px solid var(--px-color-primary); }
+.px-btn-ghost { background: transparent; color: var(--px-color-text); border: 1px solid rgba(255,255,255,.1); }
+.px-btn-danger { background: var(--px-color-danger); color: #fff; }
+.px-btn:hover { opacity: .85; }
+
+.px-card {
+  background: var(--px-color-bg-card); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 20px; padding: 20px; box-shadow: var(--px-shadow-card);
+}
+.px-card-highlight { border-color: rgba(200,255,80,.25); box-shadow: var(--px-shadow-accent); }
+
+.px-input {
+  width: 240px; height: 40px; padding: 0 12px;
+  background: var(--px-color-bg-surface); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px; color: var(--px-color-text); font-size: 14px; outline: none;
+}
+.px-input:focus { border-color: var(--px-color-primary); }
+
+.px-xpbar { width: 320px; }
+.px-xpbar-track { height: 6px; background: var(--px-color-bg-surface); border-radius: 9999px; overflow: hidden; margin-top: 8px; }
+.px-xpbar-fill { height: 100%; background: linear-gradient(90deg, #6B3FA0, #C8FF50); border-radius: 9999px; transition: width .8s; }
+
+.px-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(135deg, rgba(107,63,160,.5), rgba(200,255,80,.15));
+  border: 1px solid rgba(200,255,80,.25); border-radius: 9999px;
+  padding: 4px 12px; font-size: 12px; color: var(--px-color-accent); font-weight: 700;
+}
+
+.px-quiz-option {
+  display: flex; align-items: center; gap: 16px; padding: 20px;
+  background: var(--px-color-bg-card); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 20px; box-shadow: var(--px-shadow-card); cursor: pointer;
+  transition: .15s; width: 360px; margin-bottom: 8px;
+}
+.px-quiz-option:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.px-quiz-option.selected { border-color: var(--px-color-primary); box-shadow: var(--px-shadow-glow); }
+.px-quiz-option.correct { border-color: var(--px-color-success); background: rgba(0,217,163,.12); }
+.px-quiz-option.wrong { border-color: var(--px-color-danger); background: rgba(255,71,87,.12); }
+.px-quiz-idx { width: 32px; height: 32px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 700; background: var(--px-color-bg-surface); color: var(--px-color-text-muted); border: 1px solid rgba(255,255,255,.1); flex-shrink: 0; }
+.px-quiz-option.selected .px-quiz-idx { background: var(--px-color-primary); color: #fff; }
+
+.px-level-badge {
+  width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 23px; font-weight: 900; color: var(--px-color-gold);
+  background: var(--px-color-bg-surface); border: 2px solid var(--px-color-gold);
+  box-shadow: var(--px-shadow-card);
+}
+
+.px-toast {
+  display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px;
+  border-radius: 9999px; font-size: 14px; font-weight: 700;
+  background: rgba(200,255,80,.08); border: 1px solid rgba(200,255,80,.5);
+  color: var(--px-color-accent); backdrop-filter: blur(12px);
+}
+.px-toast.error { background: rgba(255,71,87,.08); border-color: rgba(255,71,87,.5); color: var(--px-color-danger); }
+.px-toast.warning { background: rgba(255,165,2,.08); border-color: rgba(255,165,2,.5); color: var(--px-color-warning); }
+
+.px-spinner {
+  display: inline-block; width: 40px; height: 40px;
+  border: 3px solid rgba(255,255,255,.1); border-top-color: var(--px-color-accent);
+  border-radius: 50%; animation: xSpin 1.2s linear infinite;
+}
+
+.px-achievement {
+  display: inline-block; text-align: center; padding: 24px;
+  background: var(--px-color-bg-card); border: 1px solid var(--px-color-gold);
+  border-radius: 16px; box-shadow: var(--px-shadow-gold);
+  animation: bounceIn .5s cubic-bezier(.34,1.56,.64,1);
+}
+.px-achievement-icon { font-size: 48px; animation: claimPulse .6s ease-out; }
+
+/* SaaS Components */
+.saas-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-weight: 500; border-radius: 8px; border: none; cursor: pointer;
+  transition: .15s; height: 36px; padding: 0 16px; font-size: 14px; box-shadow: var(--shadow-sm);
+}
+.saas-btn-primary { background: var(--color-primary); color: #fff; }
+.saas-btn-secondary { background: var(--color-bg-surface); color: var(--color-text-primary); border: 1px solid var(--color-border); }
+.saas-btn-outline { background: transparent; color: var(--color-primary); border: 1px solid var(--color-border); }
+.saas-btn-danger { background: var(--color-danger); color: #fff; }
+.saas-btn:hover { opacity: .9; }
+
+.saas-card {
+  background: var(--color-bg-card); border: 1px solid var(--color-border-light);
+  border-radius: 8px; padding: 24px; box-shadow: var(--shadow-sm);
+}
+
+.saas-input {
+  width: 240px; height: 36px; padding: 0 12px;
+  background: var(--color-bg-card); border: 1px solid var(--color-border);
+  border-radius: 8px; color: var(--color-text-primary); font-size: 14px; outline: none;
+  transition: .15s;
+}
+.saas-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(26,111,245,.15); }
+
+.saas-kpi {
+  display: inline-flex; flex-direction: column; gap: 8px; padding: 20px;
+  background: var(--color-bg-card); border: 1px solid var(--color-border-light);
+  border-radius: 8px; box-shadow: var(--shadow-sm); width: 200px;
+}
+.saas-kpi-label { font-size: 12px; color: var(--color-text-secondary); font-weight: 500; }
+.saas-kpi-value { font-size: 28px; font-weight: 700; color: var(--color-text-primary); line-height: 1; }
+.saas-kpi-trend { font-size: 12px; color: var(--color-success); font-weight: 600; }
+
+.saas-chat-user { display: inline-block; padding: 12px 16px; background: var(--color-primary); color: #fff; border-radius: 12px 12px 4px 12px; font-size: 14px; max-width: 300px; }
+.saas-chat-ai { display: inline-block; padding: 12px 16px; background: var(--color-bg-surface); color: var(--color-text-primary); border-radius: 12px 12px 12px 4px; font-size: 14px; max-width: 300px; }
+
+.saas-uploader {
+  border: 2px dashed var(--color-border); border-radius: 12px;
+  background: var(--color-bg-surface); padding: 32px 24px; text-align: center;
+  width: 360px; transition: .25s;
+}
+.saas-uploader:hover { border-color: var(--color-primary); background: var(--color-primary-light); }
+
+.saas-empty { text-align: center; padding: 48px 24px; }
+.saas-empty-icon { font-size: 48px; opacity: .6; margin-bottom: 12px; }
+
+.saas-table { width: 100%; border-collapse: collapse; background: var(--color-bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--color-border-light); }
+.saas-table th { padding: 12px 16px; background: var(--color-bg-surface); font-size: 12px; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: .5px; text-align: left; border-bottom: 1px solid var(--color-border); }
+.saas-table td { padding: 12px 16px; font-size: 14px; color: var(--color-text-primary); border-bottom: 1px solid var(--color-border-light); }
+
+.saas-skeleton { height: 20px; background: linear-gradient(90deg, var(--color-bg-surface) 0%, var(--color-bg-hover) 50%, var(--color-bg-surface) 100%); background-size: 200% 100%; border-radius: 6px; animation: shimmer 1.5s linear infinite; }
+
+.streaming-cursor { display: inline-block; width: 2px; height: 1em; background: var(--color-primary); margin-left: 2px; vertical-align: text-bottom; animation: cursorBlink 1s step-end infinite; }
+
+.swatch { display: inline-block; width: 60px; height: 60px; border-radius: 8px; margin-right: 8px; border: 1px solid rgba(255,255,255,.1); }
+</style>
+</head>
+<body>
+<div class="page">
+  <!-- Sidebar Nav -->
+  <div class="sidebar">
+    <h2>UI 预览</h2>
+    <a href="#px-tokens" class="active">PlanetX Tokens</a>
+    <a href="#px-anim">PlanetX 动画</a>
+    <a href="#px-button">PX Button</a>
+    <a href="#px-card">PX Card</a>
+    <a href="#px-input">PX Input</a>
+    <a href="#px-xpbar">PX XPBar</a>
+    <a href="#px-badge">PX LevelBadge</a>
+    <a href="#px-quiz">PX QuizOption</a>
+    <a href="#px-toast">PX ToastBar</a>
+    <a href="#px-popup">PX Achievement</a>
+    <a href="#px-loading">PX Loading</a>
+    <a href="#saas-tokens">SaaS Tokens</a>
+    <a href="#saas-button">SaaS Button</a>
+    <a href="#saas-card">SaaS Card</a>
+    <a href="#saas-input">SaaS Input</a>
+    <a href="#saas-kpi">SaaS KPICard</a>
+    <a href="#saas-table">SaaS DataTable</a>
+    <a href="#saas-chat">SaaS Chat</a>
+    <a href="#saas-upload">SaaS Uploader</a>
+    <a href="#saas-states">SaaS States</a>
+  </div>
+
+  <div class="main">
+    <!-- ==================== PLANETX ==================== -->
+    <div class="section section-px" id="px-tokens">
+      <h3>PlanetX Design Tokens</h3>
+      <div class="label">主色 / 语义色</div>
+      <div class="row">
+        <span class="swatch" style="background:#6C63FF"></span>
+        <span class="swatch" style="background:#C8FF50"></span>
+        <span class="swatch" style="background:#FFD700"></span>
+        <span class="swatch" style="background:#00E5FF"></span>
+        <span class="swatch" style="background:#FF2D95"></span>
+        <span class="swatch" style="background:#00D9A3"></span>
+        <span class="swatch" style="background:#FF4757"></span>
+        <span class="swatch" style="background:#FFA502"></span>
+      </div>
+      <div class="label">背景层</div>
+      <div class="row">
+        <span class="swatch" style="background:#080810"></span>
+        <span class="swatch" style="background:#0a0a1a"></span>
+        <span class="swatch" style="background:#0D0D1A"></span>
+        <span class="swatch" style="background:#1A1A2E"></span>
+        <span class="swatch" style="background:#16213e"></span>
+      </div>
+    </div>
+
+    <div class="section section-px" id="px-anim">
+      <h3>PlanetX 动画 (12 种)</h3>
+      <div class="row">
+        <div style="width:60px;height:60px;text-align:center;line-height:60px;font-size:24px;border-radius:50%;border:2px solid #FFD700;animation:starPulse 3s ease-in-out infinite">✦</div>
+        <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.1);border-top-color:#C8FF50;border-radius:50%;animation:xSpin 1.2s linear infinite"></div>
+        <div class="px-card" style="animation:screenIn .4s ease-out">screenIn</div>
+        <div class="px-card" style="animation:fadeIn .3s ease-out">fadeIn</div>
+        <div class="px-card" style="animation:glowPulse 2s ease-in-out infinite;border-color:rgba(200,255,80,.25)">glowPulse</div>
+        <div class="px-achievement" style="padding:12px 16px;font-size:14px">bounceIn</div>
+      </div>
+    </div>
+
+    <div class="section section-px" id="px-button">
+      <h3>PlanetX Button</h3>
+      <div class="row">
+        <button class="px-btn px-btn-primary">主要按钮</button>
+        <button class="px-btn px-btn-accent">荧光绿</button>
+        <button class="px-btn px-btn-outline">描边</button>
+        <button class="px-btn px-btn-ghost">幽灵</button>
+        <button class="px-btn px-btn-danger">危险</button>
+      </div>
+      <div class="label">尺寸</div>
+      <div class="row">
+        <button class="px-btn px-btn-primary" style="height:32px;padding:0 12px;font-size:12px">Small</button>
+        <button class="px-btn px-btn-primary">Medium</button>
+        <button class="px-btn px-btn-primary" style="height:48px;padding:0 28px;font-size:16px">Large</button>
+      </div>
+    </div>
+
+    <div class="section section-px" id="px-card">
+      <h3>PlanetX Card</h3>
+      <div class="row">
+        <div class="px-card" style="width:200px">默认 Card</div>
+        <div class="px-card px-card-highlight" style="width:200px">高亮 Card</div>
+      </div>
+    </div>
+
+    <div class="section section-px" id="px-input">
+      <h3>PlanetX Input</h3>
+      <div class="row">
+        <input class="px-input" placeholder="输入星际代号" />
+        <input class="px-input" placeholder="错误状态" style="border-color:var(--px-color-danger)" />
+      </div>
+    </div>
+
+    <div class="section section-px" id="px-xpbar">
+      <h3>PlanetX XPBar</h3>
+      <div class="px-xpbar">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--px-color-text-muted)">⚡ 星际能量</span>
+          <span class="px-badge">🪐 Lv.7 · 探索者</span>
+          <span style="font-size:12px;color:var(--px-color-accent);font-weight:700">340 / 500 XP</span>
+        </div>
+        <div class="px-xpbar-track"><div class="px-xpbar-fill" style="width:68%"></div></div>
+      </div>
+    </div>
+
+    <div class="section section-px" id="px-badge">
+      <h3>PlanetX LevelBadge</h3>
+      <div class="row">
+        <div style="text-align:center">
+          <div class="px-level-badge" style="border-color:#CD7F32;color:#CD7F32">5</div>
+          <div style="font-size:12px;color:var(--px-color-text-muted);margin-top:4px">Bronze</div>
+        </div>
+        <div style="text-align:center">
+          <div class="px-level-badge" style="border-color:#C0C0C0;color:#C0C0C0">10</div>
+          <div style="font-size:12px;color:var(--px-color-text-muted);margin-top:4px">Silver</div>
+        </div>
+        <div style="text-align:center">
+          <div class="px-level-badge">15</div>
+          <div style="font-size:12px;color:var(--px-color-text-muted);margin-top:4px">Gold</div>
+        </div>
+        <div style="text-align:center">
+          <div class="px-level-badge" style="border-color:#B9F2FF;color:#B9F2FF;animation:glowPulse 2s ease-in-out infinite">25</div>
+          <div style="font-size:12px;color:var(--px-color-text-muted);margin-top:4px">Diamond</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section section-px" id="px-quiz">
+      <h3>PlanetX QuizOptionCard</h3>
+      <div class="px-quiz-option">
+        <div class="px-quiz-idx">A</div>
+        <span>我喜欢探索未知领域</span>
+      </div>
+      <div class="px-quiz-option selected">
+        <div class="px-quiz-idx">B</div>
+        <span>我喜欢分析数据和逻辑</span>
+        <span style="margin-left:auto;color:var(--px-color-primary)">●</span>
+      </div>
+      <div class="px-quiz-option correct">
+        <div class="px-quiz-idx" style="background:var(--px-color-success);color:#fff">C</div>
+        <span style="color:var(--px-color-success)">团队合作</span>
+        <span style="margin-left:auto">✓</span>
+      </div>
+      <div class="px-quiz-option wrong">
+        <div class="px-quiz-idx" style="background:var(--px-color-danger);color:#fff">D</div>
+        <span style="color:var(--px-color-danger)">独自工作</span>
+        <span style="margin-left:auto">✗</span>
+      </div>
+    </div>
+
+    <div class="section section-px" id="px-toast">
+      <h3>PlanetX ToastBar</h3>
+      <div class="row">
+        <div class="px-toast">✓ 操作成功！</div>
+        <div class="px-toast error">✗ 网络错误，请重试</div>
+        <div class="px-toast warning">⚠ 请先完成测试</div>
+      </div>
+    </div>
+
+    <div class="section section-px" id="px-popup">
+      <h3>PlanetX AchievementPopup</h3>
+      <div class="px-achievement">
+        <div class="px-achievement-icon">🏆</div>
+        <div style="font-size:18px;font-weight:900;color:var(--px-color-gold);margin-top:8px">首次升空！</div>
+        <div style="font-size:14px;color:var(--px-color-text-muted);margin-top:4px">完成第一次人格测试</div>
+      </div>
+    </div>
+
+    <div class="section section-px" id="px-loading">
+      <h3>PlanetX Loading</h3>
+      <div class="row">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="px-spinner" style="width:16px;height:16px;border-width:2px"></div>
+          <span style="color:var(--px-color-text-muted);font-size:14px">Small</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="px-spinner"></div>
+          <span style="color:var(--px-color-text-muted);font-size:14px">Medium</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="px-spinner" style="width:64px;height:64px;border-width:4px"></div>
+          <span style="color:var(--px-color-text-muted);font-size:14px">Large</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SAAS ==================== -->
+    <div class="section section-saas" id="saas-tokens">
+      <h3>SaaS Design Tokens</h3>
+      <div class="label">主色 / 语义色</div>
+      <div class="row">
+        <span class="swatch" style="background:#1a6ff5"></span>
+        <span class="swatch" style="background:#00b894"></span>
+        <span class="swatch" style="background:#e74c3c"></span>
+        <span class="swatch" style="background:#f39c12"></span>
+        <span class="swatch" style="background:#0984e3"></span>
+        <span class="swatch" style="background:#e8f0fe"></span>
+      </div>
+      <div class="label">背景层</div>
+      <div class="row">
+        <span class="swatch" style="background:#f5f6fa"></span>
+        <span class="swatch" style="background:#f8f9fa"></span>
+        <span class="swatch" style="background:#ffffff;border:1px solid #e0e0e0"></span>
+        <span class="swatch" style="background:#0d1b2a"></span>
+      </div>
+    </div>
+
+    <div class="section section-saas" id="saas-button">
+      <h3>SaaS Button</h3>
+      <div class="row">
+        <button class="saas-btn saas-btn-primary">确认</button>
+        <button class="saas-btn saas-btn-secondary">取消</button>
+        <button class="saas-btn saas-btn-outline">描边</button>
+        <button class="saas-btn saas-btn-danger">删除</button>
+      </div>
+      <div class="label">尺寸</div>
+      <div class="row">
+        <button class="saas-btn saas-btn-primary" style="height:30px;padding:0 12px;font-size:12px">Small</button>
+        <button class="saas-btn saas-btn-primary">Medium</button>
+        <button class="saas-btn saas-btn-primary" style="height:42px;padding:0 24px;font-size:16px">Large</button>
+      </div>
+    </div>
+
+    <div class="section section-saas" id="saas-card">
+      <h3>SaaS Card</h3>
+      <div class="row">
+        <div class="saas-card" style="width:200px">默认 Card</div>
+        <div class="saas-card" style="width:200px;box-shadow:var(--shadow-md)">悬停 Card</div>
+      </div>
+    </div>
+
+    <div class="section section-saas" id="saas-input">
+      <h3>SaaS Input / Select</h3>
+      <div class="row">
+        <input class="saas-input" placeholder="请输入邮箱" />
+        <div style="position:relative;display:inline-block">
+          <select class="saas-input" style="appearance:none;padding-right:32px">
+            <option>前端工程师</option>
+            <option>后端工程师</option>
+          </select>
+          <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--color-text-muted);font-size:12px;pointer-events:none">▼</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section section-saas" id="saas-kpi">
+      <h3>SaaS KPICard</h3>
+      <div class="row">
+        <div class="saas-kpi">
+          <span class="saas-kpi-label">本月新增候选人</span>
+          <span class="saas-kpi-value">1,248</span>
+          <span class="saas-kpi-trend">↑ 12.5% vs 上期</span>
+        </div>
+        <div class="saas-kpi">
+          <span class="saas-kpi-label">简历解析量</span>
+          <span class="saas-kpi-value">863</span>
+          <span class="saas-kpi-trend" style="color:var(--color-danger)">↓ 3.2% vs 上期</span>
+        </div>
+        <div class="saas-kpi">
+          <span class="saas-kpi-label">匹配成功率</span>
+          <span class="saas-kpi-value">94<span style="font-size:14px;color:var(--color-text-muted)">%</span></span>
+          <span class="saas-kpi-trend">↑ 5.8% vs 上期</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section section-saas" id="saas-table">
+      <h3>SaaS DataTable</h3>
+      <table class="saas-table">
+        <thead><tr><th>姓名</th><th>职位</th><th>匹配度</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td>张三</td><td>前端工程师</td><td style="color:var(--color-success)">92%</td><td>已面试</td></tr>
+          <tr style="background:var(--color-bg-surface)"><td>李四</td><td>后端工程师</td><td style="color:var(--color-success)">88%</td><td>待安排</td></tr>
+          <tr><td>王五</td><td>全栈工程师</td><td style="color:var(--color-warning)">75%</td><td>待安排</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section section-saas" id="saas-chat">
+      <h3>SaaS ChatBubble + StreamingText</h3>
+      <div style="max-width:500px">
+        <div style="display:flex;gap:8px;flex-direction:row-reverse;margin-bottom:8px">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--color-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">我</div>
+          <div class="saas-chat-user">你好，帮我分析一下这份简历</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--color-bg-surface);color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;font-size:14px;border:1px solid var(--color-border);flex-shrink:0">AI</div>
+          <div class="saas-chat-ai">好的，正在分析候选人技能匹配度<span class="streaming-cursor"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section section-saas" id="saas-upload">
+      <h3>SaaS ResumeUploader</h3>
+      <div class="row">
+        <div class="saas-uploader">
+          <div style="font-size:40px;margin-bottom:12px">📄</div>
+          <div style="font-size:14px;color:var(--color-text-secondary)">拖拽简历到此处，或点击上传</div>
+          <div style="margin-top:8px;font-size:12px;color:var(--color-text-muted)">支持 .pdf / .doc / .docx 格式</div>
+        </div>
+        <div class="saas-uploader" style="border-color:var(--color-primary);background:var(--color-primary-light)">
+          <div style="font-size:40px;margin-bottom:12px">⏳</div>
+          <div style="font-size:14px;color:var(--color-primary)">上传中...</div>
+          <div style="margin-top:8px;font-size:12px;color:var(--color-text-muted)">resume.pdf (2.3MB)</div>
+          <div style="margin-top:12px;height:6px;background:var(--color-bg-hover);border-radius:9999px;overflow:hidden">
+            <div style="height:100%;width:60%;background:var(--color-primary);border-radius:9999px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section section-saas" id="saas-states">
+      <h3>SaaS EmptyState / ErrorState / Skeleton</h3>
+      <div class="row" style="align-items:flex-start">
+        <div class="saas-card saas-empty" style="width:280px">
+          <div class="saas-empty-icon">📭</div>
+          <div style="font-size:16px;font-weight:500;color:var(--color-text-primary)">暂无候选人</div>
+          <div style="font-size:14px;color:var(--color-text-muted);margin-top:4px">上传简历后将自动解析并添加候选人</div>
+        </div>
+        <div class="saas-card saas-empty" style="width:280px">
+          <div class="saas-empty-icon">⚠️</div>
+          <div style="font-size:16px;font-weight:500;color:var(--color-danger)">出错了</div>
+          <div style="font-size:14px;color:var(--color-text-muted);margin-top:4px">网络连接失败，请检查网络后重试</div>
+        </div>
+        <div class="saas-card" style="width:280px">
+          <div class="saas-skeleton" style="margin-bottom:8px"></div>
+          <div class="saas-skeleton" style="margin-bottom:8px;width:80%"></div>
+          <div class="saas-skeleton" style="width:60%"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

@@ -1,55 +1,347 @@
 /**
- * T-space brand tokens - SaaS professional visual system.
+ * SaaS brand tokens - professional visual system.
  * Clean, light theme with looma blue primary color.
+ *
+ * Token taxonomy:
+ *   --color-*           Semantic colors
+ *   --color-bg-*        Background layers
+ *   --color-text-*      Text colors
+ *   --color-border*     Border colors
+ *   --sidebar-*         Sidebar layout
+ *   --header-*          Header layout
+ *   --radius-*          Border radius
+ *   --shadow-*          Shadows
+ *   --transition-*      Transition timing
+ *   --font-*            Typography
+ *   --btn-*             Button component tokens
+ *   --card-*            Card component tokens
+ *   --input-*           Form field tokens
+ *   --table-*           Data table tokens
+ *   --modal-*           Modal / overlay tokens
+ *   --chat-*            Chat component tokens
+ *   --sidebar-ui-*      Sidebar visual tokens
+ *   --z-*               Z-index scale
  */
 
 :root {
-  /* Colors - SaaS professional theme */
+  /* ========================================================
+   * COLORS - SaaS professional theme
+   * ======================================================== */
   --color-primary: #1a6ff5;
   --color-primary-hover: #155fd4;
+  --color-primary-active: #0f4fb0;
   --color-primary-light: #e8f0fe;
-  --color-success: #00b894;
-  --color-danger: #e74c3c;
-  --color-warning: #f39c12;
-  --color-info: #0984e3;
+  --color-primary-dim: rgba(26, 111, 245, 0.06);
 
-  /* Background */
+  --color-secondary: #6c5ce7;
+  --color-secondary-hover: #5b4bd6;
+
+  --color-success: #00b894;
+  --color-success-light: rgba(0, 184, 148, 0.1);
+  --color-danger: #e74c3c;
+  --color-danger-light: rgba(231, 76, 60, 0.1);
+  --color-warning: #f39c12;
+  --color-warning-light: rgba(243, 156, 18, 0.1);
+  --color-info: #0984e3;
+  --color-info-light: rgba(9, 132, 227, 0.1);
+
+  /* Chart palette (for Dashboard / KPICard sparklines) */
+  --color-chart-1: #1a6ff5;
+  --color-chart-2: #00b894;
+  --color-chart-3: #f39c12;
+  --color-chart-4: #6c5ce7;
+  --color-chart-5: #e74c3c;
+  --color-chart-6: #0984e3;
+
+  /* ========================================================
+   * BACKGROUND
+   * ======================================================== */
   --color-bg-page: #f5f6fa;
   --color-bg-sidebar: #0d1b2a;
+  --color-bg-sidebar-hover: rgba(255, 255, 255, 0.05);
+  --color-bg-sidebar-active: rgba(255, 255, 255, 0.1);
   --color-bg-card: #ffffff;
   --color-bg-surface: #f8f9fa;
   --color-bg-hover: #f0f0f5;
+  --color-bg-stripe: #fafbfc;
+  --color-bg-overlay: rgba(0, 0, 0, 0.4);
 
-  /* Text */
+  /* ========================================================
+   * TEXT
+   * ======================================================== */
   --color-text-primary: #2d3436;
   --color-text-secondary: #636e72;
   --color-text-muted: #b2bec3;
+  --color-text-disabled: #dfe6e9;
+  --color-text-on-primary: #ffffff;
+  --color-text-link: var(--color-primary);
 
-  /* Sidebar */
+  /* Sidebar text */
   --color-text-sidebar: #dfe6e9;
   --color-text-sidebar-active: #ffffff;
   --color-text-sidebar-muted: rgba(255, 255, 255, 0.4);
 
-  /* Border */
+  /* ========================================================
+   * BORDER
+   * ======================================================== */
   --color-border: #e0e0e0;
   --color-border-light: #f0f0f0;
+  --color-border-strong: #ccc;
+  --color-border-focus: var(--color-primary);
+  --color-border-error: var(--color-danger);
 
-  /* Layout */
+  /* ========================================================
+   * LAYOUT
+   * ======================================================== */
   --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
   --header-height: 56px;
+  --header-height-mobile: 48px;
+  --content-max-width: 1200px;
 
-  /* Radius */
+  /* ========================================================
+   * RADIUS
+   * ======================================================== */
+  --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
+  --radius-full: 9999px;
 
-  /* Shadows */
+  /* ========================================================
+   * SHADOWS
+   * ======================================================== */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+  --shadow-focus: 0 0 0 3px rgba(26, 111, 245, 0.15);
 
-  /* Transitions */
+  /* ========================================================
+   * TRANSITIONS
+   * ======================================================== */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
+  --transition-slow: 400ms ease;
+  --transition-sidebar: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-modal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ========================================================
+   * TYPOGRAPHY
+   * ======================================================== */
+  --font-family: "Noto Sans SC", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+
+  --font-size-xs: 0.75rem;     /* 12px */
+  --font-size-sm: 0.875rem;    /* 14px */
+  --font-size-base: 1rem;      /* 16px */
+  --font-size-lg: 1.125rem;    /* 18px */
+  --font-size-xl: 1.25rem;     /* 20px */
+  --font-size-2xl: 1.5rem;     /* 24px */
+  --font-size-3xl: 2rem;       /* 32px */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ========================================================
+   * BUTTON - component tokens
+   * ======================================================== */
+  --btn-height-sm: 30px;
+  --btn-height-md: 36px;
+  --btn-height-lg: 42px;
+
+  --btn-padding-sm: 0 12px;
+  --btn-padding-md: 0 16px;
+  --btn-padding-lg: 0 24px;
+
+  --btn-font-sm: 0.75rem;
+  --btn-font-md: 0.875rem;
+  --btn-font-lg: 1rem;
+
+  --btn-radius: var(--radius-md);
+  --btn-gap: 6px;
+  --btn-font-weight: var(--font-weight-medium);
+
+  --btn-bg-primary: var(--color-primary);
+  --btn-bg-primary-hover: var(--color-primary-hover);
+  --btn-bg-primary-active: var(--color-primary-active);
+
+  --btn-bg-secondary: var(--color-bg-surface);
+  --btn-bg-secondary-hover: var(--color-bg-hover);
+
+  --btn-bg-outline: transparent;
+  --btn-bg-outline-hover: var(--color-primary-light);
+
+  --btn-bg-danger: var(--color-danger);
+  --btn-bg-danger-hover: #c0392b;
+
+  --btn-text-primary: #ffffff;
+  --btn-text-secondary: var(--color-text-primary);
+  --btn-text-outline: var(--color-primary);
+  --btn-text-disabled: var(--color-text-muted);
+
+  --btn-border-outline: 1px solid var(--color-border);
+  --btn-border-outline-hover: 1px solid var(--color-primary);
+  --btn-border-disabled: 1px solid var(--color-border-light);
+
+  --btn-shadow: var(--shadow-xs);
+  --btn-shadow-hover: var(--shadow-sm);
+  --btn-shadow-focus: var(--shadow-focus);
+
+  /* ========================================================
+   * CARD - component tokens
+   * ======================================================== */
+  --card-bg: var(--color-bg-card);
+  --card-bg-hover: var(--color-bg-surface);
+  --card-padding: 24px;
+  --card-padding-sm: 16px;
+  --card-padding-lg: 32px;
+  --card-gap: 16px;
+  --card-radius: var(--radius-md);
+  --card-border: 1px solid var(--color-border-light);
+  --card-shadow: var(--shadow-sm);
+  --card-shadow-hover: var(--shadow-md);
+
+  --card-header-padding: 16px 24px;
+  --card-header-border: 1px solid var(--color-border-light);
+
+  /* ========================================================
+   * INPUT / FORM - component tokens
+   * ======================================================== */
+  --input-height-sm: 30px;
+  --input-height-md: 36px;
+  --input-height-lg: 42px;
+
+  --input-padding: 0 12px;
+  --input-padding-lg: 0 16px;
+
+  --input-bg: var(--color-bg-card);
+  --input-bg-disabled: var(--color-bg-surface);
+  --input-bg-focus: var(--color-bg-card);
+
+  --input-border: 1px solid var(--color-border);
+  --input-border-hover: 1px solid var(--color-border-strong);
+  --input-border-focus: 1px solid var(--color-border-focus);
+  --input-border-error: 1px solid var(--color-border-error);
+  --input-border-disabled: 1px solid var(--color-border-light);
+
+  --input-radius: var(--radius-md);
+  --input-font-size: var(--font-size-sm);
+  --input-placeholder: var(--color-text-muted);
+
+  --input-shadow-focus: var(--shadow-focus);
+
+  --label-color: var(--color-text-secondary);
+  --label-font-size: var(--font-size-sm);
+  --label-font-weight: var(--font-weight-medium);
+
+  --helper-color: var(--color-text-muted);
+  --helper-font-size: var(--font-size-xs);
+  --helper-error: var(--color-danger);
+  --helper-success: var(--color-success);
+
+  /* ========================================================
+   * DATA TABLE - component tokens
+   * ======================================================== */
+  --table-bg: var(--color-bg-card);
+  --table-bg-stripe: var(--color-bg-stripe);
+  --table-bg-hover: var(--color-bg-hover);
+  --table-bg-selected: var(--color-primary-light);
+
+  --table-border: 1px solid var(--color-border-light);
+  --table-border-header: 1px solid var(--color-border);
+
+  --table-header-bg: var(--color-bg-surface);
+  --table-header-color: var(--color-text-secondary);
+  --table-header-font-size: var(--font-size-xs);
+  --table-header-font-weight: var(--font-weight-semibold);
+  --table-header-text-transform: uppercase;
+  --table-header-letter-spacing: 0.5px;
+
+  --table-cell-padding: 12px 16px;
+  --table-cell-padding-compact: 8px 12px;
+  --table-cell-font-size: var(--font-size-sm);
+  --table-cell-color: var(--color-text-primary);
+
+  --table-radius: var(--radius-md);
+
+  /* ========================================================
+   * MODAL / OVERLAY - component tokens
+   * ======================================================== */
+  --modal-overlay: var(--color-bg-overlay);
+  --modal-bg: var(--color-bg-card);
+  --modal-max-width: 480px;
+  --modal-max-width-lg: 720px;
+  --modal-padding: 24px;
+  --modal-radius: var(--radius-lg);
+  --modal-border: none;
+  --modal-shadow: var(--shadow-xl);
+  --modal-header-border: 1px solid var(--color-border-light);
+  --modal-footer-bg: var(--color-bg-surface);
+
+  /* ========================================================
+   * CHAT - component tokens
+   * ======================================================== */
+  --chat-bubble-bg-user: var(--color-primary);
+  --chat-bubble-text-user: #ffffff;
+  --chat-bubble-bg-ai: var(--color-bg-surface);
+  --chat-bubble-text-ai: var(--color-text-primary);
+  --chat-bubble-radius: var(--radius-lg);
+  --chat-bubble-padding: 12px 16px;
+  --chat-bubble-gap: 8px;
+
+  --chat-input-bg: var(--color-bg-card);
+  --chat-input-border: 1px solid var(--color-border);
+  --chat-input-radius: var(--radius-lg);
+  --chat-input-height: 48px;
+
+  --chat-streaming-cursor: var(--color-primary);
+  --chat-streaming-cursor-width: 2px;
+
+  /* ========================================================
+   * SIDEBAR UI - visual tokens
+   * ======================================================== */
+  --sidebar-item-padding: 10px 20px;
+  --sidebar-item-radius: var(--radius-sm);
+  --sidebar-item-gap: 2px;
+  --sidebar-item-font-size: var(--font-size-sm);
+  --sidebar-active-border: 2px solid var(--color-primary);
+  --sidebar-active-bg: var(--color-bg-sidebar-active);
+  --sidebar-icon-size: 18px;
+  --sidebar-icon-gap: 12px;
+
+  /* ========================================================
+   * KPI CARD - component tokens
+   * ======================================================== */
+  --kpi-card-padding: 20px;
+  --kpi-card-gap: 8px;
+  --kpi-label-font-size: var(--font-size-xs);
+  --kpi-label-color: var(--color-text-secondary);
+  --kpi-value-font-size: 1.75rem;
+  --kpi-value-font-weight: var(--font-weight-bold);
+  --kpi-value-color: var(--color-text-primary);
+  --kpi-trend-font-size: var(--font-size-xs);
+  --kpi-trend-up: var(--color-success);
+  --kpi-trend-down: var(--color-danger);
+
+  /* ========================================================
+   * Z-INDEX SCALE
+   * ======================================================== */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-sidebar: 500;
+  --z-header: 600;
+  --z-overlay: 800;
+  --z-modal: 1000;
+  --z-toast: 1200;
+  --z-tooltip: 1300;
 }

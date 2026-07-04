@@ -1,49 +1,267 @@
 /**
  * PlanetX brand tokens - game-style visual system.
  * Deep space theme with star purple primary + #C8FF50 accent.
+ *
+ * Token taxonomy:
+ *   --px-color-*       Semantic colors
+ *   --px-bg-*          Background layers
+ *   --px-text-*        Text colors
+ *   --px-spacing-*     Spacing scale
+ *   --px-radius-*      Border radius
+ *   --px-shadow-*      Shadows / glow
+ *   --px-font-*        Typography
+ *   --px-btn-*         Button component tokens
+ *   --px-card-*        Card component tokens
+ *   --px-input-*       Form field tokens
+ *   --px-badge-*       Badge / chip tokens
+ *   --px-modal-*       Modal / overlay tokens
+ *   --px-bar-*         XP bar / progress tokens
+ *   --px-anim-*        Animation timing tokens
+ *   --px-z-*           Z-index scale
  */
 
 :root {
-  /* Colors - PlanetX game theme */
+  /* ========================================================
+   * COLORS - PlanetX game theme (existing + alpha variants)
+   * ======================================================== */
   --px-color-primary: #6C63FF;
   --px-color-primary-hover: #5A52E0;
+  --px-color-primary-active: #4A42D0;
+  --px-color-primary-light: rgba(108, 99, 255, 0.15);
+  --px-color-primary-dim: rgba(108, 99, 255, 0.08);
+
   --px-color-accent: #C8FF50;
+  --px-color-accent-hover: #B8EF40;
   --px-color-accent-dim: #A3CC40;
+  --px-color-accent-light: rgba(200, 255, 80, 0.12);
+
   --px-color-gold: #FFD700;
   --px-color-cyan: #00E5FF;
   --px-color-pink: #FF2D95;
-  --px-color-success: #00D9A3;
-  --px-color-danger: #FF4757;
-  --px-color-warning: #FFA502;
 
-  /* Background - deep space */
+  --px-color-success: #00D9A3;
+  --px-color-success-light: rgba(0, 217, 163, 0.12);
+  --px-color-danger: #FF4757;
+  --px-color-danger-light: rgba(255, 71, 87, 0.12);
+  --px-color-warning: #FFA502;
+  --px-color-warning-light: rgba(255, 165, 2, 0.12);
+
+  /* Level tier colors (for XPBar / LevelBadge variants) */
+  --px-color-tier-bronze: #CD7F32;
+  --px-color-tier-silver: #C0C0C0;
+  --px-color-tier-gold: #FFD700;
+  --px-color-tier-platinum: #E5E4E2;
+  --px-color-tier-diamond: #B9F2FF;
+
+  /* ========================================================
+   * BACKGROUND - deep space layers
+   * ======================================================== */
   --px-color-bg-deep: #0a0a1a;
   --px-color-bg-page: #080810;
   --px-color-bg-card: #0D0D1A;
   --px-color-bg-surface: #1A1A2E;
   --px-color-bg-elevated: #16213e;
+  --px-color-bg-hover: rgba(200, 255, 80, 0.04);
+  --px-color-bg-active: rgba(200, 255, 80, 0.08);
+  --px-color-bg-overlay: rgba(8, 8, 16, 0.85);
 
-  /* Text */
+  /* ========================================================
+   * TEXT
+   * ======================================================== */
   --px-color-text: #e0e0ff;
   --px-color-text-bright: #E8E8F0;
   --px-color-text-muted: #B8B8C8;
   --px-color-text-dim: #555577;
+  --px-color-text-on-accent: #0a0a1a;
+  --px-color-text-on-primary: #ffffff;
+  --px-color-text-link: #00E5FF;
 
-  /* Spacing */
+  /* ========================================================
+   * BORDER
+   * ======================================================== */
+  --px-border-subtle: rgba(255, 255, 255, 0.06);
+  --px-border-default: rgba(255, 255, 255, 0.1);
+  --px-border-strong: rgba(255, 255, 255, 0.2);
+  --px-border-accent: rgba(200, 255, 80, 0.25);
+  --px-border-gold: rgba(255, 215, 0, 0.4);
+
+  /* ========================================================
+   * SPACING
+   * ======================================================== */
   --px-spacing-xs: 4px;
   --px-spacing-sm: 8px;
   --px-spacing-md: 16px;
   --px-spacing-lg: 24px;
   --px-spacing-xl: 32px;
+  --px-spacing-2xl: 48px;
+  --px-spacing-3xl: 64px;
 
-  /* Radius - larger for game feel */
+  /* ========================================================
+   * RADIUS - larger for game feel
+   * ======================================================== */
+  --px-radius-xs: 4px;
   --px-radius-sm: 8px;
   --px-radius-md: 12px;
   --px-radius-lg: 16px;
   --px-radius-xl: 20px;
+  --px-radius-2xl: 24px;
+  --px-radius-full: 9999px;
 
-  /* Shadows - subtle glow */
+  /* ========================================================
+   * SHADOWS - glow / depth
+   * ======================================================== */
   --px-shadow-glow: 0 0 20px rgba(108, 99, 255, 0.3);
+  --px-shadow-glow-strong: 0 0 40px rgba(108, 99, 255, 0.5);
   --px-shadow-card: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --px-shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.5);
   --px-shadow-accent: 0 0 24px rgba(200, 255, 80, 0.15);
+  --px-shadow-accent-strong: 0 0 48px rgba(200, 255, 80, 0.3);
+  --px-shadow-gold: 0 0 60px rgba(255, 215, 0, 0.3);
+  --px-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* ========================================================
+   * TYPOGRAPHY
+   * ======================================================== */
+  --px-font-family: "Noto Sans SC", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --px-font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+  --px-font-display: "Orbitron", "Noto Sans SC", sans-serif;
+
+  --px-font-size-xs: 0.75rem;    /* 12px */
+  --px-font-size-sm: 0.875rem;   /* 14px */
+  --px-font-size-base: 1rem;     /* 16px */
+  --px-font-size-lg: 1.125rem;   /* 18px */
+  --px-font-size-xl: 1.25rem;    /* 20px */
+  --px-font-size-2xl: 1.5rem;    /* 24px */
+  --px-font-size-3xl: 2rem;      /* 32px */
+  --px-font-size-hero: 2.5rem;   /* 40px */
+
+  --px-font-weight-normal: 400;
+  --px-font-weight-medium: 500;
+  --px-font-weight-bold: 700;
+  --px-font-weight-black: 900;
+
+  --px-line-height-tight: 1.2;
+  --px-line-height-normal: 1.5;
+  --px-line-height-relaxed: 1.75;
+
+  --px-letter-spacing-wide: 1px;
+  --px-letter-spacing-wider: 2px;
+
+  /* ========================================================
+   * BUTTON - component tokens
+   * ======================================================== */
+  --px-btn-height-sm: 32px;
+  --px-btn-height-md: 40px;
+  --px-btn-height-lg: 48px;
+
+  --px-btn-padding-sm: 0 12px;
+  --px-btn-padding-md: 0 20px;
+  --px-btn-padding-lg: 0 28px;
+
+  --px-btn-font-sm: 0.75rem;
+  --px-btn-font-md: 0.875rem;
+  --px-btn-font-lg: 1rem;
+
+  --px-btn-radius: 12px;
+  --px-btn-gap: 6px;
+
+  --px-btn-bg-primary: var(--px-color-primary);
+  --px-btn-bg-primary-hover: var(--px-color-primary-hover);
+  --px-btn-bg-accent: var(--px-color-accent);
+  --px-btn-bg-accent-hover: var(--px-color-accent-hover);
+  --px-btn-bg-ghost: transparent;
+  --px-btn-bg-ghost-hover: rgba(255, 255, 255, 0.05);
+  --px-btn-bg-danger: var(--px-color-danger);
+
+  --px-btn-border-outline: 1.5px solid var(--px-color-primary);
+  --px-btn-border-ghost: 1.5px solid var(--border-default);
+
+  /* ========================================================
+   * CARD - component tokens
+   * ======================================================== */
+  --px-card-bg: var(--px-color-bg-card);
+  --px-card-bg-highlight: var(--px-color-bg-surface);
+  --px-card-padding: 20px;
+  --px-card-padding-lg: 32px;
+  --px-card-gap: 16px;
+  --px-card-radius: var(--px-radius-xl);
+  --px-card-border: 1px solid var(--px-border-default);
+  --px-card-border-highlight: 1px solid var(--px-border-accent);
+
+  /* ========================================================
+   * INPUT / FORM - component tokens
+   * ======================================================== */
+  --px-input-height-sm: 32px;
+  --px-input-height-md: 40px;
+  --px-input-padding: 0 12px;
+  --px-input-bg: var(--px-color-bg-surface);
+  --px-input-bg-focus: var(--px-color-bg-elevated);
+  --px-input-border: 1px solid var(--px-border-default);
+  --px-input-border-focus: 1.5px solid var(--px-color-primary);
+  --px-input-border-error: 1.5px solid var(--px-color-danger);
+  --px-input-radius: var(--px-radius-md);
+  --px-input-font-size: 0.875rem;
+  --px-input-placeholder: var(--px-color-text-dim);
+
+  --px-label-color: var(--px-color-text-muted);
+  --px-label-font-size: 0.75rem;
+  --px-label-letter-spacing: var(--px-letter-spacing-wide);
+
+  --px-helper-color: var(--px-color-text-dim);
+  --px-helper-error: var(--px-color-danger);
+
+  /* ========================================================
+   * BADGE / CHIP - component tokens
+   * ======================================================== */
+  --px-badge-height: 24px;
+  --px-badge-padding: 0 10px;
+  --px-badge-radius: var(--px-radius-full);
+  --px-badge-font-size: 0.6875rem;
+  --px-badge-font-weight: var(--px-font-weight-bold);
+
+  --px-badge-bg-level: linear-gradient(135deg, rgba(107,63,160,0.5), rgba(200,255,80,0.15));
+  --px-badge-bg-success: var(--px-color-success-light);
+  --px-badge-bg-danger: var(--px-color-danger-light);
+  --px-badge-bg-warning: var(--px-color-warning-light);
+
+  /* ========================================================
+   * MODAL / OVERLAY - component tokens
+   * ======================================================== */
+  --px-modal-overlay: var(--px-color-bg-overlay);
+  --px-modal-bg: var(--px-color-bg-card);
+  --px-modal-max-width: 360px;
+  --px-modal-padding: 24px;
+  --px-modal-radius: var(--px-radius-lg);
+  --px-modal-border: 1px solid var(--px-border-gold);
+  --px-modal-shadow: var(--px-shadow-gold);
+
+  /* ========================================================
+   * XP BAR / PROGRESS - component tokens
+   * ======================================================== */
+  --px-bar-height: 6px;
+  --px-bar-height-lg: 8px;
+  --px-bar-bg: var(--px-color-bg-surface);
+  --px-bar-fill: linear-gradient(90deg, #6B3FA0, var(--px-color-accent));
+  --px-bar-radius: var(--px-radius-full);
+  --px-bar-transition: width 0.8s ease;
+
+  /* ========================================================
+   * ANIMATION TIMING
+   * ======================================================== */
+  --px-anim-fast: 150ms ease;
+  --px-anim-normal: 250ms ease;
+  --px-anim-slow: 400ms ease;
+  --px-anim-xp: 800ms ease;
+  --px-anim-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ========================================================
+   * Z-INDEX SCALE
+   * ======================================================== */
+  --px-z-base: 0;
+  --px-z-content: 10;
+  --px-z-dropdown: 50;
+  --px-z-sticky: 80;
+  --px-z-modal: 100;
+  --px-z-toast: 200;
+  --px-z-popup: 300;
 }

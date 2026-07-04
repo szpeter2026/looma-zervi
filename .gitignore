@@ -22,6 +22,7 @@ build/
 node_modules/
 frontend/packages/*/dist/
 frontend/packages/*/.vite/
+frontend/storybook-static/
 *.tsbuildinfo
 
 # IDE
@@ -76,3 +77,7 @@ web/
 # Playwright
 frontend/playwright-report/
 frontend/test-results/
+
+# Local agent memory (do not commit)
+frontend/.workbuddy/
+.workbuddy/
