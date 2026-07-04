@@ -1,7 +1,7 @@
 # 第一轮双仓联调报告（Jason 本机 · 2026-07-04）
 
 > **目的：** 记录 Jason 高性能机第一轮 **looma-zervi × szbolent-portal × WordPress** 联调发现，供 **szbenyx** 参与改进双仓体系体验。  
-> **同步：** 本文与 `szbolent-portal/docs/ROUND1_INTEGRATION_REPORT.md` **同文同版**（改任一侧须 sync 另一侧）  
+> **同步：** 本文与 `looma-zervi/docs/ROUND1_INTEGRATION_REPORT.md` **同文同版**（改任一侧须 sync 另一侧）  
 > **关联：** [DECISION_RESPONSE.md](./DECISION_RESPONSE.md) · [DUAL_REPO_WORK_GUIDE.md](./DUAL_REPO_WORK_GUIDE.md) · [DUAL_REPO_SYNC_STATUS.md](./DUAL_REPO_SYNC_STATUS.md)
 
 ---
@@ -189,5 +189,66 @@ curl -sf http://127.0.0.1:3000/v1/poetry/stats
 
 ---
 
+## 8. 补充通知 szbenyx（2026-07-04 · Jason 推送后）
+
+> **本文档与 `DUAL_REPO_SYNC_STATUS.md` 已 push 至双仓远端。** 请 pull 后在本节或 PR 评论回复认领情况。
+
+### 8.1 远端已推送（请 pull）
+
+| 仓 | 分支 | HEAD | 要点 |
+|----|------|------|------|
+| **looma-zervi** | `refactor/framework-v2` | `52cf717` | ROUND1 报告 · S0-3 merge · **CI typecheck 修复** |
+| **szbolent-portal** | `main` | `7d7d370` | ROUND1 报告 · **WP compose 默认挂载 Poetry-modown** · About 占位图修复 |
+
+```bash
+# szbenyx Surface 建议执行
+cd looma-zervi && git fetch github && git checkout refactor/framework-v2 && git pull github refactor/framework-v2
+cd szbolent-portal && git pull origin main
+```
+
+### 8.2 CI 与合并流程（重要）
+
+- looma **开发分支**：`refactor/framework-v2`（`github` 远端已对齐 `52cf717`）
+- **`main` 尚未合并** Jason 侧 S0-3 / 文档 / CI 修复；请 szbenyx **开 PR**：`refactor/framework-v2` → `main` 并 **Review**
+- CI 工作流 `.github/workflows/ci.yml` 已在 PR / push 时跑：
+  - `Frontend Typecheck` · `Frontend Unit Tests` · `Backend Tests` ·（可选）E2E / Docker
+- Jason 已修 CI 阻断项：
+  - `1872692` shared-core `ApiClient.test.ts` localStorage mock
+  - `52cf717` saas `Reports.tsx` 缺失 `token` 引用
+- **GitHub 提示 `main` 未保护**：请 szbenyx 在 **Settings → Branches** 为 `main`（两仓）启用：
+  - Require PR before merging
+  - Require status checks（至少上述三项 Frontend/Backend）
+  - Block force push / deletion
+
+### 8.3 portal 侧 Jason 已代做（请 szbenyx 确认/合并思路）
+
+| 项 | 状态 | szbenyx 动作 |
+|----|------|--------------|
+| `docker-compose.wp.yml` bind mount Poetry-modown + `genz_` 表前缀 | ✅ 已在 `7d7d370` | Review 路径默认值是否适合 Surface；或改 `POETRY_MODOWN_WP_CONTENT` env |
+| `About.vue` 外链占位 TLS 报错 | ✅ 已改 CSS 占位 | 可选补真实 about 图 |
+| ROUND1 §6.2 **R1-W3** | ⚠️ Jason 本机先落地 | 请确认是否采纳为仓库默认 |
+
+### 8.4 仍待 szbenyx（§6.2 不变 + 新增）
+
+| 优先级 | 任务 |
+|--------|------|
+| **P0** | Review + merge PR `refactor/framework-v2` → `main`（looma） |
+| **P0** | 两仓 `main` 分支保护规则 |
+| **P0** | portal P0-P4 清 vite `:8001` |
+| **P1** | `poetry.ts` → `/authors` · `contracts/poetry.v1.json` · `looma.ts` + legal |
+| **P1** | 回复 §7 四项决策（契约真源 58k、WP 运维边界、activity 拍板） |
+| **P2** | 更新 `DECISION_RESPONSE` §四/§六 与部署策略一致 |
+
+### 8.5 WordPress 本地（Jason 机已验证 · 供 Surface 复现）
+
+详见 portal `docker-compose.wp.yml` + ROUND1 §5。要点：
+
+- `docker compose -f docker-compose.wp.yml up -d` → `:8800`
+- 需导入 SQL（Jason 用 `~/Downloads/modown_wp_backup_2026-01-23_*.sql`）
+- 插件 **erphpdown** + 主题 **modown** 随 Poetry-modown `wp-content` 挂载
+- **勿将 WP 密码提交 git**；本地管理员 `zervi`，密码 Jason 本机单独维护
+
+---
+
 **Jason** · 2026-07-04 · 第一轮联调记录  
-**待 szbenyx：** 认领 §6.2 · 更新 `DUAL_REPO_SYNC_STATUS.md` · 契约与 portal P0 继续推送
+**待 szbenyx：** §8.2 PR Review · §8.4 认领 · §7 四项反馈
