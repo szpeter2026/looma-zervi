@@ -3,11 +3,14 @@ Payment routes blueprint — Stub provider for internal testing.
 Ownership: JOINT
 
 Endpoints:
-  GET  /v1/payment/plans    - List available pricing plans
+  GET  /v1/payment/plans    - List available pricing plans (region-aware)
   GET  /v1/payment/status   - Current user's subscription status
   POST /v1/payment/upgrade  - Upgrade tier (stub: no real payment)
 
-For production, replace stub logic with WeChat Pay / Alipay integration.
+Pricing contract: backend/contracts/payment.v1.json
+  CN supporter: ¥9.9/mo · US supporter: $1.99/mo
+
+For production, replace stub logic with WeChat Pay / Stripe integration.
 """
 from flask import Blueprint, jsonify, g, request, current_app
 
@@ -19,63 +22,52 @@ from src.analytics.events import (
     EVENT_TRIAL_STARTED,
     EVENT_TRIAL_FAILED,
 )
+from src.payment.plans import get_plan_for_tier, list_plans_for_region, resolve_region
 
 payment_bp = Blueprint("payment", __name__)
 
-# --- Pricing plans (hardcoded for MVP) ---
-PLANS = {
-    "free": {
-        "tier": "free",
-        "name": "免费版",
-        "price_monthly": 0,
-        "features": [
-            "每日 30 次 AI 对话",
-            "基础岗位匹配",
-            "简历解析（3次/天）",
-        ],
-    },
-    "supporter": {
-        "tier": "supporter",
-        "name": "支持者版",
-        "price_monthly": 9.9,
-        "features": [
-            "每日 100 次 AI 对话",
-            "高级岗位匹配",
-            "简历解析（不限）",
-            "专属星球徽章",
-        ],
-    },
-    "pro": {
-        "tier": "pro",
-        "name": "专业版",
-        "price_monthly": 29.9,
-        "features": [
-            "AI 对话不限",
-            "全功能岗位匹配",
-            "简历解析（不限）",
-            "企业级报告",
-            "优先客服",
-        ],
-    },
-}
+UPGRADABLE_TIERS = frozenset({"supporter", "pro"})
+TIER_ORDER = {"free": 0, "supporter": 1, "pro": 2, "enterprise": 3}
 
 
 @payment_bp.route("/payment/plans", methods=["GET"])
 def list_plans():
-    """List all available pricing plans."""
-    return jsonify(plans=list(PLANS.values()))
+    """List pricing plans for a billing region (?region=CN|US)."""
+    region = resolve_region(
+        request.args.get("region"),
+        request.headers.get("Accept-Language"),
+    )
+    return jsonify(**list_plans_for_region(region))
 
 
 @payment_bp.route("/payment/status", methods=["GET"])
 @require_auth
 def payment_status():
     """Get current user's subscription status."""
+    region = resolve_region(
+        request.args.get("region"),
+        request.headers.get("Accept-Language"),
+    )
     tier = g.get("user_tier", "free")
-    plan = PLANS.get(tier, PLANS["free"])
+    if tier == "enterprise":
+        plan = {
+            "tier": "enterprise",
+            "name": "企业版" if region == "CN" else "Enterprise",
+            "price_monthly": 0,
+            "currency": list_plans_for_region(region)["currency"],
+            "region": region,
+            "plan_id": f"enterprise_contact_{region.lower()}",
+            "features": [],
+            "upgradable": False,
+        }
+    else:
+        try:
+            plan = get_plan_for_tier(tier, region)
+        except KeyError:
+            plan = get_plan_for_tier("free", region)
     return jsonify(
         tier=tier,
         plan=plan,
-        # Stub: always show as active for internal testing
         status="active",
         expires_at=None,
     )
@@ -92,14 +84,12 @@ def upgrade_tier():
     data = request.get_json(silent=True) or {}
     new_tier = data.get("tier")
 
-    if new_tier not in ("supporter", "pro"):
+    if new_tier not in UPGRADABLE_TIERS:
         return jsonify(error="bad_request", message="Invalid tier. Choose: supporter, pro"), 400
 
     current_tier = g.get("user_tier", "free")
 
-    # Tier downgrade not allowed via this endpoint
-    tier_order = {"free": 0, "supporter": 1, "pro": 2}
-    if tier_order.get(new_tier, 0) <= tier_order.get(current_tier, 0):
+    if TIER_ORDER.get(new_tier, 0) <= TIER_ORDER.get(current_tier, 0):
         log_product_event(
             current_app._db,
             EVENT_TRIAL_FAILED,
@@ -114,7 +104,6 @@ def upgrade_tier():
             message=f"Cannot downgrade from {current_tier} to {new_tier}",
         ), 400
 
-    # --- Stub: directly update tier in DB (no payment) ---
     db = current_app._db
     db.update_user_tier(g.user_id, new_tier)
 
@@ -128,7 +117,11 @@ def upgrade_tier():
             properties={"from_tier": current_tier},
         )
 
-    plan = PLANS[new_tier]
+    region = resolve_region(
+        request.args.get("region") or data.get("region"),
+        request.headers.get("Accept-Language"),
+    )
+    plan = get_plan_for_tier(new_tier, region)
     access_token = sign_token_for_user(db, g.user_id)
     return jsonify(
         tier=new_tier,

@@ -179,6 +179,13 @@ export type {
   PaymentStatus,
   UpgradeRequest,
   UpgradeResponse,
+  PaymentRegion,
+} from "./types/payment";
+
+export {
+  PAYMENT_SUPPORTER_PRICES,
+  PAYMENT_PRO_PRICES,
+  DEPRECATED_TIER_ALIASES,
 } from "./types/payment";
 
 export type {

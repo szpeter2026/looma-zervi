@@ -1,6 +1,6 @@
 # 双仓远端同步状态与职责对照
 
-> **更新：** 2026-07-04 晚 · Jason push 后 · **szbenyx 请阅 §0 + §7**  
+> **更新：** 2026-07-04 深夜 · 支付 tier 契约存档 · **szbenyx 请阅 §0 + §7 + [PAYMENT_TIER_CONTRACT.md](./PAYMENT_TIER_CONTRACT.md)**  
 > **联调报告：** [ROUND1_INTEGRATION_REPORT.md](./ROUND1_INTEGRATION_REPORT.md)（含 **§8 补充通知**）  
 > **远端 HEAD：** [looma `refactor/framework-v2` @ `52cf717`](https://github.com/szpeter2026/looma-zervi/tree/refactor/framework-v2) · [portal `main` @ `7d7d370`](https://github.com/szpeter2026/szbolent-portal)
 
@@ -8,9 +8,9 @@
 
 ## 0. 给 szbenyx 的三条必读
 
-1. **请 pull 两仓**（见 ROUND1 **§8.1**），阅读 **ROUND1 §8** 全文。  
-2. **looma 合并：** 请 Review PR **`refactor/framework-v2` → `main`**（含 S0-3、ROUND1 文档、CI 修复）。  
-3. **分支保护：** GitHub 提示 `main` 未保护 — 请为 **两仓 `main`** 启用 PR + required checks（见 ROUND1 **§8.2**）。
+1. **请 pull 两仓**，阅读 **[PAYMENT_TIER_CONTRACT.md](./PAYMENT_TIER_CONTRACT.md)**（支付/tier 统一标准 · 2026-07-04 存档）。  
+2. **looma 合并：** 请 Review PR 含 `payment.v1.json` + region-aware `/v1/payment/plans` 的变更 → `main`。  
+3. **分支保护：** 为 **两仓 `main`** 启用 PR + required checks（见 ROUND1 **§8.2**）。
 
 ---
 
@@ -66,9 +66,10 @@
 | **P0** | Review PR looma `refactor/framework-v2` → `main` |
 | **P0** | 两仓 `main` 分支保护 + required checks |
 | **P0** | portal vite 清 `:8001`（P0-P4） |
-| **P1** | contracts、`poetry.ts`/authors、`looma.ts`、legal |
+| **P1** | `payment.v1.json` 已落地 looma · portal 接 `looma.ts` + Pricing（见 **PAYMENT_TIER_CONTRACT §6.2**） |
+| **P1** | contracts、`poetry.ts`/authors、legal |
 | **P1** | 回复 ROUND1 §7 四项决策 |
-| **P2** | DECISION_RESPONSE 歧义清理 · Pricing mock |
+| **P2** | DECISION_RESPONSE 歧义清理 |
 
 ---
 
@@ -76,6 +77,7 @@
 
 | 优先级 | 任务 |
 |--------|------|
+| **P1** | 合并 payment 契约 PR 至 `main`（PAY-C1/C2，见 PAYMENT_TIER_CONTRACT） |
 | **P1** | Chroma import 或确认 58k 基线 |
 | **P1** | WP uploads + 较新 SQL |
 | **P2** | miniprogram shared-core / consent（W2–W3） |
@@ -86,6 +88,7 @@
 
 | 文档 | 说明 |
 |------|------|
+| **`PAYMENT_TIER_CONTRACT.md`** | **支付/tier 契约存档**（CN ¥9.9 / US $1.99 · 双仓执行标准） |
 | `ROUND1_INTEGRATION_REPORT.md` | 联调发现 + **§8 szbenyx 补充通知** |
 | `DUAL_REPO_SYNC_STATUS.md` | 本文（远端 HEAD + 待办） |
 | `DECISION_RESPONSE.md` | 决策真源（§部署策略优先） |

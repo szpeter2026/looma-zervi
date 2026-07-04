@@ -405,8 +405,13 @@ export function createAct1Api(client: ApiClient) {
 // ============================================================
 export function createPaymentApi(client: ApiClient) {
   return {
-    /** List available pricing plans */
-    plans: () => client.get<import("../types/payment").PlansResponse>(API_ROUTES.PAYMENT_PLANS),
+    /** List available pricing plans (?region=CN|US) */
+    plans: (region?: import("../types/payment").PaymentRegion) => {
+      const query = region ? `?region=${region}` : "";
+      return client.get<import("../types/payment").PlansResponse>(
+        `${API_ROUTES.PAYMENT_PLANS}${query}`,
+      );
+    },
 
     /** Get current user subscription status */
     status: () => client.get<import("../types/payment").PaymentStatus>(API_ROUTES.PAYMENT_STATUS),

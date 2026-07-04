@@ -62,7 +62,7 @@ flowchart LR
 | 领域 | looma-zervi 团队 | szbolent-portal 团队 | 协作方式 |
 |------|------------------|----------------------|----------|
 | **身份 / JWT / tier** | 实现 `/v1/auth/*` | 消费 API，存 token（`looma.ts` 待建） | 契约变更需提前通知 |
-| **支付** | 实现 `/v1/payment/*`、微信回调 | Pricing / VIP 页调 API | 共用 `TENCENT_CLOUD_COMMERCE.md` P1 |
+| **支付** | 实现 `/v1/payment/*`、微信回调；真源 **`backend/contracts/payment.v1.json`** | Pricing 消费 API（见 **`PAYMENT_TIER_CONTRACT.md`**） | 共用 `TENCENT_CLOUD_COMMERCE.md` P1 |
 | **诗词数据** | SQLite `poems` + ChromaDB；`/v1/poetry/*` | `src/api/poetry.ts` 适配层 | 后端改字段 → portal 同步改 adapter |
 | **RAG / AI** | `/v1/ask`、`/v1/poetry/search` | 按需接入；**禁用** `tatha.ts` | 不部署独立 Tatha :8010 |
 | **静态门户** | — | `npm run build` → CDN/Nginx | portal 团队独立部署 |
@@ -198,6 +198,7 @@ API_BASE=https://api.szbolent.cn ./scripts/verify-closed-loop.sh
 
 #### looma-zervi 团队
 
+- [x] **P1-L0** `backend/contracts/payment.v1.json` + region-aware `/v1/payment/plans`（详见 **`PAYMENT_TIER_CONTRACT.md`**）
 - [ ] **P1-L1** 新增 `GET /v1/poetry/authors`（分页聚合诗人，替代 portal 客户端扫页）
 - [ ] **P1-L2** 导出 OpenAPI spec 或 `contracts/poetry.v1.json` 作为契约真源
 - [ ] **P1-L3** pytest 契约测试：browse / random / stats 响应 schema 稳定
@@ -205,6 +206,7 @@ API_BASE=https://api.szbolent.cn ./scripts/verify-closed-loop.sh
 
 #### szbolent-portal 团队
 
+- [ ] **P1-P0** Pricing + `looma.ts` 按 **`PAYMENT_TIER_CONTRACT.md` §6.2** 对接（禁止 `basic`/硬编码价）
 - [ ] **P1-P1** `poetry.ts` 改用 `/v1/poetry/authors`（后端就绪后）
 - [ ] **P1-P2** 契约变更 CI：对比 OpenAPI 与 `poetry.ts` 类型（或 codegen）
 - [ ] **P1-P3** Blog 列表接真实 WordPress posts
