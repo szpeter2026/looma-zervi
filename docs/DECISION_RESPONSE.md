@@ -1,9 +1,10 @@
 # 协同方案决策回复（szbenyx → Jason）
 
-> **日期：** 2026-07-04
-> **回复人：** szbenyx（后端 Owner · portal 总负责人 · Enterprise/Jobs/Resume/Reports 路由 Owner）
-> **依据：** `CONSISTENCY_CROSS_REPO_SYNERGY_PROPOSAL.md` v1.0
-> **状态：** 决策文件，请据此排期执行
+> **日期：** 2026-07-04（**远端最新** · commit `8286d75` / `f4b9343`）  
+> **回复人：** szbenyx（后端 Owner · portal 总负责人 · Enterprise/Jobs/Resume/Reports 路由 Owner）  
+> **依据：** `CONSISTENCY_CROSS_REPO_SYNERGY_PROPOSAL.md` v1.0  
+> **状态：** 决策文件，请据此排期执行  
+> **Jason 确认：** [JASON_DECISION_ACK.md](./JASON_DECISION_ACK.md) · 职责对照 [DUAL_REPO_SYNC_STATUS.md](./DUAL_REPO_SYNC_STATUS.md)
 
 ---
 
@@ -91,6 +92,8 @@ Jason 高性能机器：
 - portal `looma.ts` 完整类型定义（auth/payment/compliance）
 - portal Pricing 页接真实 API
 
+> **⚠️ 文档内部待对齐：** §四 #1 与 §六 仍写「诗词注入归我」；以 **§部署策略调整** 为准 → **注入 + 联调归 Jason**。见 `DUAL_REPO_SYNC_STATUS.md`。
+
 ---
 
 ## 三、你的行动清单（按优先级）
@@ -111,13 +114,13 @@ Jason 高性能机器：
 
 | # | 任务 | 截止 | 产出 |
 |---|------|------|------|
-| 1 | looma.db 注入 78656 首诗词种子数据 | W1 初 | API 有真实数据 |
+| 1 | ~~looma.db 注入 78656 首诗词种子数据~~ → **已转 Jason 机器** | — | 见部署策略 |
 | 2 | `backend/contracts/poetry.v1.json` 导出 | W1 中 | 契约真源 v0.1 |
 | 3 | `backend/contracts/auth.v1.json` 导出 | W1 末 | 契约真源 v0.1 |
 | 4 | portal：删 `:8001` proxy + `tatha.ts` + `business.ts` | W1 初 | legacy 清零 |
 | 5 | portal：`looma.ts` fetch 封装 + 静态页 | W1 中 | P0-P2/P0-P7 |
 | 6 | portal：Pricing UI 骨架 | W1 末 | P0-P3 |
-| 7 | 清理 `mcp-servers/.venv` | 即刻 | 释放 292 MB |
+| 7 | ~~清理 `mcp-servers/.venv`~~ | — | ✅ 已完成 |
 
 ---
 
@@ -133,14 +136,9 @@ Jason 高性能机器：
 
 ## 六、关于种子数据 — 你需要知道的事实
 
-我刚审视了 `backend/data/looma.db`（0.47 MB）：
-
-- **28 张表 schema 完备**，设计规范（WAL、外键、部分唯一索引）
-- **但实际数据只有 4 条 Beta 测试用户**（`beta_free@looma.test` 等，密码均为 `looma123`）
-- **poems 表基本为空** — 需要运行 `scripts/import_poetry.py` 从 ChromaDB 源灌入 78656 首诗词
-- **所有诗词/用户/企业/候选人数据不在 git 仓库中**（`.gitignore` 排除了 `backend/data/` 和 `*.db`）
-
-**我已将诗词种子注入列为我的 W1 第一个任务**。注入完成后立即导出 OpenAPI 契约，你的 S0-3 可以并行开工，不受影响。
+- **28 张表 schema 完备**；**poems 表基本为空**（需 `import_poetry.py`）
+- **ChromaDB `data/poetry_full` 全量在 Jason 机器**（78656 首）
+- **注入与联调在 Jason 高性能机执行**（2026-07-04 部署策略）
 
 ---
 
@@ -148,13 +146,10 @@ Jason 高性能机器：
 
 请在 **2026-07-05 前**确认以下三项：
 
-- [ ] 接受上述分工和截止时间
-- [ ] 确认 S0-3（shared-core 补导出）可以在 W1 末完成
-- [ ] 确认 CORS 生产配置可在我完成诗词注入后同步就绪
-
-确认后我不再逐项催促，按上述排期各自推进。阻塞问题在周一 sync 上提出。
+- [x] 接受上述分工和截止时间 — Jason 2026-07-04
+- [x] 确认 S0-3 可在 W1 末完成 — 已启动
+- [x] 确认 CORS 可在诗词注入后就绪 — `.env.example` 已更新
 
 ---
 
-**szbenyx**
-2026-07-04
+**szbenyx** · 2026-07-04

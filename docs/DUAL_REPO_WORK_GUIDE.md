@@ -9,7 +9,8 @@
 > - 备案 / 支付 / 域名：`TENCENT_CLOUD_COMMERCE.md`  
 > - 主体选型 / 费用：`COMMERCE_ENTITY_DECISION.md`  
 > - 门户集成细节：`szbolent-portal/docs/INTEGRATION.md`  
-> - 溯源边界：`szbolent-portal/docs/LINEAGE.md`
+> - 溯源边界：`szbolent-portal/docs/LINEAGE.md`  
+> - **一致性 × 双仓协同（专家研判稿）：** `Projects/CONSISTENCY_CROSS_REPO_SYNERGY_PROPOSAL.md`
 
 ---
 

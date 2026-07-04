@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { createReportsApi, type Report, type ReportType } from "@looma/shared-core";
 import { formatDate } from "@looma/shared-core";
 import { createSaasApiClient } from "../../api/saasApiClient";
+import { useSaasAuthStore } from "../auth/authStore";
 
 const typeMap: Record<string, { label: string; emoji: string }> = {
   daily: { label: "日报", emoji: "📊" },
@@ -21,6 +22,7 @@ export default function Reports() {
   const [type, setType] = useState<ReportType>("daily");
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const token = useSaasAuthStore((s) => s.token);
 
   const api = createSaasApiClient();
   const reportsApi = createReportsApi(api);
