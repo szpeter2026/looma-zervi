@@ -307,8 +307,36 @@ pnpm add -D jest ts-jest @types/jest
 P0 ✅ → P1（删重复层）→ 微信点验 → P2（工程化）→ P3（CI）
 ```
 
-**不要跳 P1 直接做 P2**：否则 services 层会建立在仍重复的 `api.ts` 之上，债务翻倍。
+## 构建桥入库状态 ✅
+
+### 已入库的关键文件
+
+| 类别 | 文件路径 | 作用 |
+|------|----------|------|
+| **共享核心构建** | `shared-core/scripts/build-mini.mjs` | esbuild 打包脚本 |
+| **API 适配器** | `shared-core/src/api/MiniApiClient.ts` | 小程序 API 客户端 |
+| **API 工厂** | `shared-core/src/api/createMiniApi.ts` | 小程序 API 工厂函数 |
+| **小程序类型** | `shared-core/src/api/mini-types.ts` | 小程序安全类型层 |
+| **合规检查** | `shared-core/src/compliance/ensureConsentMini.ts` | 小程序合规检查 |
+| **构建入口** | `shared-core/src/entries/mini.ts` | 窄入口配置 |
+| **构建配置** | `shared-core/tsconfig.mini.json` | 小程序构建配置 |
+| **npm 配置** | `miniprogram/package.json` | 小程序 npm 包配置 |
+| **验证脚本集** | `miniprogram/scripts/` | 构建验证与迁移脚本 |
+| **类型增强** | `miniprogram/types/miniprogram.ts` | 小程序扩展类型 |
+| **验证文档** | `P1_MIGRATION_SUMMARY.md` 等 | 迁移验证记录 |
+
+### 状态说明
+- ✅ **P1 迁移完成**：四条业务链路已验证（登录、Ask、分享、Consent）
+- ✅ **构建桥入库完成**：所有关键构建脚本、配置、文档已纳入版本控制
+- ✅ **GitHub 同步**：`b0ee14a` 提交已推送至 GitHub main
+- ✅ **Gitee 同步**：镜像仓库已更新
+- ⚠️ **遗留修改**：UI 组件库相关修改仍处于未提交状态（非构建桥核心）
+
+### 下一步建议
+1. **微信真机点验**：在微信开发者工具中构建 npm 并测试四条链路
+2. **运行验证脚本**：`bash scripts/verify-p0-local.sh`
+3. **P2 工程化**：服务层分离、环境配置三分、测试覆盖
+4. **P3 CI 防回退**：自动化构建验证
 
 ---
-
-*最后更新：2026-07-05 — P1 四条链路迁移已完成*
+*最后更新：2026-07-05 — P1 四条链路迁移已完成，构建桥完整入库*
