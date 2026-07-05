@@ -1,70 +1,106 @@
 #!/bin/bash
 
-# 运行Ask API基线测试并记录结果
-set -e
+# 运行 Ask API 基线测试并记录结果
+set -euo pipefail
 
-echo "🚀 运行Ask API基线测试..."
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+API_BASE="${API_BASE:-http://127.0.0.1:5200}"
+BACKEND_LABEL="${BACKEND_LABEL:-Flask dev server (single worker)}"
+CONCURRENCY="${CONCURRENCY:-5}"
+REQUESTS="${REQUESTS:-20}"
+RESULTS_FILE="${RESULTS_FILE:-$ROOT/docs/k6_baseline_main.json}"
+
+echo "🚀 运行 Ask API 基线测试..."
 echo "=========================================="
+echo "后端: $BACKEND_LABEL"
+echo "配置: ${CONCURRENCY} 并发 × ${REQUESTS} 请求 (nocache)"
 
-# 1. 检查后端是否运行
+echo ""
 echo "1. 检查后端服务..."
-if ! curl -s http://127.0.0.1:5200/health > /dev/null 2>&1; then
+if ! curl -sf "$API_BASE/health" > /dev/null 2>&1; then
     echo "❌ 后端服务未运行在 :5200"
     echo "请先启动后端: cd backend && ./dev.sh"
     exit 1
 fi
 echo "✅ 后端服务运行正常"
 
-# 2. 运行并发测试 (nocache)
 echo ""
-echo "2. 运行并发测试 (nocache, 5并发 × 20请求)..."
-cd /Users/jason/Projects/looma-zervi
+echo "2. 运行并发测试..."
+TMP_JSON="$(mktemp)"
+python3 "$ROOT/scripts/concurrency_test.py" \
+    --url "$API_BASE/v1/ask" \
+    --concurrency "$CONCURRENCY" \
+    --requests "$REQUESTS" \
+    --ready-url "$API_BASE/health" \
+    --json-output "$TMP_JSON"
 
-# 运行Python并发测试
-python3 scripts/concurrency_test.py \
-    --url http://127.0.0.1:5200/v1/ask \
-    --token token-b658c985 \
-    --concurrency 5 \
-    --requests 20 \
-    --ready-url http://127.0.0.1:5200/health
-
-# 3. 创建基线结果文件
 echo ""
 echo "3. 生成基线测试报告..."
-cat > docs/k6_baseline_main.json << 'EOF'
-{
-  "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
-  "environment": "local",
-  "api_endpoint": "http://127.0.0.1:5200/v1/ask",
-  "test_config": {
-    "concurrency": 5,
-    "requests": 20,
-    "cache_mode": "nocache",
-    "backend": "Flask dev server (single worker)",
-    "llm_provider": "DeepSeek"
-  },
-  "results": {
-    "summary": "需要运行实际测试获取数据",
-    "recommendations": [
-      "内测部署需使用gunicorn ≥4 workers",
-      "SaaS需要修改为使用非流式API",
-      "考虑添加LLM层缓存（类似LLM分支的llm_cache.py）"
-    ]
-  },
-  "next_steps": [
-    "安装k6后运行完整压测: npm install -g k6",
-    "运行k6测试: k6 run scripts/k6_ask_test_nocache.js --vus 5 --duration 30s",
-    "统一SaaS Ask契约到非流式",
-    "内测前部署gunicorn配置"
-  ]
-}
-EOF
+python3 - "$TMP_JSON" "$RESULTS_FILE" "$BACKEND_LABEL" "$CONCURRENCY" "$REQUESTS" << 'PYEOF'
+import json
+import sys
+from datetime import datetime, timezone
 
-echo "✅ 基线测试框架已创建"
+tmp_path, out_path, backend_label, concurrency, requests = sys.argv[1:6]
+with open(tmp_path, encoding="utf-8") as fh:
+    results = json.load(fh)
+
+latency = results.get("latency_ms", {})
+report = {
+    "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "environment": "local",
+    "api_endpoint": "http://127.0.0.1:5200/v1/ask",
+    "status": "tested",
+    "test_config": {
+        "concurrency": int(concurrency),
+        "requests": int(requests),
+        "cache_mode": "nocache",
+        "backend": backend_label,
+        "llm_provider": "DeepSeek",
+        "auth_mode": "registered user + ask_rag consent",
+    },
+    "results": results,
+    "slo_targets": {
+        "ask_p95_nocache_vu5": "< 8s",
+        "ask_p95_cache_hit": "< 500ms",
+        "error_rate": "< 5%",
+        "concurrent_users": ">= 10",
+    },
+    "slo_pass": {
+        "error_rate": results.get("error_rate", 1) < 0.05,
+        "p95_under_8s": latency.get("p95", 999999) < 8000,
+    },
+    "observations": [
+        "Ask API 使用 ask_rag consent 门禁",
+        "每次请求使用唯一 query 避免结果缓存",
+        f"测试后端: {backend_label}",
+    ],
+    "next_steps": [
+        "内测部署使用 gunicorn 多 worker",
+        "安装 k6 后运行完整压测: brew install k6",
+        "k6 run scripts/k6_ask_test_nocache.js --vus 5 --duration 30s",
+    ],
+}
+
+with open(out_path, "w", encoding="utf-8") as fh:
+    json.dump(report, fh, indent=2, ensure_ascii=False)
+    fh.write("\n")
+
+print(f"✅ 基线报告已写入: {out_path}")
+if report["slo_pass"]["error_rate"]:
+    print("✅ 错误率 SLO 通过 (< 5%)")
+else:
+    print("❌ 错误率 SLO 未通过")
+if report["slo_pass"]["p95_under_8s"]:
+    print("✅ P95 延迟 SLO 通过 (< 8s)")
+else:
+    p95_s = latency.get("p95", 0) / 1000
+    print(f"⚠️  P95 延迟 SLO 未通过: {p95_s:.2f}s")
+PYEOF
+
+rm -f "$TMP_JSON"
+
 echo ""
-echo "📊 运行完整k6测试:"
-echo "  1. 安装k6: brew install k6 或 npm install -g k6"
-echo "  2. 运行测试: k6 run scripts/k6_ask_test_nocache.js --vus 5 --duration 30s"
-echo "  3. 查看结果后更新 docs/k6_baseline_main.json"
-echo ""
-echo "📝 注意: 当前使用的是Python并发测试脚本，k6测试需要额外安装k6工具"
+echo "📊 可选: 安装 k6 后运行完整压测"
+echo "  brew install k6"
+echo "  k6 run scripts/k6_ask_test_nocache.js --vus 5 --duration 30s"
