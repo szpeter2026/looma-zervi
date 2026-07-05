@@ -5,7 +5,14 @@
  */
 
 import { eventBus } from './event-bus'
-import type { User, GameProfile, Identity, PersonalityType, MissionId, Fleet } from '../types/index'
+import { 
+  User, 
+  Identity, 
+  PersonalityType as PlanetXPersonalityType, 
+  MissionId, 
+  Fleet,
+  GameProfile
+} from '../types/index'
 import { hydratePersonality } from '../constants/quiz'
 
 interface StoreState {
@@ -15,7 +22,7 @@ interface StoreState {
 
   // Game
   identity: Identity | undefined
-  personalityType: PersonalityType | undefined
+  personalityType: PlanetXPersonalityType | undefined
   level: number
   xp: number
   xpToNext: number
@@ -32,6 +39,7 @@ interface StoreState {
 
   // UI
   achievement: { title: string; desc: string } | null
+  personalityDetail?: string
 }
 
 const state: StoreState = {
@@ -49,6 +57,7 @@ const state: StoreState = {
   quizStep: 0,
   quizTraitCounts: {},
   achievement: null,
+  personalityDetail: undefined,
 }
 
 export const store = {
@@ -61,29 +70,50 @@ export const store = {
   },
 
   /** Update game profile from backend response */
-  applyGameProfile(data: Partial<GameProfile> & { personality_detail?: string }) {
-    if (data.identity !== undefined) state.identity = data.identity
-    if (data.level !== undefined) state.level = data.level
-    if (data.xp !== undefined) state.xp = data.xp
-    if (data.xp_to_next !== undefined) state.xpToNext = data.xp_to_next
+  applyGameProfile(data: any) {
+    // 兼容后端返回的字段命名（可能是 snake_case）
+    const identity = data.identity !== undefined ? data.identity : undefined
+    const level = data.level !== undefined ? data.level : undefined
+    const xp = data.xp !== undefined ? data.xp : undefined
+    const personality_type = data.personality_type !== undefined ? data.personality_type : data.personalityType
+    const missions_completed = data.missions_completed !== undefined ? data.missions_completed : data.missionsCompleted
+    const fleet = data.fleet !== undefined ? data.fleet : undefined
+    const team_size = data.team_size !== undefined ? data.team_size : data.teamSize
+    const fleet_members = data.fleet_members !== undefined ? data.fleet_members : data.fleetMembers
+    const personality_detail = data.personality_detail !== undefined ? data.personality_detail : undefined
+
+    if (identity !== undefined) state.identity = identity
+    if (level !== undefined) state.level = level
+    if (xp !== undefined) state.xp = xp
+    // 注意：shared-core 的 GameProfile 中没有 xp_to_next 字段
+    // 保持现有的 xpToNext 逻辑不变
+
+    if (personality_detail !== undefined) {
+      state.personalityDetail = personality_detail
+    }
 
     const personality = hydratePersonality(
-      typeof data.personality_type === 'string' ? data.personality_type : undefined,
-      data.personality_detail,
+      typeof personality_type === 'string' ? personality_type : undefined,
+      personality_detail,
     )
     if (personality) {
-      state.personalityType = personality
-    } else if (data.personality_type === '' || data.personality_type === null) {
+      state.personalityType = personality as any
+    } else if (personality_type === '' || personality_type === null) {
       state.personalityType = undefined
     }
 
-    if (data.missions_completed !== undefined) {
-      const mc = data.missions_completed as MissionId[] | number
-      state.missionsCompleted = Array.isArray(mc) ? mc : []
+    if (missions_completed !== undefined) {
+      // 处理 missions_completed 可能是数字或数组的情况
+      if (Array.isArray(missions_completed)) {
+        state.missionsCompleted = missions_completed as MissionId[]
+      } else if (typeof missions_completed === 'number') {
+        // 如果是数字，转换为空数组（因为小程序需要数组）
+        state.missionsCompleted = []
+      }
     }
-    if (data.fleet !== undefined) state.fleet = data.fleet
-    if (data.team_size !== undefined) state.teamSize = data.team_size
-    if (data.fleet_members !== undefined) state.fleetMembers = data.fleet_members
+    if (fleet !== undefined) state.fleet = fleet
+    if (team_size !== undefined) state.teamSize = team_size
+    if (fleet_members !== undefined) state.fleetMembers = fleet_members
     eventBus.emit('profile:loaded', state)
   },
 
