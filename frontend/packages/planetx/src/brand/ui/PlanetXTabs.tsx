@@ -23,28 +23,42 @@ export default function PlanetXTabs({
     width: fullWidth ? "100%" : "auto",
   };
 
-  const tabStyle = (item: PlanetXTabItem, index: number): React.CSSProperties => ({
-    position: "relative",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "var(--px-spacing-xs)",
-    padding: orientation === "vertical" 
-      ? "var(--px-spacing-sm) var(--px-spacing-md)" 
-      : "var(--px-spacing-sm) var(--px-spacing-lg)",
-    background: "transparent",
-    border: "none",
-    color: activeTab === item.value ? "var(--px-color-text-bright)" : "var(--px-color-text-muted)",
-    cursor: "pointer",
-    fontSize: "var(--px-font-size-sm)",
-    fontWeight: activeTab === item.value ? "var(--px-font-weight-bold)" : "var(--px-font-weight-medium)",
-    transition: "var(--px-anim-normal)",
-    borderRadius: variant === "pills" ? "var(--px-radius-full)" : "var(--px-radius-md)",
-    ...(fullWidth && orientation === "horizontal" ? { flex: 1 } : {}),
-    ...(fullWidth && orientation === "vertical" ? { width: "100%" } : {}),
-  });
+  const tabStyle = (item: PlanetXTabItem): React.CSSProperties => {
+    const isActive = activeTab === item.value;
+    const base: React.CSSProperties = {
+      position: "relative",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "var(--px-spacing-xs)",
+      padding: orientation === "vertical" 
+        ? "var(--px-spacing-sm) var(--px-spacing-md)" 
+        : "var(--px-spacing-sm) var(--px-spacing-lg)",
+      background: "transparent",
+      border: "none",
+      color: isActive ? "var(--px-color-text-bright)" : "var(--px-color-text-muted)",
+      cursor: "pointer",
+      fontSize: "var(--px-font-size-sm)",
+      fontWeight: isActive ? "var(--px-font-weight-bold)" : "var(--px-font-weight-medium)",
+      transition: "var(--px-anim-normal)",
+      borderRadius: variant === "pills" ? "var(--px-radius-full)" : "var(--px-radius-md)",
+      ...(fullWidth && orientation === "horizontal" ? { flex: 1 } : {}),
+      ...(fullWidth && orientation === "vertical" ? { width: "100%" } : {}),
+    };
 
-  const hoverStyle = (item: PlanetXTabItem): React.CSSProperties => {
+    if (variant === "pills" && isActive) {
+      return {
+        ...base,
+        background: "var(--px-color-primary)",
+        color: "var(--px-color-text-on-primary)",
+        boxShadow: "var(--px-shadow-glow)",
+      };
+    }
+
+    return base;
+  };
+
+  const hoverStyle = (): React.CSSProperties => {
     if (variant === "pills") {
       return {
         background: "var(--px-color-primary-light)",
@@ -56,27 +70,16 @@ export default function PlanetXTabs({
     };
   };
 
-  const activeStyle = (item: PlanetXTabItem): React.CSSProperties => {
-    if (variant === "pills") {
-      return {
-        background: "var(--px-color-primary)",
-        color: "var(--px-color-text-on-primary)",
-        boxShadow: "var(--px-shadow-glow)",
-      };
-    }
-    return {};
-  };
-
   return (
     <div style={containerStyle}>
-      {items.map((item, index) => (
+      {items.map((item) => (
         <button
           key={item.value}
           onClick={() => onChange?.(item.value)}
-          style={tabStyle(item, index)}
+          style={tabStyle(item)}
           onMouseEnter={(e) => {
             if (activeTab !== item.value) {
-              Object.assign(e.currentTarget.style, hoverStyle(item));
+              Object.assign(e.currentTarget.style, hoverStyle());
             }
           }}
           onMouseLeave={(e) => {

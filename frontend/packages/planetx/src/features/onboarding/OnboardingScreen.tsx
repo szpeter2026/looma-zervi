@@ -99,14 +99,15 @@ export default function OnboardingScreen() {
         paddingTop: 'var(--px-spacing-md)', 
         borderTop: '1px solid rgba(255,255,255,0.1)' 
       }}>
-        <PlanetXButton
-          variant="accent"
-          onClick={handleEnterTSpace}
-          leftIcon="🪐"
-          style={{ marginBottom: 'var(--px-spacing-xs)' }}
-        >
-          进入 T 空间 · Navigator 叙事体验
-        </PlanetXButton>
+        <div style={{ marginBottom: 'var(--px-spacing-xs)' }}>
+          <PlanetXButton
+            variant="accent"
+            onClick={handleEnterTSpace}
+            leftIcon="🪐"
+          >
+            进入 T 空间 · Navigator 叙事体验
+          </PlanetXButton>
+        </div>
         <p style={{ fontSize: '12px', color: 'var(--px-color-text-muted)', marginTop: 'var(--px-spacing-xs)', opacity: 0.6 }}>
           与 AI 向导对话 · 探索六域 · 10分钟叙事体验
         </p>
