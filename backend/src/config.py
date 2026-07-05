@@ -22,6 +22,7 @@ class Config:
     # Flask
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
     FLASK_ENV = os.getenv("FLASK_ENV", "development")
+    FLASK_PORT = int(os.getenv("FLASK_PORT", "5200"))
 
     # JWT
     JWT_SECRET = os.getenv("JWT_SECRET", "looma-zervi-default-jwt-secret-change-in-production-2026")
@@ -58,6 +59,8 @@ class Config:
 
     # Quota
     FREE_DAILY_LIMIT = int(os.getenv("FREE_DAILY_LIMIT", "30"))
+    SUPPORTER_DAILY_LIMIT = int(os.getenv("SUPPORTER_DAILY_LIMIT", "999999"))
+    PRO_DAILY_LIMIT = int(os.getenv("PRO_DAILY_LIMIT", "999999"))
 
     # LLM Provider (multi-provider fallback: deepseek, ollama, openai)
     LLM_PROVIDER_ORDER = os.getenv("LLM_PROVIDER_ORDER", "deepseek,ollama,openai")
@@ -108,6 +111,7 @@ def _refresh_config():
     """
     Config.SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
     Config.FLASK_ENV = os.getenv("FLASK_ENV", "development")
+    Config.FLASK_PORT = int(os.getenv("FLASK_PORT", "5200"))
     Config.JWT_SECRET = os.getenv("JWT_SECRET", "looma-zervi-default-jwt-secret-change-in-production-2026")
     Config.JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "24"))
     Config.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
@@ -128,6 +132,8 @@ def _refresh_config():
         "http://localhost:5173,http://localhost:5174,http://localhost:3000",
     ).split(",")
     Config.FREE_DAILY_LIMIT = int(os.getenv("FREE_DAILY_LIMIT", "30"))
+    Config.SUPPORTER_DAILY_LIMIT = int(os.getenv("SUPPORTER_DAILY_LIMIT", "999999"))
+    Config.PRO_DAILY_LIMIT = int(os.getenv("PRO_DAILY_LIMIT", "999999"))
     Config.LLM_PROVIDER_ORDER = os.getenv("LLM_PROVIDER_ORDER", "deepseek,ollama,openai")
     Config.OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
     Config.OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "")

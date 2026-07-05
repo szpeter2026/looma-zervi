@@ -6,7 +6,7 @@
  *
  * Auth bypass strategy:
  *   1. addInitScript injects saas-auth into localStorage BEFORE any JS runs
- *   2. Route interception handles ALL /v1/* API calls (cross-origin to :5000)
+ *   2. Route interception handles ALL /v1/* API calls (cross-origin to :5200)
  *   3. We also stub fetchProfile by pre-hydrating the Zustand store via init script
  *
  * Key fixes from iteration 5:

@@ -19,7 +19,9 @@ COPY . .
 RUN mkdir -p data chroma_data
 
 # Expose port
-EXPOSE 5000
+EXPOSE 5200
 
-# Run with gunicorn in production
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "3", "--timeout", "60", "run:app"]
+ENV FLASK_PORT=5200
+
+# Run with gunicorn (bind 5200 — see gunicorn_config.py)
+CMD ["gunicorn", "--config", "gunicorn_config.py", "run:app"]

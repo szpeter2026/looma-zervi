@@ -22,7 +22,7 @@ warn() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 # 检查目录
 ROOT_DIR=$(pwd)
 if [ ! -f "$ROOT_DIR/pyproject.toml" ]; then
-    echo "请在项目根目录运行: cd /Users/jason/Projects/looma-zervi"
+    echo "请在仓库根目录运行（需包含 pyproject.toml、backend/、frontend/）"
     exit 1
 fi
 
@@ -79,7 +79,7 @@ fi
 if [ -f "$ROOT_DIR/backend/.env" ]; then
     pass "后端环境配置文件存在"
 else
-    warn "后端 .env 文件不存在 (运行: cd backend && ./dev.sh)"
+    warn "backend/.env 不存在 (cp .env.example backend/.env 或运行 ./scripts/start-full-mvp.sh)"
 fi
 
 if [ -f "$ROOT_DIR/backend/requirements.txt" ]; then
@@ -141,10 +141,12 @@ else
 fi
 
 POETRY_CHROMA="$ROOT_DIR/data/poetry_full"
-if [ -d "$POETRY_CHROMA" ]; then
-    pass "诗词向量库存在"
+if [ -d "$POETRY_CHROMA" ] && [ -n "$(find "$POETRY_CHROMA" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+    pass "诗词向量库存在且有数据"
 else
-    warn "诗词向量库不存在 (RAG功能将降级)"
+    warn "诗词向量库不存在或为空 (RAG/诗词 Ask 将降级)"
+    echo "  路径: $POETRY_CHROMA"
+    echo "  导入: cd backend && python scripts/import_poetry.py"
 fi
 
 echo ""

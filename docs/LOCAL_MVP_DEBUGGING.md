@@ -129,7 +129,7 @@ FLASK_PORT=5200
 DATABASE_PATH=./data/looma.db
 
 # 诗词向量库
-POETRY_CHROMA_PATH=/Users/jason/Projects/looma-zervi/data/poetry_full
+POETRY_CHROMA_PATH=data/poetry_full
 
 # JWT密钥
 JWT_SECRET=dev-secret-change-in-production
