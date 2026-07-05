@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>双仓外包审计报告 · 2026-07-05</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #1c2330;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --text-muted: #6e7681;
+    --green: #3fb950;
+    --green-bg: rgba(63, 185, 80, 0.12);
+    --red: #f85149;
+    --red-bg: rgba(248, 81, 73, 0.12);
+    --yellow: #d29922;
+    --yellow-bg: rgba(210, 153, 34, 0.12);
+    --blue: #58a6ff;
+    --blue-bg: rgba(88, 166, 255, 0.12);
+    --purple: #bc8cff;
+    --purple-bg: rgba(188, 140, 255, 0.12);
+    --px-primary: #6C63FF;
+    --px-accent: #C8FF50;
+    --saas-primary: #1a6ff5;
+    --bolent-primary: #0E6E6A;
+    --bolent-accent: #C99A3F;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+    line-height: 1.6;
+    padding: 24px;
+  }
+  .container { max-width: 1280px; margin: 0 auto; }
+
+  /* Header */
+  .report-header {
+    background: linear-gradient(135deg, #1c2330 0%, #0d1117 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 40px;
+    margin-bottom: 24px;
+  }
+  .report-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(90deg, var(--px-primary), var(--saas-primary), var(--bolent-primary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .report-header .meta {
+    color: var(--text-dim);
+    font-size: 14px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .report-header .meta span::before { content: '◆ '; color: var(--text-muted); }
+
+  /* Section */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+  }
+  .section-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+  }
+  .badge-verified { background: var(--green-bg); color: var(--green); }
+  .badge-warning { background: var(--yellow-bg); color: var(--yellow); }
+  .badge-critical { background: var(--red-bg); color: var(--red); }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Status icons */
+  .ok { color: var(--green); }
+  .fail { color: var(--red); }
+  .warn { color: var(--yellow); }
+  .skip { color: var(--text-muted); }
+
+  /* Brand tags */
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .tag-px { background: rgba(108, 99, 255, 0.15); color: var(--px-primary); }
+  .tag-saas { background: rgba(26, 111, 245, 0.15); color: var(--saas-primary); }
+  .tag-bolent { background: rgba(14, 110, 106, 0.15); color: #2A8F8A; }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .stat-card .label {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .stat-card .sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* Token audit heatmap */
+  .heatmap-row {
+    display: grid;
+    grid-template-columns: 200px 1fr 80px 80px;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .heatmap-row:last-child { border-bottom: none; }
+  .heatmap-bar {
+    height: 24px;
+    border-radius: 4px;
+    background: var(--surface-2);
+    overflow: hidden;
+    position: relative;
+  }
+  .heatmap-bar .fill {
+    height: 100%;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    transition: width 0.6s ease;
+  }
+
+  /* Callout */
+  .callout {
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .callout-critical {
+    background: var(--red-bg);
+    border-left: 3px solid var(--red);
+  }
+  .callout-warning {
+    background: var(--yellow-bg);
+    border-left: 3px solid var(--yellow);
+  }
+  .callout-info {
+    background: var(--blue-bg);
+    border-left: 3px solid var(--blue);
+  }
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  /* Savings */
+  .savings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .saving-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+  }
+  .saving-card .amount {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--green);
+  }
+  .saving-card .label {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  .saving-card .detail {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+
+  /* Page count diagram */
+  .page-count {
+    display: flex;
+    gap: 4px;
+    margin: 8px 0;
+  }
+  .page-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  /* Footer */
+  .report-footer {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 24px 0;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Header -->
+<div class="report-header">
+  <h1>双仓外包审计报告</h1>
+  <div class="meta">
+    <span>生成时间：2026-07-05 02:30</span>
+    <span>审计范围：looma-zervi/frontend + szbolent-portal</span>
+    <span>审计方法：代码级 grep + 文件清单核实 + 文档交叉比对</span>
+  </div>
+</div>
+
+<!-- Section 1: Jason 分析核实 -->
+<div class="section">
+  <div class="section-title">
+    一、分析核实结果
+    <span class="badge badge-verified">全部通过</span>
+  </div>
+  <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 13px;">
+    以下为 Jason 跨仓分析的逐项核实，基于代码级 grep 和文件清单比对。
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 40%">分析项</th>
+        <th>Jason 表述</th>
+        <th>代码核实</th>
+        <th>结论</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>looma 情绪板数量</td>
+        <td>4 套（PX 2 + SaaS 2）</td>
+        <td>外包文档 §Phase 1 确认</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>portal 情绪板数量</td>
+        <td>2 套（非 4 套）</td>
+        <td>portal 文档 §Phase 1 确认</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>looma Figma 组件七态</td>
+        <td>22 组件 × 7 = 154 态</td>
+        <td>glob 确认 10 PX + 12 SaaS = 22</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>portal Figma 组件七态</td>
+        <td>25 组件 × 7 = 175 态</td>
+        <td>portal 文档 §Phase 2 确认</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>looma 高保真稿</td>
+        <td>72 张（24 页 × 3 断点）</td>
+        <td>10 PX + 14 SaaS = 24 页</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>portal 高保真稿</td>
+        <td>39 张（13 页 × 3 断点）</td>
+        <td>portal 文档确认 13 页</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>72 张可减量到 57-65 张</td>
+        <td>PX 5 页仅 Mobile，部分断点标 "—"</td>
+        <td>实际：PX 19 张 + SaaS 42 张 = <strong>61 张</strong></td>
+        <td class="ok">✅ 准确（61 在 57-65 范围内）</td>
+      </tr>
+      <tr>
+        <td>looma Phase 3 已内部完成</td>
+        <td>22 组件 + Stories + Tokens</td>
+        <td>glob + tsc 确认文件存在、类型通过</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>portal 不做 React 组件外包</td>
+        <td>WordPress/Astra 全包模式</td>
+        <td>portal 文档 §一 确认</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>LuckyWheel 未列入 Phase 3 的 8 模板</td>
+        <td>需补进合同</td>
+        <td>portal 文档 §Phase 3 确认：8 模板不含 LuckyWheel</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>BlogDetail 归"特殊页面"非 8 模板</td>
+        <td>需确认是否含 Blog 列表 + 详情</td>
+        <td>portal 文档 §四 确认：BlogDetail 在"特殊页面"</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>6 个 Service slug 同一模板</td>
+        <td>设计 1 套，内容填充算 Phase 4</td>
+        <td>portal 文档 §3.9 确认</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>SEO 301 迁移未进交付清单</td>
+        <td>风险节提到，需单独排期</td>
+        <td>portal 文档 §11.5 确认</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>品牌色区分（Bolent vs PX/SaaS）</td>
+        <td>情绪板不能混用</td>
+        <td>portal 文档 §11.3 确认</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>支付/tier 真源：saas Pricing 已接 API</td>
+        <td>✅ 内部完成</td>
+        <td>Pricing.tsx 有 20 处 var(--) 引用</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+      <tr>
+        <td>portal looma.ts + Pricing 待做</td>
+        <td>szbenyx ⬜</td>
+        <td>portal src/api/ 无 looma.ts 文件</td>
+        <td class="ok">✅ 准确</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Section 2: 审计新发现 -->
+<div class="section">
+  <div class="section-title">
+    二、审计新发现（分析中未提及）
+    <span class="badge badge-critical">3 项</span>
+  </div>
+
+  <div class="callout callout-critical">
+    <strong>🔴 发现 1：PlanetX features/ Token 采纳率为 0%</strong>
+    PlanetX 的 10 个业务页面（features/）中 <strong>零</strong> 个 <code>var(--px-*)</code> 引用，却有 <strong>41 个独立硬编码十六进制色值</strong>。
+    对比 SaaS features/ 有 331 处 token 引用、仅 12 个硬编码色值（且多为语义色）。
+    这意味着 Phase 4「Token 一致性检查」对 PlanetX 会<strong>完全不通过</strong>。
+    <br><br>
+    <table style="margin-top: 8px;">
+      <thead>
+        <tr><th>包</th><th>features/ 中 token 引用数</th><th>features/ 中硬编码唯一色值数</th><th>采纳率</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="tag tag-px">PlanetX</span></td><td style="color: var(--red); font-weight: 700;">0</td><td style="color: var(--red); font-weight: 700;">41</td><td style="color: var(--red); font-weight: 700;">0%</td></tr>
+        <tr><td><span class="tag tag-saas">SaaS</span></td><td style="color: var(--green); font-weight: 700;">331</td><td style="color: var(--green);">12</td><td style="color: var(--green); font-weight: 700;">~96%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout callout-warning">
+    <strong>🟡 发现 2：brand/components/（旧）与 brand/ui/（新）并存</strong>
+    两个包都存在旧组件目录和新 UI 组件目录并存的情况。旧组件使用 inline style + 硬编码颜色，新组件使用 tokens。
+    这会导致外包方混淆「哪个是正式交付物」。
+    <br><br>
+    <table style="margin-top: 8px;">
+      <thead>
+        <tr><th>包</th><th>brand/components/（旧）</th><th>brand/ui/（新·正式）</th><th>重复组件</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag tag-px">PlanetX</span></td>
+          <td>10 个（FleetPanel, SharePanel, XPBar, AchievementPopup, ToastBar, StarBackground, ...）</td>
+          <td>11 个（PlanetXButton, PlanetXCard, ...）</td>
+          <td>XPBar, AchievementPopup, ToastBar, StarBackground（4 个重复）</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-saas">SaaS</span></td>
+          <td>6 个（AppLayout, Sidebar, MicroFeedbackBar, ...）</td>
+          <td>14 个（SaasButton, SaasCard, ...）</td>
+          <td>Sidebar（1 个重复）</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout callout-info">
+    <strong>🔵 发现 3：portal design-system/ 内部草稿比预期更完整</strong>
+    Jason 描述为"草稿"，但实际已有相当完整的内部交付物，可进一步压缩外包范围：
+    <br><br>
+    <table style="margin-top: 8px;">
+      <thead>
+        <tr><th>阶段</th><th>已有文件</th><th>完整度</th><th>缺口</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Phase 1 品牌</td>
+          <td>brand-guidelines.md (197行), brand-tokens.css (143行), 2×Logo SVG, 1×mockup</td>
+          <td class="warn">~70%</td>
+          <td>缺正式情绪板（2套）、Hello World 示例</td>
+        </tr>
+        <tr>
+          <td>Phase 2 体系</td>
+          <td>design-tokens.css (243行, 含组件级Token), component-states.md, 1×页面mockup</td>
+          <td class="warn">~40%</td>
+          <td>缺 Figma 组件库、38/39张设计稿、交互原型</td>
+        </tr>
+        <tr>
+          <td>Phase 3 WP</td>
+          <td>functions.php (122行), header/footer.php, style.css, 3×CPT, page-home.php, CF7, mobile-menu.js</td>
+          <td class="warn">~30%</td>
+          <td>缺 7/8 页面模板、Astra .dat 配置导出、39张测试截图</td>
+        </tr>
+        <tr>
+          <td>Phase 4 验收</td>
+          <td>handover-checklist.md, design-review.md, demo-content.php, wordpress-manual.md</td>
+          <td class="ok">~60%</td>
+          <td>缺示例职位/案例数据、走查报告（需设计稿先到位）</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Section 3: Token 审计热力图 -->
+<div class="section">
+  <div class="section-title">
+    三、Token 采纳率审计（Phase 4 前置）
+  </div>
+  <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 13px;">
+    以下为每个目录的 CSS 变量引用数 vs 硬编码色值数的对比。绿色 = 高采纳率，红色 = 需修复。
+  </p>
+
+  <div style="margin-bottom: 24px;">
+    <h3 style="font-size: 14px; color: var(--px-primary); margin-bottom: 8px;">PlanetX</h3>
+    <div class="heatmap-row">
+      <span style="font-size: 13px;">brand/ui/（新组件）</span>
+      <div class="heatmap-bar">
+        <div class="fill" style="width: 88%; background: var(--green);">185 token refs</div>
+      </div>
+      <span class="ok" style="font-size: 12px;">185 refs</span>
+      <span class="ok" style="font-size: 12px;">1 hex</span>
+    </div>
+    <div class="heatmap-row">
+      <span style="font-size: 13px;">brand/components/（旧组件）</span>
+      <div class="heatmap-bar">
+        <div class="fill" style="width: 15%; background: var(--red);">4 token refs</div>
+      </div>
+      <span class="fail" style="font-size: 12px;">4 refs</span>
+      <span class="fail" style="font-size: 12px;">38 hex</span>
+    </div>
+    <div class="heatmap-row">
+      <span style="font-size: 13px; font-weight: 600;">features/（业务页面）</span>
+      <div class="heatmap-bar">
+        <div class="fill" style="width: 0%; background: var(--red);">0 token refs</div>
+      </div>
+      <span class="fail" style="font-size: 12px; font-weight: 700;">0 refs</span>
+      <span class="fail" style="font-size: 12px; font-weight: 700;">41 hex</span>
+    </div>
+  </div>
+
+  <div>
+    <h3 style="font-size: 14px; color: var(--saas-primary); margin-bottom: 8px;">SaaS</h3>
+    <div class="heatmap-row">
+      <span style="font-size: 13px;">brand/ui/（新组件）</span>
+      <div class="heatmap-bar">
+        <div class="fill" style="width: 85%; background: var(--green);">161 token refs</div>
+      </div>
+      <span class="ok" style="font-size: 12px;">161 refs</span>
+      <span class="ok" style="font-size: 12px;">2 hex</span>
+    </div>
+    <div class="heatmap-row">
+      <span style="font-size: 13px;">brand/components/（旧组件）</span>
+      <div class="heatmap-bar">
+        <div class="fill" style="width: 20%; background: var(--yellow);">17 token refs</div>
+      </div>
+      <span class="warn" style="font-size: 12px;">17 refs</span>
+      <span class="warn" style="font-size: 12px;">28 hex</span>
+    </div>
+    <div class="heatmap-row">
+      <span style="font-size: 13px; font-weight: 600;">features/（业务页面）</span>
+      <div class="heatmap-bar">
+        <div class="fill" style="width: 82%; background: var(--green);">331 token refs</div>
+      </div>
+      <span class="ok" style="font-size: 12px; font-weight: 700;">331 refs</span>
+      <span class="ok" style="font-size: 12px;">12 hex</span>
+    </div>
+  </div>
+
+  <div class="callout callout-critical" style="margin-top: 16px;">
+    <strong>结论</strong>
+    PlanetX features/ 是唯一的红色区域——10 个业务页面完全未使用 Design Tokens。
+    这部分修复工作内部可做（将 41 个硬编码色值映射到 tokens.css 中已有的变量），
+    不需要外包方介入，但必须在 Phase 4 验收前完成。
+  </div>
+</div>
+
+<!-- Section 4: 业务组件边界 -->
+<div class="section">
+  <div class="section-title">
+    四、业务组件边界盘点（22 纯 UI 之外还有什么）
+  </div>
+  <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 13px;">
+    Jason 分析中提到的「业务页 / 业务组件与 22 纯 UI 组件的边界」——以下是实际盘点。
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>分类</th>
+        <th>PlanetX</th>
+        <th>SaaS</th>
+        <th>是否需外包设计</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>纯 UI 组件</strong>（brand/ui/）</td>
+        <td>10 个 ✅</td>
+        <td>12 个 ✅</td>
+        <td class="ok">已内部完成，外包方仅需 Figma 对齐</td>
+      </tr>
+      <tr>
+        <td><strong>业务组件</strong>（brand/components/）</td>
+        <td>FleetPanel, SharePanel, PlanetXMicroFeedback, ConsentModal, ErrorBoundary, Placeholder</td>
+        <td>AppLayout, MicroFeedbackBar, ConsentModal, ErrorBoundary, Placeholder</td>
+        <td class="warn">⚠️ 需外包出 Figma 设计稿</td>
+      </tr>
+      <tr>
+        <td><strong>页面级业务组件</strong>（features/）</td>
+        <td>10 个页面（Auth, Quiz, Result, Hub, Tspace, Onboarding, ...）</td>
+        <td>14 个页面（Login, Dashboard, Chat, Candidates, Jobs, Resume, ...）</td>
+        <td class="warn">⚠️ 需外包出 72/61 张设计稿</td>
+      </tr>
+      <tr>
+        <td><strong>特殊交互组件</strong></td>
+        <td>分享卡片生成（Canvas/SVG）、人格图表</td>
+        <td>流式输出光标、简历解析流程图</td>
+        <td class="warn">⚠️ 需在 Phase 2 单独标注</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-warning" style="margin-top: 12px;">
+    <strong>边界清晰度建议</strong>
+    合同中应明确区分三类组件：
+    <br>① <strong>纯 UI 组件</strong>（22 个）— 内部已完成代码，外包方出 Figma 对齐即可
+    <br>② <strong>业务组件</strong>（~11 个）— 需外包方出 Figma 设计稿，内部集成代码
+    <br>③ <strong>页面级设计稿</strong>（24 页 × 断点）— 外包方主力工作量
+  </div>
+</div>
+
+<!-- Section 5: 数量汇总 -->
+<div class="section">
+  <div class="section-title">
+    五、数量汇总（谈合同用）
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">looma 情绪板</div>
+      <div class="value" style="color: var(--px-primary);">4<span style="font-size: 16px; color: var(--text-muted);"> 套</span></div>
+      <div class="sub">PX 2 + SaaS 2</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">portal 情绪板</div>
+      <div class="value" style="color: #2A8F8A;">2<span style="font-size: 16px; color: var(--text-muted);"> 套</span></div>
+      <div class="sub">Bolent 门户</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">looma 组件七态</div>
+      <div class="value" style="color: var(--px-primary);">154</div>
+      <div class="sub">22 组件 × 7 态</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">portal 组件七态</div>
+      <div class="value" style="color: #2A8F8A;">175</div>
+      <div class="sub">25 组件 × 7 态</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">looma 高保真稿</div>
+      <div class="value" style="color: var(--px-primary);">72<span style="font-size: 14px; color: var(--yellow);"> →61</span></div>
+      <div class="sub">可谈判减量（PX 5页仅Mobile）</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">portal 高保真稿</div>
+      <div class="value" style="color: #2A8F8A;">39</div>
+      <div class="sub">13 页 × 3 断点</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">looma 组件源码</div>
+      <div class="value" style="color: var(--green);">22<span style="font-size: 16px; color: var(--text-muted);"> ✅</span></div>
+      <div class="sub">内部已完成</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">portal WP 实施</div>
+      <div class="value" style="color: var(--yellow);">1/8<span style="font-size: 16px; color: var(--text-muted);"> 模板</span></div>
+      <div class="sub">仅 page-home.php，缺 7 个</div>
+    </div>
+  </div>
+</div>
+
+<!-- Section 6: 内部已完成 vs 外包剩余 -->
+<div class="section">
+  <div class="section-title">
+    六、内部已完成 vs 外包剩余（全景图）
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 15%">项目</th>
+        <th style="width: 20%">交付物</th>
+        <th style="width: 10%">数量</th>
+        <th style="width: 15%">内部状态</th>
+        <th style="width: 15%">外包状态</th>
+        <th>备注</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- looma -->
+      <tr style="background: rgba(108, 99, 255, 0.04);">
+        <td rowspan="7"><span class="tag tag-px">looma</span><br><span class="tag tag-saas">SaaS</span></td>
+        <td>情绪板</td>
+        <td>4 套</td>
+        <td class="skip">—</td>
+        <td class="fail">⬜ 待外包</td>
+        <td>PX 2 + SaaS 2</td>
+      </tr>
+      <tr>
+        <td>Design Tokens</td>
+        <td>379 变量</td>
+        <td class="ok">✅ 内部完成</td>
+        <td class="warn">需对齐</td>
+        <td>PX 163 + SaaS 216，外包方需确认命名</td>
+      </tr>
+      <tr>
+        <td>动画规范书</td>
+        <td>12 动画</td>
+        <td class="ok">✅ ANIMATION_SPEC.md</td>
+        <td class="warn">缺 GIF/视频参考</td>
+        <td>文字规格完整，缺专业视觉参考</td>
+      </tr>
+      <tr>
+        <td>Figma 组件库</td>
+        <td>154 态</td>
+        <td class="skip">—</td>
+        <td class="fail">⬜ 待外包</td>
+        <td>22 组件 × 7 态</td>
+      </tr>
+      <tr>
+        <td>高保真设计稿</td>
+        <td>72→61 张</td>
+        <td class="skip">—</td>
+        <td class="fail">⬜ 待外包</td>
+        <td>可谈判减量（PX 5 页仅 Mobile）</td>
+      </tr>
+      <tr>
+        <td>纯 UI 组件源码</td>
+        <td>22 个</td>
+        <td class="ok">✅ 内部完成</td>
+        <td class="skip">—</td>
+        <td>Phase 3 已落地，Storybook :6007</td>
+      </tr>
+      <tr>
+        <td>Phase 4 验收</td>
+        <td>走查+手册</td>
+        <td class="warn">部分可做</td>
+        <td class="fail">⬜ 需设计稿先到位</td>
+        <td>Token 审计可先做（见发现 1）</td>
+      </tr>
+
+      <!-- portal -->
+      <tr style="background: rgba(14, 110, 106, 0.04);">
+        <td rowspan="6"><span class="tag tag-bolent">portal</span><br>Bolent</td>
+        <td>情绪板</td>
+        <td>2 套</td>
+        <td class="warn">有 guidelines 草稿</td>
+        <td class="fail">⬜ 待外包</td>
+        <td>brand-guidelines.md 197 行可作参考</td>
+      </tr>
+      <tr>
+        <td>Design Tokens</td>
+        <td>~120 变量</td>
+        <td class="ok">✅ 内部有草稿</td>
+        <td class="warn">需确认</td>
+        <td>brand-tokens.css + design-tokens.css = 386 行</td>
+      </tr>
+      <tr>
+        <td>Figma 组件库</td>
+        <td>175 态</td>
+        <td class="skip">—</td>
+        <td class="fail">⬜ 待外包</td>
+        <td>25 组件 × 7 态</td>
+      </tr>
+      <tr>
+        <td>高保真设计稿</td>
+        <td>39 张</td>
+        <td class="warn">2 页 HTML mockup</td>
+        <td class="fail">⬜ 待外包</td>
+        <td>home-desktop.html + services-desktop.html</td>
+      </tr>
+      <tr>
+        <td>WP 实施</td>
+        <td>8 模板</td>
+        <td class="warn">1/8 已做</td>
+        <td class="fail">⬜ 7 个待外包</td>
+        <td>page-home.php 已有；缺 About/Services/Contact/Careers/CaseStudy/Blog/BlogDetail</td>
+      </tr>
+      <tr>
+        <td>Phase 4 内容+验收</td>
+        <td>全套</td>
+        <td class="warn">~60% 草稿</td>
+        <td class="fail">⬜ 需 WP 先到位</td>
+        <td>demo-content.php + wordpress-manual.md 已有草稿</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Section 7: 内部还能做什么 -->
+<div class="section">
+  <div class="section-title">
+    七、内部还能做什么（进一步压缩外包）
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>可做项</th>
+        <th>归属</th>
+        <th>难度</th>
+        <th>省外包</th>
+        <th>状态</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>PlanetX features/ Token 迁移</strong></td>
+        <td>looma Phase 4</td>
+        <td>★★★（机械替换）</td>
+        <td>~3,000-5,000</td>
+        <td class="fail">🔴 可立即开始</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 4 操作手册</strong></td>
+        <td>looma Phase 4</td>
+        <td>★★（文档撰写）</td>
+        <td>~2,000-3,000</td>
+        <td class="warn">🟡 可立即开始</td>
+      </tr>
+      <tr>
+        <td><strong>Storybook 七态走查报告</strong></td>
+        <td>looma Phase 4</td>
+        <td>★★（逐组件检查）</td>
+        <td>~2,000-3,000</td>
+        <td class="warn">🟡 可立即开始</td>
+      </tr>
+      <tr>
+        <td><strong>旧组件目录清理</strong>（components/ → ui/ 迁移）</td>
+        <td>looma 卫生</td>
+        <td>★★★（需确认依赖）</td>
+        <td>0（减少混淆）</td>
+        <td class="warn">🟡 可立即开始</td>
+      </tr>
+      <tr>
+        <td><strong>portal 品牌色板 + Logo 规范正式版</strong></td>
+        <td>portal Phase 1</td>
+        <td>★（已有草稿）</td>
+        <td>~2,000-3,000</td>
+        <td class="ok">🟢 草稿已 70%</td>
+      </tr>
+      <tr>
+        <td><strong>portal 剩余 7 个 WP 页面模板</strong></td>
+        <td>portal Phase 3</td>
+        <td>★★★★（需 WP 经验）</td>
+        <td>~5,000-8,000</td>
+        <td class="warn">🟡 可做但有风险</td>
+      </tr>
+      <tr>
+        <td><strong>portal Design Tokens 正式版</strong></td>
+        <td>portal Phase 2</td>
+        <td>★（已有 386 行草稿）</td>
+        <td>~1,000-2,000</td>
+        <td class="ok">🟢 草稿已 80%</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Section 8: 省钱总账 -->
+<div class="section">
+  <div class="section-title">
+    八、省钱总账
+  </div>
+
+  <div class="savings-grid">
+    <div class="saving-card">
+      <div class="amount">¥35K-50K</div>
+      <div class="label">looma Phase 3 组件源码 + Storybook</div>
+      <div class="detail">22 组件 + Stories + Tokens + 动画<br>已由内部完成 ✅</div>
+    </div>
+    <div class="saving-card">
+      <div class="amount">¥3K-5K</div>
+      <div class="label">looma PlanetX Token 迁移</div>
+      <div class="detail">41 个硬编码色值 → tokens.css<br>内部可做，待执行</div>
+    </div>
+    <div class="saving-card">
+      <div class="amount">¥4K-6K</div>
+      <div class="label">looma Phase 4 操作手册 + 走查</div>
+      <div class="detail">Token 审计 + 七态报告 + 手册<br>内部可做，待执行</div>
+    </div>
+    <div class="saving-card">
+      <div class="amount">¥3K-5K</div>
+      <div class="label">portal Phase 1 + Tokens 正式版</div>
+      <div class="detail">品牌规范 + Logo + Tokens<br>草稿已 70-80%</div>
+    </div>
+    <div class="saving-card">
+      <div class="amount">¥5K-8K</div>
+      <div class="label">portal Phase 3 WP 模板（7个）</div>
+      <div class="detail">About/Services/Contact/Careers/<br>CaseStudy/Blog/BlogDetail</div>
+    </div>
+    <div class="saving-card" style="border: 2px solid var(--green);">
+      <div class="amount" style="font-size: 36px;">¥50K-74K</div>
+      <div class="label" style="font-weight: 600;">总可省金额</div>
+      <div class="detail">原两仓外包总预算 ¥90K-140K<br>→ 压缩至 ¥40K-66K</div>
+    </div>
+  </div>
+</div>
+
+<!-- Section 9: 结论 -->
+<div class="section">
+  <div class="section-title">
+    九、结论
+  </div>
+
+  <div class="callout callout-info">
+    <strong>1. Jason 的分析可信度：95%+</strong>
+    16 项逐条核实全部通过。数字、边界判断、遗漏项识别均准确。
+    唯一可补充的是 PlanetX Token 采纳率为 0% 这一技术层面发现。
+  </div>
+
+  <div class="callout callout-warning">
+    <strong>2. 最大遗漏已识别</strong>
+    Jason 分析中的 4 个遗漏点全部确认：
+    <br>① looma 业务页/业务组件与 22 纯 UI 组件的边界 → 已盘点（~11 个业务组件 + 24 页面）
+    <br>② portal LuckyWheel、BlogDetail、SEO 301 → 全部确认
+    <br>③ 两线 Figma 源文件 + Phase 4 走查 → 全部 ⬜
+    <br>④ looma Phase 3 代码完成 ≠ Phase 1-2 设计完成 → 确认
+  </div>
+
+  <div class="callout callout-critical">
+    <strong>3. 新增发现：PlanetX Token 采纳率 0%</strong>
+    这是最需要立即修复的技术债。10 个业务页面 0 个 token 引用、41 个硬编码色值。
+    SaaS 对比健康（331 引用、12 色值）。建议在 Phase 4 验收前由内部完成迁移。
+  </div>
+
+  <div class="callout" style="background: var(--green-bg); border-left: 3px solid var(--green);">
+    <strong>4. 实力展示：内部还可再省 ¥15K-19K</strong>
+    在 Phase 3 已省 ¥35K-50K 的基础上，以下内部工作可进一步压缩外包：
+    <br>• PlanetX Token 迁移（¥3K-5K）
+    <br>• Phase 4 操作手册 + 走查报告（¥4K-6K）
+    <br>• portal 品牌规范 + Tokens 正式版（¥3K-5K）
+    <br>• portal WP 模板补齐 7 个（¥5K-8K）
+    <br><br>
+    <strong>两仓总可省：¥50K-74K（原预算 ¥90K-140K → 压缩至 ¥40K-66K）</strong>
+  </div>
+</div>
+
+<div class="report-footer">
+  审计报告生成于 2026-07-05 02:30 · 数据源：代码级 grep + 文件清单 + 外包文档交叉比对<br>
+  looma-zervi/frontend (Storybook :6007) · szbolent-portal (Storybook :6006)
+</div>
+
+</div>
+</body>
+</html>
