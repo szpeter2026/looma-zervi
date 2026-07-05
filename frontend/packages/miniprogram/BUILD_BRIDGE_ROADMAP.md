@@ -172,12 +172,78 @@ export const getShareTextMini = (personality: PlanetXPersonalityType): string =>
 
 ---
 
-## P2 — 吸收 zervi.test 工程化实践（备案等待期，约 2 天）
+## P2 — 小程序自动化测试集成与工程化实践
 
-参考项目：`/Users/jason/SurfaceZervi/GitHub/szjason72/zervi.test`
+### 2.1 小程序自动化测试方案
 
-### 2.1 Model / Service 分层（对齐 zervi.test `models/`）
+基于当前架构分析：
 
+```
+┌─────────────────────────────────────────────────────────┐
+│  Playwright E2E（现有）                                  │
+│  SaaS :5174  +  PlanetX :5173  →  浏览器自动化           │
+└───────────────────────────┬─────────────────────────────┘
+                            │ HTTP
+┌───────────────────────────▼─────────────────────────────┐
+│  Flask 后端 :5200  ← dev.sh / e2e-backend.sh            │
+│  WECHAT_DEV_MODE=true  →  微信登录可 mock                │
+└───────────────────────────▲─────────────────────────────┘
+                            │ wx.request
+┌───────────────────────────┴─────────────────────────────┐
+│  微信小程序自动化（新增）                                  │
+│  miniprogram-automator + *.mini.live.spec.ts            │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### 复用组件
+- ✅ **后端 API**：完全复用 `e2e-backend.sh` 启动的后端
+- ✅ **API 契约**：共享 `/v1/auth/wechat`, `/v1/ask`, `/v1/referral/create`, `/v1/compliance/consent/*`
+- ✅ **测试数据**：复用 `liveApi.ts` 的种子逻辑（适配微信登录）
+
+#### 新增组件
+- ⚠️ **miniprogram-automator**：微信开发者工具自动化
+- ⚠️ **小程序 Playwright 配置**：`playwright.mini.config.ts`
+- ⚠️ **小程序测试文件**：`*.mini.live.spec.ts`
+
+### 2.2 本地联调脚本增强
+
+已实现：`scripts/start-miniprogram-local.sh`
+
+功能：
+1. 检查环境配置
+2. 启动后端指引
+3. 构建链验证
+4. 开发者工具操作指引
+5. API 验证脚本调用
+
+### 2.3 测试验证分工
+
+| 验证项 | 工具 | 覆盖端 | 状态 |
+|--------|------|--------|------|
+| 后端合规 | `verify-p0-local.sh` | 全端 API | ✅ 已实现 |
+| Consent 闭环 | `verify-p0-local.sh` | 全端 API | ✅ 已实现 |
+| Web UI 闭环 | `pnpm e2e:live:all` | SaaS + PlanetX | ✅ 已实现 |
+| 小程序构建链 | `pnpm run build:npm` | 小程序 | ✅ 已实现 |
+| 小程序业务链路 | 微信开发者工具 + 真机 | 小程序 only | ⚠️ 需手动 |
+| 小程序自动化 | `miniprogram-automator` | 小程序 | ❌ 待实现 |
+
+### 2.4 核心链路验证清单
+
+#### 手动点验（当前）
+1. **登录链路**：`wx.login()` → mock openid → JWT
+2. **Ask 链路**：提问 → 回答 → 显示
+3. **分享链路**：生成分享码 → 分享 → 访问
+4. **Consent 链路**：首次提示 → 同意记录 → 后续跳过
+
+#### 自动化规划（P2.5）
+1. **miniprogram-automator 集成**
+2. **小程序 Playwright 配置**
+3. **API 层测试复用**（适配微信登录）
+4. **UI 自动化测试**（页面导航、组件交互）
+
+### 2.5 工程化改进
+
+#### Model / Service 分层（对齐 zervi.test `models/`）
 ```
 miniprogram/
 ├── services/           # 新建
@@ -189,12 +255,8 @@ miniprogram/
     └── ask/index.ts    # 只调 askService.ask()
 ```
 
-**原则**：页面不直接 `wx.request`，不直接拼 URL。
-
-### 2.2 环境配置三分
-
+#### 环境配置三分
 `utils/config.ts` 扩展为：
-
 ```typescript
 type Env = 'dev' | 'staging' | 'prod' | 'mock'
 
@@ -206,34 +268,19 @@ const CONFIGS = {
 }
 ```
 
-备案前用 `staging`；备案后用 `prod`。
-
-### 2.3 一键联调脚本
-
-新建 `scripts/start-miniprogram-env.sh`（仓库根目录）：
-
-1. 启动 backend `:5200`
-2. 可选启动 MCP `:8999`
-3. 跑 `verify-p0-local.sh` 烟雾
-4. 打印当前 `API_BASE` 与微信「不校验合法域名」提示
-
-### 2.4 API 字段契约文档
-
+#### API 字段契约文档
 新建 `docs/API_FIELD_EXPECTATIONS.md`：
-
 - 每个 `/v1/*` 端点的 request/response 字段
 - 与 `shared-core` 类型同名对照
 - 后端变更时 **先改 shared-core 类型，再改文档**
 
-### 2.5 Jest + mock `wx`
-
+#### Jest + mock `wx`
 ```bash
 cd frontend/packages/miniprogram
 pnpm add -D jest ts-jest @types/jest
 ```
 
 测试目标：
-
 - `createMiniApiClient` 401 → 清 token
 - `ensureConsent` 403 → 返回 false
 - 参考 zervi.test `utils/__tests__/http.test.ts`
@@ -242,8 +289,10 @@ pnpm add -D jest ts-jest @types/jest
 
 - [ ] `services/` 目录建立，至少 auth + ask 迁移完成
 - [ ] `config.ts` 支持 dev/staging/prod 切换
-- [ ] `start-miniprogram-env.sh` 可一键启动联调环境
+- [ ] `start-miniprogram-local.sh` 可一键启动联调环境（✅ 已实现）
 - [ ] 至少 3 个 Jest 用例通过
+- [ ] 小程序自动化测试方案设计完成
+- [ ] 本地联调文档完善（✅ 已创建 `MINIPROGRAM_LOCAL_DEBUGGING.md`）
 
 ---
 
