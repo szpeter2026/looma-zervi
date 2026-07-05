@@ -324,7 +324,7 @@ jobs:
           echo "=== Health check ==="
           sleep 5
           $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "curl -sf http://localhost:5000/health && echo ' Backend OK' || echo ' Backend FAIL'"
+            "curl -sf http://localhost:5200/health && echo ' Backend OK' || echo ' Backend FAIL'"
           $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "curl -sf http://localhost/health && echo ' Nginx OK' || echo ' Nginx FAIL'"
 

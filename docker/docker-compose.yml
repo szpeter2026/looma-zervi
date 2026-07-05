@@ -10,7 +10,9 @@ services:
     container_name: looma-backend
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "5200:5200"
+    environment:
+      - FLASK_PORT=5200
     env_file:
       - ../backend/.env
     volumes:

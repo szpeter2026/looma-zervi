@@ -1,7 +1,7 @@
 # 压测焦虑纠偏与 Ask 契约统一 — 架构决策记录（ADR）
 
 > **版本：** 1.0 · **日期：** 2026-07-06  
-> **状态：** 📋 待执行（内测并行）  
+> **状态：** P0 已完成 · P1 内测并行  
 > **关联分支：** `github/feature/llm-provider-fallback-k6-baseline`  
 > **关联文档：** [LOCAL_MVP_DEBUGGING.md](./LOCAL_MVP_DEBUGGING.md) · [MINIPROGRAM_LOCAL_DEBUGGING.md](./MINIPROGRAM_LOCAL_DEBUGGING.md) · [CONSISTENCY_CROSS_REPO_SYNERGY_PROPOSAL.md](./CONSISTENCY_CROSS_REPO_SYNERGY_PROPOSAL.md)  
 > **目的：** 记录团队对内测前「客户端 / SaaS 压测」焦虑的理解偏差、核实结论与后续合入 main 的工作清单
@@ -30,7 +30,7 @@
 | A5 | **小程序和 Web 在 Ask 上压力相同** | ❌ 小程序走 **非流式 POST**（与当前后端一致）；SaaS 走 **假 SSE 读流**（与后端不一致），SaaS 风险更高 | 见 §4 |
 | A6 | **Multica 80% = 还缺 20% 架构没做** | ✅ 缺的 20% 是 **容量 / LLM resilience / Ask 传输契约**，不是再拆 `@looma/core` 包 | shared-core RULE：仅契约，不含 UI/Store |
 | A7 | **ChromaDB Docker :8000 是 MVP 必需** | ❌ 诗词 RAG 用 `data/poetry_full` 本地 PersistentClient；Docker Chroma 为可选扩展 | `backend/dev.sh` · `rehearsal-local.sh` |
-| A8 | **PlanetX 本地联调默认连本地后端** | ⚠️ `planetxAuthStore` 无 `VITE_API_BASE` 时 fallback **`http://1.14.202.161`** | 需 MVP 脚本 export `VITE_API_BASE=http://127.0.0.1:5200` |
+| A8 | **PlanetX 本地联调默认连本地后端** | ✅ fallback 已改为 `http://127.0.0.1:5200`；生产/build 仍须设 `VITE_API_BASE` | `planetxAuthStore.ts` · MVP 启动脚本 |
 
 ---
 

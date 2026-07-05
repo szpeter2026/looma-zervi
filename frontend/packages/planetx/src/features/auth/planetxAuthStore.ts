@@ -41,7 +41,7 @@ export function getRankName(level: number): RankName {
 }
 
 // ============ API Client 初始化 ============
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_API_BASE ?? 'http://1.14.202.161'
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:5200'
 const SAAS_BASE = import.meta.env.VITE_SAAS_URL ?? 'http://localhost:5174'
 
 const MISSION_XP: Record<MissionId, number> = {

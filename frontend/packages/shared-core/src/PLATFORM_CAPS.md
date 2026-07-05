@@ -10,16 +10,15 @@
 | 端 | 客户端实现 | 期望 | 后端实现 | 状态 | 影响 |
 |----|-----------|------|----------|------|------|
 | **小程序** | `createChatApi().ask()` | JSON一次返回 | `jsonify(...)` | ✅ 一致 | 无问题 |
-| **SaaS (B端)** | `useChat.ts` → `fetch` + `body.getReader()` | SSE流式 | `jsonify(...)` | ❌ **P0缺陷** | 长连接阻塞，并发性能差 |
-| **shared-core Web** | `createChatApi().askStream()` | SSE流式 | 未实现stream路由 | ❌ **P0缺陷** | API未实现 |
+| **SaaS (B端)** | `useChatNonStreaming` → `createChatApi().ask()` | JSON一次返回 | `jsonify(...)` | ✅ 一致 | P0 已修复（2026-07-06） |
+| **shared-core Web** | `createChatApi().askStream()` | SSE流式 | 未实现stream路由 | ⏸️ 规划中 | P2；内测使用非流式 ask |
 
 ### 解决方案
 
-#### 短期方案（P0 - 内测前）
-1. **统一为非流式JSON**（推荐）
-   - SaaS改用 `createChatApi(client).ask()`
-   - 保持与小程序一致
-   - 降低并发复杂度
+#### 短期方案（P0 - 内测前）✅ 已完成
+1. **统一为非流式JSON**
+   - SaaS 已改用 `useChatNonStreaming` + `createChatApi().ask()`
+   - 与小程序一致
 
 2. **实现真SSE**（工作量大）
    - 后端实现 `/v1/ask/stream` 端点

@@ -29,7 +29,7 @@ log_step()  { echo -e "${CYAN}[MVP]${NC} $1"; }
 
 # 检查是否在项目根目录
 if [ ! -f "pyproject.toml" ] || [ ! -d "backend" ] || [ ! -d "frontend" ]; then
-    log_error "请在项目根目录运行本脚本: /Users/jason/Projects/looma-zervi"
+    log_error "请在仓库根目录运行本脚本（需包含 pyproject.toml、backend/、frontend/）"
     exit 1
 fi
 
@@ -123,55 +123,36 @@ fi
 
 # 检查 .env 文件
 if [ ! -f ".env" ]; then
-    log_warn ".env 文件不存在，创建默认配置..."
-    cat > .env << EOF
-# looma 后端环境配置（开发用）
-# 生产环境请替换为真实值
+    log_warn ".env 文件不存在，从仓库根 .env.example 复制..."
+    if [ -f "$ROOT_DIR/.env.example" ]; then
+        cp "$ROOT_DIR/.env.example" .env
+    elif [ -f ".env.example" ]; then
+        cp ".env.example" .env
+    else
+        log_error "找不到 .env.example，请手动创建 backend/.env"
+        exit 1
+    fi
+    cat >> .env << EOF
 
-# Flask
-FLASK_ENV=development
-FLASK_PORT=5200
-
-# Database
-DATABASE_PATH=./data/looma.db
-
-# Poetry ChromaDB（58k 诗词向量，位于仓库根 data/poetry_full）
-POETRY_CHROMA_PATH=$ROOT_DIR/data/poetry_full
-
-# pgvector Docker（looma-pgvector，端口 5433）
-PG_HOST=127.0.0.1
-PG_PORT=5433
-PG_USER=jason
-PG_PASSWORD=ServBay.dev
-PG_DATABASE=looma
-
-# JWT
-JWT_SECRET=dev-secret-change-in-production
-JWT_EXPIRATION_HOURS=720
-
-# WeChat Mini Program (开发模式跳过 wx.login 验证)
-WECHAT_APPID=your_wechat_appid
-WECHAT_SECRET=your_wechat_secret
+# --- start-full-mvp.sh dev overrides ---
 WECHAT_DEV_MODE=true
-
-# AI Model
-DEEPSEEK_API_KEY=your_deepseek_api_key
-DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-
-# ChromaDB (本地向量数据库)
-CHROMA_PERSIST_DIR=./data/chroma
-
-# CORS
-CORS_ORIGINS=http://localhost:5173,http://localhost:5174
+POETRY_CHROMA_PATH=$ROOT_DIR/data/poetry_full
 EOF
-    log_warn "已创建 .env 文件，请根据实际情况修改配置"
-    log_warn "  尤其是: DEEPSEEK_API_KEY, WECHAT_APPID, WECHAT_SECRET"
+    log_warn "已创建 backend/.env — 请填写 DEEPSEEK_API_KEY、WECHAT_APPID、WECHAT_APP_SECRET"
 else
     log_info ".env 文件已存在"
 fi
 
+# 诗词向量库（RAG 必需；缺失时 Ask 会静默降级）
+POETRY_DATA="$ROOT_DIR/data/poetry_full"
+if [ ! -d "$POETRY_DATA" ] || [ -z "$(find "$POETRY_DATA" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+    log_warn "诗词向量库不存在或为空: $POETRY_DATA"
+    log_warn "RAG/诗词功能将降级。导入: cd backend && python scripts/import_poetry.py"
+    log_warn "详见 docs/LOCAL_MVP_DEBUGGING.md"
+fi
+
 # 确保数据目录存在
-mkdir -p data
+mkdir -p data "$ROOT_DIR/data"
 
 # 设置开发环境变量
 export WECHAT_DEV_MODE=true
@@ -282,8 +263,8 @@ log_info "运行小程序构建链检查..."
 if node scripts/quick-check.js 2>/dev/null; then
     log_info "小程序构建链检查通过"
 else
-    log_warn "小程序构建链检查发现问题"
-    log_info "如需重新构建: pnpm run build:npm"
+    log_warn "小程序构建链检查发现问题 — 请运行: cd frontend && pnpm --filter @looma/miniprogram run build:npm"
+    log_warn "然后在微信开发者工具: 工具 → 构建 npm → 编译"
 fi
 
 # ============================================
