@@ -16,7 +16,7 @@ export default function SaasTooltip({
   disabled = false,
 }: SaasTooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
-  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [timeoutId, setTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   const showTooltip = () => {

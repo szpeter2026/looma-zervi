@@ -8,7 +8,7 @@
  */
 import { useState, useCallback, useRef, useMemo } from "react";
 import { createSaasApiClient } from "../../api/saasApiClient";
-import { createChatApi } from "@looma/shared-core";
+import { createChatApi, type DocSource as ApiDocSource } from "@looma/shared-core";
 
 const RETRY_DELAYS = [1000, 2000, 5000];
 const MAX_RETRIES = 3;
@@ -37,6 +37,14 @@ interface UseChatNonStreamingOptions {
 let _uid = 0;
 function uid(): string {
   return `msg_${Date.now()}_${++_uid}`;
+}
+
+function mapSources(sources?: ApiDocSource[]): DocSource[] | undefined {
+  if (!sources?.length) return undefined;
+  return sources.map((s, i) => ({
+    filename: s.chunk_text?.slice(0, 80) || `Source ${i + 1}`,
+    score: s.score,
+  }));
 }
 
 export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
@@ -78,19 +86,20 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
         try {
           const response = await chatApi.ask({
             query,
-            history: messages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
-            mode: options.mode ?? "chat",
-            top_k: options.top_k ?? 5,
+            session_history: messages.slice(-10).map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
           });
 
           // Update assistant message with full answer
           setMessages((prev) =>
-            prev.map((m) =>
+            prev.map((m): ChatMessage =>
               m.id === assistantId
-                ? { 
-                    ...m, 
-                    content: response.answer || response.message || "",
-                    sources: response.sources
+                ? {
+                    ...m,
+                    content: response.answer,
+                    sources: mapSources(response.sources),
                   }
                 : m
             )
