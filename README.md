@@ -55,7 +55,18 @@ looma-zervi/
 
 ## Quick start
 
-### Backend
+### 一键启动完整MVP联调环境
+```bash
+# 启动所有服务（后端、前端、小程序环境）
+./scripts/start-full-mvp.sh
+
+# 或使用验证脚本检查环境
+./scripts/verify-mvp-setup.sh
+```
+
+### 分步启动
+
+#### Backend
 ```bash
 cd backend
 python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
@@ -64,13 +75,35 @@ cp .env.example .env  # edit config
 python run.py
 ```
 
-### Frontend
+#### Frontend Web
 ```bash
 cd frontend
 pnpm install
 pnpm --filter @looma/planetx dev   # PlanetX on :5173
 pnpm --filter @looma/saas dev      # T-space on :5174
 ```
+
+#### Miniprogram Local Debugging
+```bash
+# 小程序本地联调
+./scripts/start-miniprogram-local.sh
+```
+
+#### 验证测试
+```bash
+# API合规测试
+./scripts/verify-p0-local.sh
+
+# 完整本地彩排
+./scripts/rehearsal-local.sh
+```
+
+### 服务访问地址
+- **后端API**: http://localhost:5200
+- **PlanetX (C端)**: http://localhost:5173
+- **T-space (B端)**: http://localhost:5174
+- **小程序**: 微信开发者工具导入 `frontend/packages/miniprogram/`
+- **详细指南**: [docs/LOCAL_MVP_DEBUGGING.md](docs/LOCAL_MVP_DEBUGGING.md)
 
 ## Ownership matrix
 
