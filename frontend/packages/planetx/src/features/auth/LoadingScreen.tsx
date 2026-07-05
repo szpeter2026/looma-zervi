@@ -26,10 +26,10 @@ export default function LoadingScreen() {
       >
         🪐
       </div>
-      <div style={{ fontSize: '18px', fontWeight: 'bold', marginTop: '16px', color: '#C8FF50' }}>
+      <div style={{ fontSize: '18px', fontWeight: 'bold', marginTop: '16px', color: 'var(--px-color-accent)' }}>
         跃迁引擎预热中{dots}
       </div>
-      <div style={{ fontSize: '12px', color: '#B8B8C8', marginTop: '8px' }}>
+      <div style={{ fontSize: '12px', color: 'var(--px-color-text-muted)', marginTop: '8px' }}>
         正在校准星际坐标
       </div>
     </div>

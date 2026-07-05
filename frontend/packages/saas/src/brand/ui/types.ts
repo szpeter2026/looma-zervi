@@ -37,6 +37,7 @@ export interface SaasInputProps {
   type?: "text" | "password" | "email" | "number" | "tel";
   prefix?: React.ReactNode;
   suffix?: React.ReactNode;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 export interface SaasSelectOption {
@@ -232,4 +233,80 @@ export interface SaasErrorStateProps {
   title?: string;
   message: string;
   onRetry?: () => void;
+}
+
+// ============================================================
+// Modal
+// ============================================================
+export type SaasModalSize = "sm" | "md" | "lg" | "xl";
+
+export interface SaasModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title?: string;
+  children: React.ReactNode;
+  size?: SaasModalSize;
+  showClose?: boolean;
+  overlayClickClose?: boolean;
+  footer?: React.ReactNode;
+}
+
+// ============================================================
+// Tooltip
+// ============================================================
+export type TooltipPosition = "top" | "bottom" | "left" | "right";
+
+export interface SaasTooltipProps {
+  children: React.ReactNode;
+  content: React.ReactNode;
+  position?: TooltipPosition;
+  delay?: number;
+  maxWidth?: string;
+  disabled?: boolean;
+}
+
+// ============================================================
+// ProgressBar
+// ============================================================
+export type ProgressVariant = "primary" | "success" | "warning" | "danger" | "info";
+export type ProgressSize = "sm" | "md" | "lg";
+export type LabelPosition = "inside" | "outside-top" | "outside-bottom";
+
+export interface SaasProgressBarProps {
+  value?: number;
+  max?: number;
+  variant?: ProgressVariant;
+  size?: ProgressSize;
+  showLabel?: boolean;
+  labelPosition?: LabelPosition;
+  labelFormat?: (value: number, max: number) => string;
+  indeterminate?: boolean;
+}
+
+// ============================================================
+// Toggle
+// ============================================================
+export interface SaasToggleProps {
+  checked?: boolean;
+  onChange?: (checked: boolean) => void;
+  label?: string;
+  description?: string;
+  size?: "sm" | "md" | "lg";
+  disabled?: boolean;
+  loading?: boolean;
+}
+
+// ============================================================
+// DatePicker
+// ============================================================
+export interface SaasDatePickerProps {
+  value?: Date | null;
+  onChange?: (date: Date | null) => void;
+  placeholder?: string;
+  minDate?: Date;
+  maxDate?: Date;
+  disabled?: boolean;
+  clearable?: boolean;
+  size?: "sm" | "md" | "lg";
+  error?: string;
 }

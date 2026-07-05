@@ -588,6 +588,88 @@ pnpm --filter @looma/saas typecheck
 
 ---
 
+## 十二、内部裁剪策略（2026-07-05 更新）
+
+> 本节记录内部团队已完成的工作量，以及由此可从外包合同中裁剪的交付物。
+> 审计报告详见：[`docs/audit-report.html`](./docs/audit-report.html)
+
+### 12.1 已内部完成的交付物
+
+以下交付物已由内部团队（嘟嘟 AI + Jason）完成，**不需要外包方再交付**：
+
+| 交付物 | Phase | 状态 | 位置 |
+|--------|-------|------|------|
+| PlanetX Design Tokens（85+ 变量） | Phase 1 | ✅ 完成 | `packages/planetx/src/brand/tokens.css` |
+| SaaS Design Tokens（110+ 变量） | Phase 1 | ✅ 完成 | `packages/saas/src/brand/tokens.css` |
+| PlanetX 动画 CSS（12 keyframe + 工具类） | Phase 1 | ✅ 完成 | `packages/planetx/src/brand/animations.css` |
+| 动画规格书（12 动画详细参数） | Phase 1 | ✅ 完成 | `packages/planetx/src/brand/ANIMATION_SPEC.md` |
+| PlanetX 10 个纯 UI 组件源码 | Phase 3 | ✅ 完成 | `packages/planetx/src/brand/ui/` |
+| SaaS 12 个纯 UI 组件源码 | Phase 3 | ✅ 完成 | `packages/saas/src/brand/ui/` |
+| 22 个组件 Storybook Stories（CSF） | Phase 3 | ✅ 完成 | `*/ui/stories/*.stories.tsx` |
+| 组件预览页面（HTML） | Phase 3 | ✅ 完成 | `ui-preview.html` |
+| Token 采纳率迁移（features/） | Phase 4 | ✅ 完成 | `packages/planetx/src/features/` |
+| Canvas API Token 工具 | Phase 4 | ✅ 完成 | `packages/planetx/src/brand/tokenUtils.ts` |
+
+### 12.2 可从外包合同裁剪的项
+
+| 原外包项 | 裁剪理由 | 节省估算 |
+|---------|---------|---------|
+| Tokens 扩展稿（PX ≥80, SaaS ≥100） | 内部已完成 85+ / 110+ 变量，外包方仅需对齐确认 | ¥3,000-5,000 |
+| 动画规范书 | 内部已有 ANIMATION_SPEC.md，外包方可补充 GIF/视频参考 | ¥2,000-3,000 |
+| React 组件源码（22 个） | 内部已完成纯 UI 组件 + Stories，外包方只需交付 Figma | ¥25,000-35,000 |
+| Storybook 七态走查报告 | 内部已有 Stories，走查可由内部完成 | ¥4,000-6,000 |
+| Token 使用率审计 | 内部已完成迁移，采纳率 0% → 100% | ¥1,000-2,000 |
+| **合计裁剪** | | **¥35,000-51,000** |
+
+### 12.3 仍须外包的项（不可裁剪）
+
+| 交付物 | 原因 |
+|--------|------|
+| 品牌情绪板（PlanetX 2 套 + SaaS 2 套） | 需要专业视觉审美判断，AI 无法替代 |
+| Figma 组件库（22 组件 × 七态 = 154 态） | 需要 Figma 文件，AI 无法创建 |
+| 高保真页面设计稿（72 张，可谈判减量至 57-65 张） | 需要专业 UI 设计师的构图和审美 |
+| 像素级设计走查 | 需要人眼视觉对比判断 |
+| 动画 GIF/视频参考 | 需要专业动效设计师制作 |
+
+### 12.4 Token 采纳率迁移结果
+
+| 指标 | 迁移前 | 迁移后 |
+|------|--------|--------|
+| PlanetX features/ 硬编码 hex 值 | 41 个唯一值 / ~130+ 处 | **0** |
+| PlanetX features/ Token 引用 | 0 处 | **152 处**（144 var() + 8 px. accessor） |
+| 采纳率 | **0%** | **100%** |
+| 新增 Feature Extension Tokens | — | 30+ 个语义色变量 |
+| Canvas API Token 工具 | 无 | `tokenUtils.ts`（`px` 访问器 + 缓存） |
+
+迁移覆盖 9 个文件：
+- `PlanetXHome.tsx` · `AuthScreen.tsx` · `LoadingScreen.tsx` · `QuizScreen.tsx`
+- `HubScreen.tsx` · `OnboardingScreen.tsx` · `ResultScreen.tsx`（含 Canvas API）
+- `FeedbackSurvey.tsx` · `TspaceNavigatorScreen.tsx`（70+ 处替换）
+
+### 12.5 外包预算影响
+
+| 阶段 | 原预算 | 裁剪后 | 说明 |
+|------|--------|--------|------|
+| Phase 1 | ¥15,000-20,000 | ¥10,000-15,000 | Tokens/动画内部完成，只付情绪板 |
+| Phase 2 | ¥30,000-50,000 | ¥30,000-50,000 | Figma 设计稿不可裁剪 |
+| Phase 3 | ¥20,000-25,000 | **¥0** | 组件源码内部完成 |
+| Phase 4 | ¥10,000-15,000 | ¥5,000-8,000 | 走查/审计内部完成，只付手册编写 |
+| **合计** | **¥75,000-110,000** | **¥45,000-73,000** | **省 ¥30,000-37,000** |
+
+> 注：以上为 looma-zervi 单仓预算。szbolent-portal 另算。
+> 双仓合计原 ¥90,000-140,000 → 压缩至 ¥40,000-66,000。
+
+### 12.6 对外包方的要求变更
+
+基于内部已完成的代码，外包方的工作范围调整为：
+
+1. **必须交付**：Figma 设计稿（含组件库 + 页面高保真）+ 情绪板
+2. **可选交付**：基于内部 Token 命名规范的设计 Token 对齐表
+3. **不需要交付**：React 组件源码、Storybook Stories、CSS 动画代码
+4. **验收基准**：内部 `ui-preview.html` 和 Storybook :6007 作为还原度对比基准
+
+---
+
 *文档结束。本文件作为与外包方洽谈时的技术需求附件使用。*
 
-*配套文档：`szbolent-portal/docs/szbolent-portal-outsourcing-astra-deliverables.md` · `docs/PAYMENT_TIER_CONTRACT.md` · `frontend/STORYBOOK.md`*
+*配套文档：`szbolent-portal/docs/szbolent-portal-outsourcing-astra-deliverables.md` · `docs/PAYMENT_TIER_CONTRACT.md` · `frontend/STORYBOOK.md` · `docs/audit-report.html`*

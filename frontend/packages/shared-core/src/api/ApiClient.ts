@@ -16,10 +16,25 @@ declare global {
   const wx: WechatStorage | undefined;
 }
 
+interface WechatRequestTask {
+  abort?: () => void;
+}
+
+interface WechatRequestOptions {
+  url: string;
+  method?: string;
+  data?: unknown;
+  header?: Record<string, string>;
+  timeout?: number;
+  success?: (resp: { statusCode: number; data: unknown; statusText?: string }) => void;
+  fail?: (err: { errMsg?: string }) => void;
+}
+
 interface WechatStorage {
   getStorageSync(key: string): unknown;
   setStorageSync(key: string, data: string): void;
   removeStorageSync(key: string): void;
+  request?(options: WechatRequestOptions): WechatRequestTask;
 }
 
 /** Platform-agnostic storage contract. */

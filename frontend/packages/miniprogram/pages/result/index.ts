@@ -3,11 +3,11 @@
  */
 import { store } from '../../utils/store'
 import { gameApi, referralApi } from '../../utils/api'
-import { getShareText } from '../../constants/quiz'
+import { getShareTextMini, hydratePersonality } from '../../constants/quiz'
 import { SAAS_BASE } from '../../utils/config'
 import { trackMiniEvent } from '../../utils/analytics'
 import { ensureConsent } from '../../utils/consent'
-import type { PersonalityType } from '../../types/index'
+import type { PlanetXPersonalityType } from '../../types/index'
 
 Page({
   data: {
@@ -28,9 +28,12 @@ Page({
   },
 
   async loadResult() {
-    const local = store.get('personalityType')
-    if (local) {
-      this.applyPersonality(local)
+    const personalityType = store.get('personalityType')
+    const personalityDetail = store.get('personalityDetail')
+    const personalityObj = hydratePersonality(personalityType, personalityDetail)
+    
+    if (personalityObj) {
+      this.applyPersonality(personalityObj)
       await this.ensureReferralCode()
       this.setData({ loading: false })
       return
@@ -39,7 +42,9 @@ Page({
     try {
       const data = await gameApi.getProfile()
       store.applyGameProfile(data)
-      const hydrated = store.get('personalityType')
+      const personalityTypeAfter = store.get('personalityType')
+      const personalityDetailAfter = store.get('personalityDetail')
+      const hydrated = hydratePersonality(personalityTypeAfter, personalityDetailAfter)
       if (hydrated) {
         this.applyPersonality(hydrated)
         await this.ensureReferralCode()
@@ -50,7 +55,7 @@ Page({
     this.setData({ loading: false })
   },
 
-  applyPersonality(p: PersonalityType) {
+  applyPersonality(p: any) {
     this.setData({
       emoji: p.emoji,
       name: p.name,
@@ -95,32 +100,38 @@ Page({
   },
 
   onShareAppMessage() {
-    const p = store.get('personalityType')
+    const personalityType = store.get('personalityType')
+    const personalityDetail = store.get('personalityDetail')
+    const personalityObj = hydratePersonality(personalityType, personalityDetail)
     const ref = this.data.referralCode
     const path = ref ? `/pages/splash/index?ref=${ref}` : '/pages/splash/index'
-    if (!p) {
+    if (!personalityObj) {
       return { title: 'PlanetX - 你的职业飞行器', path }
     }
     return {
-      title: `🪐 我的星际人格是「${p.name}」！测测你是什么星球身份？`,
+      title: `🪐 我的星际人格是「${personalityObj.name}」！测测你是什么星球身份？`,
       path,
     }
   },
 
   onShareTimeline() {
-    const p = store.get('personalityType')
-    if (!p) return { title: 'PlanetX - 你的职业飞行器' }
+    const personalityType = store.get('personalityType')
+    const personalityDetail = store.get('personalityDetail')
+    const personalityObj = hydratePersonality(personalityType, personalityDetail)
+    if (!personalityObj) return { title: 'PlanetX - 你的职业飞行器' }
     return {
-      title: `🪐 我的星际人格是「${p.name}」！${p.tagline}`,
+      title: `🪐 我的星际人格是「${personalityObj.name}」！${personalityObj.tagline}`,
     }
   },
 
   handleShare() {
-    const p = store.get('personalityType')
-    if (!p) return
+    const personalityType = store.get('personalityType')
+    const personalityDetail = store.get('personalityDetail')
+    const personalityObj = hydratePersonality(personalityType, personalityDetail)
+    if (!personalityObj) return
     const ref = this.data.referralCode
     const inviteUrl = ref ? `pages/splash/index?ref=${ref}` : 'pages/splash/index'
-    const text = getShareText(p, inviteUrl)
+    const text = getShareTextMini(personalityObj, inviteUrl)
     wx.setClipboardData({
       data: text,
       success: () => {

@@ -10,6 +10,8 @@ import { useState } from "react";
 import { useNavigate, Navigate, Link } from "react-router-dom";
 import { BRAND_SAAS } from "@looma/shared-core";
 import { useSaasAuthStore } from "./authStore";
+import SaasButton from "../../brand/ui/SaasButton";
+import SaasInput from "../../brand/ui/SaasInput";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -63,56 +65,33 @@ export default function Login() {
 
         {/* 表单 */}
         <div className="space-y-4">
-          <div>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setErrorMsg("");
-              }}
-              placeholder="邮箱地址"
-              className="w-full px-4 py-3 text-sm rounded-lg border outline-none transition-colors"
-              style={{
-                borderColor: "#e0e0e0",
-                color: "var(--color-text-primary)",
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = "var(--color-primary)";
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = "#e0e0e0";
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleLogin();
-              }}
-            />
-          </div>
-          <div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                setErrorMsg("");
-              }}
-              placeholder="密码"
-              className="w-full px-4 py-3 text-sm rounded-lg border outline-none transition-colors"
-              style={{
-                borderColor: "#e0e0e0",
-                color: "var(--color-text-primary)",
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = "var(--color-primary)";
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = "#e0e0e0";
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleLogin();
-              }}
-            />
-          </div>
+          <SaasInput
+            type="email"
+            value={email}
+            onChange={(value) => {
+              setEmail(value);
+              setErrorMsg("");
+            }}
+            placeholder="邮箱地址"
+            prefix="📧"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleLogin();
+            }}
+          />
+          
+          <SaasInput
+            type="password"
+            value={password}
+            onChange={(value) => {
+              setPassword(value);
+              setErrorMsg("");
+            }}
+            placeholder="密码"
+            prefix="🔐"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleLogin();
+            }}
+          />
 
           {errorMsg && (
             <p className="text-sm" style={{ color: "var(--color-danger)" }}>
@@ -120,14 +99,15 @@ export default function Login() {
             </p>
           )}
 
-          <button
+          <SaasButton
+            variant="primary"
+            fullWidth
             onClick={handleLogin}
             disabled={loading}
-            className="w-full py-3 text-sm rounded-lg text-white border-none cursor-pointer disabled:opacity-60 transition-colors font-medium"
-            style={{ backgroundColor: "var(--color-primary)" }}
+            loading={loading}
           >
             {loading ? "登录中..." : "登录"}
-          </button>
+          </SaasButton>
         </div>
 
         {/* 注册链接 */}

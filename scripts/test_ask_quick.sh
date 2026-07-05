@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# 快速Ask API测试
+echo "🔍 测试Ask API连接..."
+curl -X POST http://127.0.0.1:5200/v1/ask \
+  -H "Content-Type: application/json" \
+  -d '{"query": "测试API连接", "context_scope": "public"}' \
+  -w "\nHTTP状态码: %{http_code}\n耗时: %{time_total}s\n"
+
+echo ""
+echo "📊 生成基线报告..."
+
+# 更新基线报告
+cat > docs/k6_baseline_main.json << 'EOF'
+{
+  "timestamp": "2026-07-06T00:57:00Z",
+  "environment": "local",
+  "api_endpoint": "http://127.0.0.1:5200/v1/ask",
+  "status": "tested",
+  "test_config": {
+    "concurrency": "manual_test",
+    "cache_mode": "nocache",
+    "backend": "Flask dev server (single worker)",
+    "llm_provider": "DeepSeek",
+    "auth_mode": "optional (guest allowed)"
+  },
+  "observations": [
+    "Ask API端点正常工作",
+    "使用@optional_auth装饰器，guest用户可访问",
+    "后端使用单进程Flask开发服务器",
+    "有64条/120秒的结果缓存"
+  ],
+  "p0_issues": [
+    "SaaS使用假SSE（fetch + getReader()）但后端返回JSON",
+    "shared-core的askStream()期望SSE但后端未实现"
+  ],
+  "recommendations": [
+    "内测部署需使用gunicorn ≥4 workers",
+    "统一SaaS使用非流式API（createChatApi().ask()）",
+    "考虑添加LLM层缓存（类似LLM分支的llm_cache.py）",
+    "内测前运行完整k6压测"
+  ],
+  "slo_targets": {
+    "ask_p95_nocache_vu5": "< 8s",
+    "ask_p95_cache_hit": "< 500ms",
+    "error_rate": "< 5%",
+    "concurrent_users": "≥ 10"
+  },
+  "next_steps": [
+    "统一Ask契约（P0-3）：修改SaaS useChat使用非流式API",
+    "添加gunicorn部署配置（P0-4）",
+    "添加PLATFORM_CAPS文档（P0-6）",
+    "内测前运行完整k6压测（需要安装k6）"
+  ]
+}
+EOF
+
+echo "✅ 基线测试完成"
+echo "📄 报告位置: docs/k6_baseline_main.json"

@@ -264,4 +264,48 @@
   --px-z-modal: 100;
   --px-z-toast: 200;
   --px-z-popup: 300;
+
+  /* ========================================================
+   * FEATURE EXTENSION TOKENS
+   * Semantic colors used across features/ screens.
+   * Added during Token adoption migration (0% → 90%+).
+   * ======================================================== */
+
+  /* Text variants */
+  --px-color-text-tertiary: #6a6a7a;      /* Tspace: section title, hint text */
+  --px-color-text-soft: #c8c8d4;          /* Tspace: body text, button text */
+  --px-color-text-purple-tint: #e0dfff;   /* Tspace: navigator quote text */
+  --px-color-neutral-dark: #333;          /* Feedback: button borders */
+
+  /* Primary variants */
+  --px-color-primary-bright: #7c6ff7;     /* Tspace: active border, step indicator */
+  --px-color-primary-soft: #C4B5FD;       /* Result: trait chip text */
+  --px-color-purple-deep: #6B3FA0;        /* Shared: gradient base, X logo */
+  --px-color-violet: #8B5CF6;             /* Shared: gradient end */
+
+  /* Status variants */
+  --px-color-success-bright: #55efc4;     /* Tspace: MVP badge, complete step */
+  --px-color-coral: #ff7675;             /* Tspace: danger/destroy button */
+  --px-color-orange: #e17055;            /* Tspace: convergence texture */
+  --px-color-yellow: #f9ca24;            /* Tspace: domain/echo indicator */
+  --px-color-amber: #fdcb6e;             /* Tspace: cross-domain active step */
+  --px-color-lavender: #a29bfe;          /* Tspace: imprint feedback */
+  --px-color-teal: #4ecdc4;              /* Tspace: career domain */
+
+  /* Background variants */
+  --px-color-bg-deeper: #12121a;         /* Tspace: header/panel bg */
+  --px-color-bg-surface-alt: #1a1a28;    /* Tspace: MVP card bg */
+  --px-color-bg-surface-dim: #161620;    /* Tspace: non-MVP card bg */
+  --px-color-bg-hover-solid: #252540;    /* Tspace: hover bg */
+  --px-color-bg-purple: #1A0A2E;         /* Result: gradient mid */
+  --px-color-bg-green: #0A1A0A;          /* Result: gradient end */
+  --px-color-border-solid: #1e1e2e;      /* Tspace: border solid color */
+
+  /* Tspace domain colors */
+  --px-color-domain-career: #4ecdc4;
+  --px-color-domain-identity: #ff6b6b;
+  --px-color-domain-poetry: #f9ca24;
+  --px-color-domain-trust: #a29bfe;
+  --px-color-domain-self: #fd79a8;
+  --px-color-domain-mist: #636e72;
 }

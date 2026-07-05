@@ -3,12 +3,12 @@
  * Owner: szbenyx
  *
  * Pure CSS + Tailwind (no tdesign-react).
- * Uses local useChat hook with SSE streaming.
+ * Updated to use non-streaming API for contract consistency.
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
-import { useChat, type DocSource } from "./useChat";
+import { useChatNonStreaming, type DocSource } from "./useChatNonStreaming";
 
 type ChatMode = "chat" | "deepseek" | "fast";
 
@@ -25,7 +25,7 @@ export default function Chat() {
     () => ensureConsent("ask_rag"),
     [ensureConsent],
   );
-  const { messages, isStreaming, error, sendStream, clear } = useChat({
+  const { messages, isStreaming, error, sendStream, clear } = useChatNonStreaming({
     mode,
     ensureAskConsent,
   });

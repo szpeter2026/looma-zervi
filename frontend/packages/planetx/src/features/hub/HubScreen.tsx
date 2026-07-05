@@ -34,11 +34,11 @@ export default function HubScreen() {
     <div>
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 900, color: '#C8FF50', letterSpacing: '2px', margin: 0 }}>
+        <h1 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--px-color-accent)', letterSpacing: '2px', margin: 0 }}>
           Planet
-          <span style={{ color: '#6B3FA0', display: 'inline-block', animation: 'xSpin 8s linear infinite' }}>X</span>
+          <span style={{ color: 'var(--px-color-purple-deep)', display: 'inline-block', animation: 'xSpin 8s linear infinite' }}>X</span>
         </h1>
-        <p style={{ fontSize: '12px', color: '#B8B8C8', letterSpacing: '0.2em', marginTop: '4px' }}>
+        <p style={{ fontSize: '12px', color: 'var(--px-color-text-muted)', letterSpacing: '0.2em', marginTop: '4px' }}>
           {identity ? IDENTITY_LABELS[identity] : ''}
         </p>
       </div>
@@ -47,7 +47,7 @@ export default function HubScreen() {
       <XPBar level={level} xp={xp} xpToNext={xpToNext} />
 
       {/* Nav Tabs */}
-      <div style={{ display: 'flex', gap: '4px', background: '#0D0D1A', borderRadius: '12px', padding: '4px', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', gap: '4px', background: 'var(--px-color-bg-card)', borderRadius: '12px', padding: '4px', marginBottom: '16px' }}>
         {(['missions', 'team', 'profile'] as const).map((t) => (
           <button
             key={t}
@@ -60,7 +60,7 @@ export default function HubScreen() {
               fontWeight: 600,
               border: 'none',
               background: tab === t ? 'rgba(200,255,80,0.1)' : 'transparent',
-              color: tab === t ? '#C8FF50' : '#B8B8C8',
+              color: tab === t ? 'var(--px-color-accent)' : 'var(--px-color-text-muted)',
               cursor: 'pointer',
               transition: 'all 0.2s',
             }}
@@ -88,7 +88,7 @@ export default function HubScreen() {
                   padding: '14px',
                   borderRadius: '12px',
                   border: '1px solid rgba(255,255,255,0.1)',
-                  background: '#0D0D1A',
+                  background: 'var(--px-color-bg-card)',
                   textAlign: 'left',
                   cursor: locked ? 'default' : 'pointer',
                   opacity: locked ? 0.4 : 1,
@@ -101,7 +101,7 @@ export default function HubScreen() {
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{m.name}</div>
-                  <div style={{ fontSize: '12px', color: '#C8FF50', marginTop: '2px' }}>🎁 {m.reward}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--px-color-accent)', marginTop: '2px' }}>🎁 {m.reward}</div>
                 </div>
                 <span
                   style={{
@@ -110,7 +110,7 @@ export default function HubScreen() {
                     borderRadius: '12px',
                     flexShrink: 0,
                     background: done ? 'rgba(200,255,80,0.15)' : 'rgba(255,255,255,0.05)',
-                    color: done ? '#C8FF50' : '#B8B8C8',
+                    color: done ? 'var(--px-color-accent)' : 'var(--px-color-text-muted)',
                   }}
                 >
                   {done ? '已完成' : locked ? `🔒 需先完成${m.requires === 'personality' ? '人格测试' : '组队'}` : '待完成'}
@@ -127,10 +127,10 @@ export default function HubScreen() {
         <div>
           <div style={{ textAlign: 'center', padding: '16px 0' }}>
             <div style={{ fontSize: '48px' }}>{personalityType?.emoji ?? '🌌'}</div>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#C8FF50', marginTop: '8px' }}>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--px-color-accent)', marginTop: '8px' }}>
               {personalityType?.name ?? '未测试'}
             </div>
-            <div style={{ fontSize: '12px', color: '#B8B8C8' }}>
+            <div style={{ fontSize: '12px', color: 'var(--px-color-text-muted)' }}>
               {personalityType?.tagline ?? '完成人格测试获取你的星际身份'}
             </div>
           </div>
@@ -144,15 +144,15 @@ export default function HubScreen() {
               <div
                 key={i}
                 style={{
-                  background: '#0D0D1A',
+                  background: 'var(--px-color-bg-card)',
                   border: '1px solid rgba(255,255,255,0.1)',
                   borderRadius: '12px',
                   padding: '14px',
                   textAlign: 'center',
                 }}
               >
-                <div style={{ fontSize: '24px', fontWeight: 900, color: '#C8FF50' }}>{s.v}</div>
-                <div style={{ fontSize: '12px', color: '#B8B8C8', marginTop: '4px' }}>{s.l}</div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--px-color-accent)' }}>{s.v}</div>
+                <div style={{ fontSize: '12px', color: 'var(--px-color-text-muted)', marginTop: '4px' }}>{s.l}</div>
               </div>
             ))}
           </div>
@@ -164,7 +164,7 @@ export default function HubScreen() {
               padding: '8px 0',
               borderRadius: '12px',
               fontSize: '12px',
-              color: '#B8B8C8',
+              color: 'var(--px-color-text-muted)',
               border: '1px solid rgba(255,255,255,0.1)',
               background: 'transparent',
               cursor: 'pointer',

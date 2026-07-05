@@ -26,14 +26,14 @@ export default function QuizScreen() {
   return (
     <div>
       <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-        <div style={{ fontSize: '14px', color: '#B8B8C8' }}>
+        <div style={{ fontSize: '14px', color: 'var(--px-color-text-muted)' }}>
           第 {quizStep + 1}/{QUIZ_QUESTIONS.length} 题
         </div>
       </div>
 
       <div
         style={{
-          background: '#0D0D1A',
+          background: 'var(--px-color-bg-card)',
           border: '1px solid rgba(255,255,255,0.1)',
           borderRadius: '16px',
           padding: '20px',
@@ -49,7 +49,7 @@ export default function QuizScreen() {
                 height: '4px',
                 borderRadius: '2px',
                 background:
-                  i < quizStep ? '#C8FF50' : i === quizStep ? '#6B3FA0' : '#1A1A2E',
+                  i < quizStep ? 'var(--px-color-accent)' : i === quizStep ? 'var(--px-color-purple-deep)' : 'var(--px-color-bg-surface)',
                 transition: 'background-color 0.3s',
               }}
             />
@@ -70,7 +70,7 @@ export default function QuizScreen() {
                 padding: '14px 16px',
                 borderRadius: '12px',
                 border: '1px solid rgba(255,255,255,0.1)',
-                background: '#1A1A2E',
+                background: 'var(--px-color-bg-surface)',
                 color: 'white',
                 fontSize: '14px',
                 cursor: 'pointer',

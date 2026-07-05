@@ -163,8 +163,11 @@ export class MiniApiClient {
     const timeout = options.timeout || this.defaultTimeout;
 
     return new Promise((resolve, reject) => {
-      // 小程序中不支持 AbortController，忽略 signal
-      const requestTask = wx.request({
+      if (!wx?.request) {
+        reject(new ApiError('wx.request not available', 501, 'NOT_SUPPORTED'));
+        return;
+      }
+      wx.request({
         url: fullUrl,
         method: method as any,
         data: data,

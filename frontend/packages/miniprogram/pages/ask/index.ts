@@ -68,7 +68,10 @@ Page({
     this.scrollToBottom()
 
     try {
-      const resp = await askApi.ask(text, this.sessionHistory) as {
+      const resp = await askApi.ask({
+        query: text,
+        session_history: this.sessionHistory
+      }) as {
         answer?: string
         intent?: string
         intent_confidence?: number

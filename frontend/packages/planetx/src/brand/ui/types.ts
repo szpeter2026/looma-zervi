@@ -148,3 +148,57 @@ export interface PlanetXStarBackgroundProps {
   color?: string;
   withFloatParticles?: boolean;
 }
+
+// ============================================================
+// Modal
+// ============================================================
+export type ModalSize = "sm" | "md" | "lg" | "full";
+
+export interface PlanetXModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title?: string;
+  children: React.ReactNode;
+  size?: ModalSize;
+  showClose?: boolean;
+  overlayClickClose?: boolean;
+}
+
+// ============================================================
+// Dropdown
+// ============================================================
+export interface DropdownItem {
+  value: string;
+  label: string;
+  icon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
+  disabled?: boolean;
+}
+
+export interface PlanetXDropdownProps {
+  trigger: React.ReactNode;
+  items: DropdownItem[];
+  align?: "left" | "right" | "center";
+  width?: string;
+  onSelect?: (value: string) => void;
+  disabled?: boolean;
+}
+
+// ============================================================
+// Tabs
+// ============================================================
+export interface PlanetXTabItem {
+  value: string;
+  label: string;
+  icon?: React.ReactNode;
+  badge?: string | number;
+}
+
+export interface PlanetXTabsProps {
+  items: PlanetXTabItem[];
+  activeTab: string;
+  onChange?: (value: string) => void;
+  variant?: "default" | "pills";
+  orientation?: "horizontal" | "vertical";
+  fullWidth?: boolean;
+}

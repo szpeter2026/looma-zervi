@@ -1,0 +1,137 @@
+{
+  "timestamp": "2026-07-05T17:13:10Z",
+  "environment": "local",
+  "api_endpoint": "http://127.0.0.1:5200/v1/ask",
+  "status": "tested",
+  "test_config": {
+    "concurrency": 5,
+    "requests": 20,
+    "cache_mode": "nocache",
+    "auth_mode": "registered user + ask_rag consent"
+  },
+  "runs": {
+    "flask_dev": {
+      "timestamp": "2026-07-05T17:13:04Z",
+      "environment": "local",
+      "api_endpoint": "http://127.0.0.1:5200/v1/ask",
+      "status": "tested",
+      "test_config": {
+        "concurrency": 5,
+        "requests": 20,
+        "cache_mode": "nocache",
+        "backend": "Flask dev server (single worker)",
+        "llm_provider": "DeepSeek",
+        "auth_mode": "registered user + ask_rag consent"
+      },
+      "results": {
+        "total_requests": 20,
+        "success": 20,
+        "failures": 0,
+        "elapsed_s": 1.58,
+        "throughput_rps": 12.69,
+        "status_codes": {
+          "200": 20
+        },
+        "error_rate": 0.0,
+        "latency_ms": {
+          "avg": 391.4,
+          "p50": 369.0,
+          "p90": 479.6,
+          "p95": 480.4,
+          "p99": 483.1
+        }
+      },
+      "slo_targets": {
+        "ask_p95_nocache_vu5": "< 8s",
+        "ask_p95_cache_hit": "< 500ms",
+        "error_rate": "< 5%",
+        "concurrent_users": ">= 10"
+      },
+      "slo_pass": {
+        "error_rate": true,
+        "p95_under_8s": true
+      },
+      "observations": [
+        "Ask API 使用 ask_rag consent 门禁",
+        "每次请求使用唯一 query 避免结果缓存",
+        "测试后端: Flask dev server (single worker)"
+      ],
+      "next_steps": [
+        "内测部署使用 gunicorn 多 worker",
+        "安装 k6 后运行完整压测: brew install k6",
+        "k6 run scripts/k6_ask_test_nocache.js --vus 5 --duration 30s"
+      ]
+    },
+    "gunicorn": {
+      "timestamp": "2026-07-05T17:13:10Z",
+      "environment": "local",
+      "api_endpoint": "http://127.0.0.1:5200/v1/ask",
+      "status": "tested",
+      "test_config": {
+        "concurrency": 5,
+        "requests": 20,
+        "cache_mode": "nocache",
+        "backend": "gunicorn (17 workers)",
+        "llm_provider": "DeepSeek",
+        "auth_mode": "registered user + ask_rag consent"
+      },
+      "results": {
+        "total_requests": 20,
+        "success": 20,
+        "failures": 0,
+        "elapsed_s": 1.46,
+        "throughput_rps": 13.71,
+        "status_codes": {
+          "200": 20
+        },
+        "error_rate": 0.0,
+        "latency_ms": {
+          "avg": 349.2,
+          "p50": 349.7,
+          "p90": 368.3,
+          "p95": 370.7,
+          "p99": 404.2
+        }
+      },
+      "slo_targets": {
+        "ask_p95_nocache_vu5": "< 8s",
+        "ask_p95_cache_hit": "< 500ms",
+        "error_rate": "< 5%",
+        "concurrent_users": ">= 10"
+      },
+      "slo_pass": {
+        "error_rate": true,
+        "p95_under_8s": true
+      },
+      "observations": [
+        "Ask API 使用 ask_rag consent 门禁",
+        "每次请求使用唯一 query 避免结果缓存",
+        "测试后端: gunicorn (17 workers)"
+      ],
+      "next_steps": [
+        "内测部署使用 gunicorn 多 worker",
+        "安装 k6 后运行完整压测: brew install k6",
+        "k6 run scripts/k6_ask_test_nocache.js --vus 5 --duration 30s"
+      ]
+    }
+  },
+  "slo_targets": {
+    "ask_p95_nocache_vu5": "< 8s",
+    "error_rate": "< 5%",
+    "concurrent_users": ">= 10"
+  },
+  "comparison": {
+    "throughput_rps": {
+      "flask": 12.69,
+      "gunicorn": 13.71
+    },
+    "p95_ms": {
+      "flask": 480.4,
+      "gunicorn": 370.7
+    },
+    "error_rate": {
+      "flask": 0.0,
+      "gunicorn": 0.0
+    }
+  }
+}

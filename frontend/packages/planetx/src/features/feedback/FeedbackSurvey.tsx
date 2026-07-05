@@ -112,13 +112,13 @@ export default function FeedbackSurvey({ sessionId, domain, onDismiss }: Props) 
           <div style={btnRowStyle}>
             <button
               onClick={() => { setResonated(true); setStep(1) }}
-              style={{ ...choiceBtnStyle, borderColor: resonated === true ? 'var(--color-primary)' : '#333' }}
+              style={{ ...choiceBtnStyle, borderColor: resonated === true ? 'var(--px-color-primary)' : 'var(--px-color-neutral-dark)' }}
             >
               ✨ 有，触动了我
             </button>
             <button
               onClick={() => { setResonated(false); setStep(1) }}
-              style={{ ...choiceBtnStyle, borderColor: resonated === false ? 'var(--color-text-muted)' : '#333' }}
+              style={{ ...choiceBtnStyle, borderColor: resonated === false ? 'var(--px-color-text-muted)' : 'var(--px-color-neutral-dark)' }}
             >
               还好，没什么感觉
             </button>
@@ -162,7 +162,7 @@ export default function FeedbackSurvey({ sessionId, domain, onDismiss }: Props) 
                 onClick={() => { setWouldReplay(opt.val); setStep(3) }}
                 style={{
                   ...choiceBtnStyle,
-                  borderColor: wouldReplay === opt.val ? 'var(--color-primary)' : '#333',
+                  borderColor: wouldReplay === opt.val ? 'var(--px-color-primary)' : 'var(--px-color-neutral-dark)',
                 }}
               >
                 {opt.label}
@@ -217,7 +217,7 @@ const containerStyle: React.CSSProperties = {
   maxWidth: 400,
   margin: '0 auto',
   padding: '32px 24px',
-  backgroundColor: 'var(--color-bg-card, #1a1a2e)',
+  backgroundColor: 'var(--px-color-bg-surface)',
   borderRadius: 16,
   border: '1px solid rgba(255,255,255,0.08)',
 }
@@ -225,28 +225,28 @@ const containerStyle: React.CSSProperties = {
 const questionStyle: React.CSSProperties = {
   fontSize: 20,
   fontWeight: 600,
-  color: 'var(--color-text-primary, #e0e0e0)',
+  color: 'var(--px-color-text)',
   marginBottom: 12,
   lineHeight: 1.5,
 }
 
 const hookStyle: React.CSSProperties = {
   fontSize: 14,
-  color: 'var(--color-primary, #7c6ff7)',
+  color: 'var(--px-color-primary-bright)',
   marginBottom: 24,
   fontStyle: 'italic',
 }
 
 const subTextStyle: React.CSSProperties = {
   fontSize: 14,
-  color: 'var(--color-text-muted, #888)',
+  color: 'var(--px-color-text-dim)',
   marginBottom: 12,
 }
 
 const doneTextStyle: React.CSSProperties = {
   fontSize: 22,
   fontWeight: 600,
-  color: 'var(--color-text-primary, #e0e0e0)',
+  color: 'var(--px-color-text)',
   textAlign: 'center',
   marginBottom: 8,
 }
@@ -267,9 +267,9 @@ const choiceBtnStyle: React.CSSProperties = {
   flex: 1,
   padding: '14px 20px',
   fontSize: 15,
-  color: 'var(--color-text-primary, #e0e0e0)',
+  color: 'var(--px-color-text)',
   backgroundColor: 'transparent',
-  border: '1.5px solid #333',
+  border: '1.5px solid var(--px-color-neutral-dark)',
   borderRadius: 12,
   cursor: 'pointer',
   transition: 'border-color 0.2s, background 0.2s',
@@ -279,8 +279,8 @@ const primaryBtnStyle: React.CSSProperties = {
   padding: '12px 28px',
   fontSize: 15,
   fontWeight: 500,
-  color: '#fff',
-  backgroundColor: 'var(--color-primary, #7c6ff7)',
+  color: 'var(--px-color-text-on-primary)',
+  backgroundColor: 'var(--px-color-primary-bright)',
   border: 'none',
   borderRadius: 12,
   cursor: 'pointer',
@@ -289,9 +289,9 @@ const primaryBtnStyle: React.CSSProperties = {
 const ghostBtnStyle: React.CSSProperties = {
   padding: '12px 20px',
   fontSize: 14,
-  color: 'var(--color-text-muted, #888)',
+  color: 'var(--px-color-text-dim)',
   backgroundColor: 'transparent',
-  border: '1px solid #333',
+  border: '1px solid var(--px-color-neutral-dark)',
   borderRadius: 12,
   cursor: 'pointer',
 }
@@ -300,9 +300,9 @@ const textareaStyle: React.CSSProperties = {
   width: '100%',
   padding: 12,
   fontSize: 14,
-  color: 'var(--color-text-primary, #e0e0e0)',
-  backgroundColor: 'var(--color-bg-surface, #0f0f23)',
-  border: '1px solid #333',
+  color: 'var(--px-color-text)',
+  backgroundColor: 'var(--px-color-bg-deep)',
+  border: '1px solid var(--px-color-neutral-dark)',
   borderRadius: 10,
   resize: 'vertical',
   outline: 'none',
@@ -312,7 +312,7 @@ const textareaStyle: React.CSSProperties = {
 
 const shareBoxStyle: React.CSSProperties = {
   padding: '16px 20px',
-  backgroundColor: 'var(--color-bg-surface, #0f0f23)',
+  backgroundColor: 'var(--px-color-bg-deep)',
   borderRadius: 12,
   border: '1px solid rgba(124,111,247,0.2)',
   textAlign: 'center',
@@ -321,7 +321,7 @@ const shareBoxStyle: React.CSSProperties = {
 const shareBtnStyle: React.CSSProperties = {
   padding: '10px 24px',
   fontSize: 14,
-  color: 'var(--color-primary, #7c6ff7)',
+  color: 'var(--px-color-primary-bright)',
   backgroundColor: 'rgba(124,111,247,0.1)',
   border: '1px solid rgba(124,111,247,0.3)',
   borderRadius: 10,

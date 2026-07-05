@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-07-05T17:13:04Z",
+  "environment": "local",
+  "api_endpoint": "http://127.0.0.1:5200/v1/ask",
+  "status": "tested",
+  "test_config": {
+    "concurrency": 5,
+    "requests": 20,
+    "cache_mode": "nocache",
+    "backend": "Flask dev server (single worker)",
+    "llm_provider": "DeepSeek",
+    "auth_mode": "registered user + ask_rag consent"
+  },
+  "results": {
+    "total_requests": 20,
+    "success": 20,
+    "failures": 0,
+    "elapsed_s": 1.58,
+    "throughput_rps": 12.69,
+    "status_codes": {
+      "200": 20
+    },
+    "error_rate": 0.0,
+    "latency_ms": {
+      "avg": 391.4,
+      "p50": 369.0,
+      "p90": 479.6,
+      "p95": 480.4,
+      "p99": 483.1
+    }
+  },
+  "slo_targets": {
+    "ask_p95_nocache_vu5": "< 8s",
+    "ask_p95_cache_hit": "< 500ms",
+    "error_rate": "< 5%",
+    "concurrent_users": ">= 10"
+  },
+  "slo_pass": {
+    "error_rate": true,
+    "p95_under_8s": true
+  },
+  "observations": [
+    "Ask API 使用 ask_rag consent 门禁",
+    "每次请求使用唯一 query 避免结果缓存",
+    "测试后端: Flask dev server (single worker)"
+  ],
+  "next_steps": [
+    "内测部署使用 gunicorn 多 worker",
+    "安装 k6 后运行完整压测: brew install k6",
+    "k6 run scripts/k6_ask_test_nocache.js --vus 5 --duration 30s"
+  ]
+}

@@ -5,6 +5,8 @@
  * SSE-based streaming via fetch API.
  * No Supabase. No tdesign.
  * Auto-retry on connection drop (up to 3 retries).
+ * 
+ * DEPRECATED: Use useChatNonStreaming instead for contract consistency.
  */
 import { useState, useCallback, useRef } from "react";
 
@@ -40,6 +42,8 @@ const RETRY_DELAYS = [1000, 2000, 5000];
 const MAX_RETRIES = 3;
 
 export function useChat(options: UseChatOptions = {}) {
+  console.warn('⚠️ useChat is deprecated. Use useChatNonStreaming for contract consistency.');
+  
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
