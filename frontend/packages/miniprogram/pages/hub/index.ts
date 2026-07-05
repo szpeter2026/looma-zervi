@@ -4,7 +4,7 @@
  */
 import { eventBus } from '../../utils/event-bus'
 import { store } from '../../utils/store'
-import { IDENTITY_LABELS } from '../../types/index'
+import { IDENTITY_LABELS, hydratePersonality } from '../../types/index'
 import type { MissionId, Identity } from '../../types/index'
 
 Page({
@@ -66,15 +66,18 @@ Page({
 
   refreshFromStore() {
     const s = store.getAll()
+    // 使用 hydratePersonality 获取完整的 PersonalityType 对象
+    const personalityObj = hydratePersonality(s.personalityType, s.personalityDetail)
+    
     this.setData({
       level: s.level,
       xp: s.xp,
       xpToNext: s.xpToNext,
       identity: s.identity || '',
       identityLabel: s.identity ? IDENTITY_LABELS[s.identity] : '',
-      personalityName: s.personalityType?.name || '',
-      personalityEmoji: s.personalityType?.emoji || '',
-      personalityTagline: s.personalityType?.tagline || '',
+      personalityName: personalityObj?.name || '',
+      personalityEmoji: personalityObj?.emoji || '',
+      personalityTagline: personalityObj?.tagline || '',
       missionsCompleted: s.missionsCompleted,
       teamSize: s.teamSize,
     })

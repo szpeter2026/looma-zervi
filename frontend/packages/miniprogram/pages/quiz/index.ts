@@ -6,7 +6,7 @@ import { QUIZ_QUESTIONS, computePersonality } from '../../constants/quiz'
 import { store } from '../../utils/store'
 import { gameApi } from '../../utils/api'
 import { MISSION_XP } from '../../utils/config'
-import type { TraitKey } from '../../types/index'
+import type { PlanetXTraitKey, PlanetXPersonalityType } from '../../types/index'
 
 Page({
   data: {
@@ -16,7 +16,7 @@ Page({
     progress: [] as boolean[],
   },
 
-  traitCounts: {} as Partial<Record<TraitKey, number>>,
+  traitCounts: {} as Partial<Record<PlanetXTraitKey, number>>,
 
   onLoad() {
     this.setData({
@@ -30,7 +30,7 @@ Page({
   onAnswer(e: any) {
     const idx = e.currentTarget.dataset.index
     const option = this.data.currentQuestion.options[idx]
-    const trait = option.trait as TraitKey
+    const trait = option.trait as PlanetXTraitKey
 
     this.traitCounts[trait] = (this.traitCounts[trait] || 0) + 1
 
@@ -54,7 +54,7 @@ Page({
   finishQuiz() {
     const personality = computePersonality(this.traitCounts)
 
-    store.set('personalityType', personality)
+    store.set('personalityType', personality as any)
     store.set('quizTraitCounts', this.traitCounts)
     store.completeMission('personality')
     store.setAchievement({
@@ -71,6 +71,7 @@ Page({
 
     gameApi.completeMission('personality', xpReward).then((data: any) => {
       if (data?.total_xp != null) {
+        // 使用完整的 profile 更新，包括 xp 和 level
         store.applyGameProfile({ xp: data.total_xp, level: data.level })
       }
     }).catch(() => {})

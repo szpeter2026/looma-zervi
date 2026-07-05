@@ -20,6 +20,9 @@ export { default as PlanetXAchievementPopup } from "./PlanetXAchievementPopup";
 export { default as PlanetXToastBar } from "./PlanetXToastBar";
 export { default as PlanetXLoading } from "./PlanetXLoading";
 export { default as PlanetXStarBackground } from "./PlanetXStarBackground";
+export { default as PlanetXModal } from "./PlanetXModal";
+export { default as PlanetXDropdown } from "./PlanetXDropdown";
+export { default as PlanetXTabs } from "./PlanetXTabs";
 
 // Type exports
 export type {
@@ -42,4 +45,10 @@ export type {
   PlanetXToastBarProps,
   PlanetXLoadingProps,
   PlanetXStarBackgroundProps,
+  ModalSize,
+  PlanetXModalProps,
+  DropdownItem,
+  PlanetXDropdownProps,
+  PlanetXTabItem,
+  PlanetXTabsProps,
 } from "./types";

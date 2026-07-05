@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { usePlanetXStore } from './planetxAuthStore'
+import PlanetXButton from '../../brand/ui/PlanetXButton'
+import PlanetXInput from '../../brand/ui/PlanetXInput'
 
 /**
  * 认证屏幕 — 邮箱登录/注册/访客模式
+ * 使用 PlanetX 品牌组件重构
  */
 export default function AuthScreen() {
   const [email, setEmail] = useState('')
@@ -25,26 +28,14 @@ export default function AuthScreen() {
     setLoading(false)
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '12px',
-    background: '#0D0D1A',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '12px',
-    color: 'white',
-    fontSize: '14px',
-    outline: 'none',
-    boxSizing: 'border-box',
-  }
-
   return (
     <div>
       <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 900, color: '#C8FF50', letterSpacing: '2px', margin: 0 }}>
+        <h1 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--px-color-accent)', letterSpacing: '2px', margin: 0 }}>
           Planet
           <span
             style={{
-              color: '#6B3FA0',
+              color: 'var(--px-color-purple-deep)',
               display: 'inline-block',
               animation: 'xSpin 8s linear infinite',
             }}
@@ -52,89 +43,61 @@ export default function AuthScreen() {
             X
           </span>
         </h1>
-        <p style={{ fontSize: '12px', color: '#B8B8C8', letterSpacing: '0.2em', marginTop: '4px' }}>
+        <p style={{ fontSize: '12px', color: 'var(--px-color-text-muted)', letterSpacing: '0.2em', marginTop: '4px' }}>
           跃迁登录 · 登上你的飞船
         </p>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div>
-          <label style={{ fontSize: '12px', color: '#B8B8C8', display: 'block', marginBottom: '4px' }}>📧 邮箱</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="你的星际邮箱"
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <label style={{ fontSize: '12px', color: '#B8B8C8', display: 'block', marginBottom: '4px' }}>🔐 密码</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="至少6位"
-            style={inputStyle}
-          />
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--px-spacing-md)' }}>
+        <PlanetXInput
+          label="📧 邮箱"
+          value={email}
+          onChange={setEmail}
+          placeholder="你的星际邮箱"
+          type="email"
+        />
+        
+        <PlanetXInput
+          label="🔐 密码"
+          value={password}
+          onChange={setPassword}
+          placeholder="至少6位"
+          type="password"
+          helperText="密码至少6位字符"
+        />
+        
+        <div style={{ display: 'flex', gap: 'var(--px-spacing-sm)' }}>
+          <PlanetXButton
+            variant="accent"
+            fullWidth
             onClick={handleLogin}
             disabled={loading}
-            style={{
-              flex: 1,
-              padding: '12px 0',
-              borderRadius: '16px',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              color: 'white',
-              background: 'linear-gradient(90deg, #6B3FA0, #8B5CF6)',
-              border: 'none',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.5 : 1,
-              transition: 'all 0.2s',
-            }}
+            loading={loading}
+            leftIcon="🚀"
           >
-            🚀 登录
-          </button>
-          <button
+            登录
+          </PlanetXButton>
+          
+          <PlanetXButton
+            variant="outline"
+            fullWidth
             onClick={handleRegister}
             disabled={loading}
-            style={{
-              flex: 1,
-              padding: '12px 0',
-              borderRadius: '16px',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              color: '#B8B8C8',
-              border: '1px solid rgba(255,255,255,0.1)',
-              background: 'transparent',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.5 : 1,
-              transition: 'all 0.2s',
-            }}
+            loading={loading}
+            leftIcon="✨"
           >
-            ✨ 注册
-          </button>
+            注册
+          </PlanetXButton>
         </div>
-        <button
+        
+        <PlanetXButton
+          variant="ghost"
+          fullWidth
           onClick={() => setScreen('onboarding')}
-          style={{
-            width: '100%',
-            padding: '8px 0',
-            borderRadius: '16px',
-            fontWeight: 'bold',
-            fontSize: '12px',
-            color: '#C8FF50',
-            border: '1px solid rgba(200,255,80,0.2)',
-            background: 'rgba(200,255,80,0.05)',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-          }}
+          leftIcon="🌌"
         >
-          🌌 先逛逛，稍后登录（访客模式）
-        </button>
+          先逛逛，稍后登录（访客模式）
+        </PlanetXButton>
       </div>
     </div>
   )

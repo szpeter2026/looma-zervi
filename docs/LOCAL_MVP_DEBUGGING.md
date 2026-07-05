@@ -197,72 +197,138 @@ tail -f /tmp/looma-backend.log /tmp/planetx.log /tmp/saas.log
 ### 服务状态检查
 ```bash
 # 检查所有服务状态
-## 🔧 核心配置说明
+## 🚀 内测部署配置（gunicorn）
 
-### API端点配置
+对于内测环境，建议使用gunicorn多worker部署以提高并发能力：
 
-#### 1. PlanetX (C端) - `http://localhost:5173`
-PlanetX默认使用环境变量决定API后端地址：
+### 1. gunicorn配置
+创建 `backend/gunicorn_config.py`：
+```python
+# backend/gunicorn_config.py
+import multiprocessing
+
+# 工作进程数 = CPU核心数 × 2 + 1
+workers = multiprocessing.cpu_count() * 2 + 1
+
+# 工作进程类型
+worker_class = "sync"
+
+# 绑定地址和端口
+bind = "0.0.0.0:5200"
+
+# 超时设置（LLM请求可能较长）
+timeout = 120
+
+# 日志配置
+accesslog = "-"
+errorlog = "-"
+loglevel = "info"
+
+# 进程名
+proc_name = "looma-backend"
+
+# 优雅重启
+graceful_timeout = 30
+```
+
+### 2. 启动脚本
+创建 `backend/start_gunicorn.sh`：
 ```bash
-# 启动脚本已设置正确的环境变量
-export VITE_API_BASE_URL=http://127.0.0.1:5200
-export VITE_API_BASE=http://127.0.0.1:5200
-export VITE_SAAS_URL=http://localhost:5174
+#!/bin/bash
+# backend/start_gunicorn.sh
+
+cd "$(dirname "$0")"
+
+# 激活虚拟环境
+if [ -d "venv" ]; then
+    source venv/bin/activate
+fi
+
+# 设置环境变量
+export FLASK_ENV=production
+export PYTHONPATH="$PWD:$PYTHONPATH"
+
+# 启动gunicorn
+exec gunicorn \
+    --config gunicorn_config.py \
+    "src.app:create_app()"
 ```
 
-**重要**: 如果不设置这些环境变量，PlanetX会默认连接到远程服务器 `http://1.14.202.161`。
+### 3. 系统服务配置（可选）
+对于Linux系统，可以配置systemd服务：
 
-#### 2. T-space (B端) - `http://localhost:5174`
-T-space通过Vite代理连接到本地后端：
-```javascript
-// frontend/vite.config.ts
-server: {
-  proxy: {
-    '/v1': 'http://localhost:5200',
-  }
-}
+```ini
+# /etc/systemd/system/looma-backend.service
+[Unit]
+Description=Looma Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=looma
+WorkingDirectory=/opt/looma-zervi/backend
+Environment=FLASK_ENV=production
+Environment=PYTHONPATH=/opt/looma-zervi/backend
+ExecStart=/opt/looma-zervi/backend/venv/bin/gunicorn \
+    --config gunicorn_config.py \
+    "src.app:create_app()"
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-#### 3. 小程序 - 微信开发者工具
-小程序配置位于 `frontend/packages/miniprogram/utils/config.ts`：
-```typescript
-export const API_BASE = 'http://127.0.0.1:5200'
-```
+### 4. 性能调优建议
+根据压力测试结果调整：
 
-#### 4. 验证API连接
+| 并发级别 | workers | 建议配置 |
+|----------|---------|----------|
+| 低 (< 10并发) | 2-3 | `workers = 3` |
+| 中 (10-50并发) | CPU核心数 × 1.5 | `workers = cpu_count() * 1.5` |
+| 高 (> 50并发) | CPU核心数 × 2 + 1 | `workers = cpu_count() * 2 + 1` |
+
+### 5. 监控指标
 ```bash
-# 测试PlanetX API配置
-./scripts/test-planetx-api.sh
+# 查看gunicorn状态
+ps aux | grep gunicorn
 
-# 检查后端是否运行
-curl http://127.0.0.1:5200/health
+# 查看进程数
+pstree -p $(pgrep gunicorn)
 
-# 检查PlanetX页面
-curl -s http://localhost:5173 2>/dev/null && echo "✅ PlanetX运行正常"
+# 监控内存
+top -p $(pgrep -d',' gunicorn)
+
+# 查看日志
+tail -f /var/log/looma/backend.log
 ```
 
-### 数据库配置
+### 6. 与开发模式的对比
 
-#### 1. 诗词向量库 (RAG)
-后端默认使用本地诗词向量库：
+| 配置项 | 开发模式 (dev.sh) | 生产模式 (gunicorn) |
+|--------|------------------|---------------------|
+| 服务器 | Flask开发服务器 | gunicorn |
+| 进程数 | 1 | 多进程 (根据CPU) |
+| 并发处理 | 单请求 | 多请求并行 |
+| 重启方式 | 手动 | 优雅重启 |
+| 日志 | 控制台输出 | 文件/系统日志 |
+| 适合场景 | 本地开发 | 内测/生产 |
+
+### 7. 验证部署
 ```bash
-POETRY_CHROMA_PATH=/Users/jason/Projects/looma-zervi/data/poetry_full
-```
+# 验证gunicorn是否运行
+curl http://localhost:5200/health
 
-如果向量库不存在，RAG功能会自动降级到文本匹配，不影响其他功能。
+# 压力测试（使用移植的脚本）
+cd /Users/jason/Projects/looma-zervi
+python3 scripts/concurrency_test.py --concurrency 10 --requests 50
 
-#### 2. 通用向量库 (ChromaDB)
-```bash
-# 本地文件模式 (默认)
-CHROMA_PERSIST_DIR=./data/chroma
-
-# 或使用Docker容器
-docker run -d --name looma-chromadb -p 8000:8000 chromadb/chroma
-```
-
-#### 3. 主数据库 (SQLite)
-```bash
-DATABASE_PATH=./data/looma.db
+# 查看worker状态
+gunicorn_pid=$(pgrep gunicorn)
+if [ -n "$gunicorn_pid" ]; then
+    echo "Gunicorn PID: $gunicorn_pid"
+    ps -o pid,ppid,cmd --forest -p $gunicorn_pid
+fi
 ```
 
 ## 🐛 常见问题

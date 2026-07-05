@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { usePlanetXStore } from '../auth/planetxAuthStore'
 import SharePanel from '../../brand/components/SharePanel'
 import PlanetXMicroFeedback from '../../brand/components/PlanetXMicroFeedback'
+import { px } from '../../brand/tokenUtils'
 
 /**
  * 测评结果屏幕 — 人格类型展示 + 多平台分享 + 卡片导出
@@ -29,9 +30,9 @@ export default function ResultScreen() {
 
     // Background
     const grad = ctx.createLinearGradient(0, 0, w, h)
-    grad.addColorStop(0, '#0D0D1A')
-    grad.addColorStop(0.5, '#1A0A2E')
-    grad.addColorStop(1, '#0A1A0A')
+    grad.addColorStop(0, px.bgCard)
+    grad.addColorStop(0.5, px.bgPurple)
+    grad.addColorStop(1, px.bgGreen)
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, w, h)
 
@@ -43,10 +44,10 @@ export default function ResultScreen() {
     ctx.font = '120px sans-serif'; ctx.textAlign = 'center'
     ctx.fillText(p.emoji, w / 2, 180)
     ctx.font = 'bold 52px "PingFang SC","Microsoft YaHei",sans-serif'
-    ctx.fillStyle = '#C8FF50'; ctx.shadowColor = 'rgba(200,255,80,0.4)'; ctx.shadowBlur = 30
+    ctx.fillStyle = px.accent; ctx.shadowColor = 'rgba(200,255,80,0.4)'; ctx.shadowBlur = 30
     ctx.fillText(p.name, w / 2, 280); ctx.shadowBlur = 0
     ctx.font = '24px "PingFang SC","Microsoft YaHei",sans-serif'
-    ctx.fillStyle = '#B8B8C8'; ctx.fillText(p.tagline, w / 2, 340)
+    ctx.fillStyle = px.textMuted; ctx.fillText(p.tagline, w / 2, 340)
 
     // Traits
     ctx.font = '22px "PingFang SC","Microsoft YaHei",sans-serif'
@@ -54,12 +55,12 @@ export default function ResultScreen() {
       const tx = w / 2 - ((p.traits.length * 140) / 2) + 70 + i * 140
       ctx.fillStyle = 'rgba(107,63,160,0.3)'; ctx.beginPath()
       ctx.roundRect(tx - (ctx.measureText(t).width + 40) / 2, 440, ctx.measureText(t).width + 40, 36, 18)
-      ctx.fill(); ctx.fillStyle = '#C4B5FD'; ctx.fillText(t, tx, 466)
+      ctx.fill(); ctx.fillStyle = px.primarySoft; ctx.fillText(t, tx, 466)
     })
 
     // Desc
     ctx.font = '22px "PingFang SC","Microsoft YaHei",sans-serif'
-    ctx.fillStyle = '#B8B8C8'
+    ctx.fillStyle = px.textMuted
     let lineY = 540
     const maxW = 600
     p.desc.split('').reduce((line: string, char: string) => {
@@ -77,7 +78,7 @@ export default function ResultScreen() {
     ctx.roundRect(w / 2 - 80, lineY + 60, 160, 160, 16); ctx.fill()
     ctx.strokeStyle = 'rgba(200,255,80,0.2)'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([])
     ctx.font = '18px "PingFang SC","Microsoft YaHei",sans-serif'
-    ctx.fillStyle = '#B8B8C8'; ctx.fillText('📱 扫码加入舰队', w / 2, lineY + 145)
+    ctx.fillStyle = px.textMuted; ctx.fillText('📱 扫码加入舰队', w / 2, lineY + 145)
     ctx.font = '16px "PingFang SC","Microsoft YaHei",sans-serif'
     ctx.fillStyle = 'rgba(184,184,200,0.3)'; ctx.fillText('PLANET X · 星际人格认证', w / 2, h - 40)
 
@@ -95,7 +96,7 @@ export default function ResultScreen() {
     <div>
       <div
         style={{
-          background: '#0D0D1A',
+          background: 'var(--px-color-bg-card)',
           border: '1px solid rgba(255,255,255,0.1)',
           borderRadius: '16px',
           padding: '24px',
@@ -103,8 +104,8 @@ export default function ResultScreen() {
         }}
       >
         <div style={{ fontSize: '48px', marginBottom: '8px' }}>{p.emoji}</div>
-        <div style={{ fontSize: '18px', fontWeight: 900, color: '#C8FF50' }}>{p.name}</div>
-        <div style={{ fontSize: '12px', color: '#B8B8C8', letterSpacing: '1px', marginTop: '4px' }}>{p.tagline}</div>
+        <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--px-color-accent)' }}>{p.name}</div>
+        <div style={{ fontSize: '12px', color: 'var(--px-color-text-muted)', letterSpacing: '1px', marginTop: '4px' }}>{p.tagline}</div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center', margin: '16px 0' }}>
           {p.traits.map((t, i) => (
@@ -116,19 +117,19 @@ export default function ResultScreen() {
                 fontSize: '12px',
                 fontWeight: 600,
                 background: 'rgba(107,63,160,0.2)',
-                color: '#C4B5FD',
+                color: 'var(--px-color-primary-soft)',
               }}
             >
               {t}
             </span>
           ))}
         </div>
-        <p style={{ fontSize: '14px', color: '#B8B8C8', lineHeight: 1.6, marginBottom: '16px' }}>{p.desc}</p>
+        <p style={{ fontSize: '14px', color: 'var(--px-color-text-muted)', lineHeight: 1.6, marginBottom: '16px' }}>{p.desc}</p>
 
         {/* Share Preview */}
         <div
           style={{
-            background: 'linear-gradient(135deg, #0D0D1A 0%, #1A0A2E 50%, #0A1A0A 100%)',
+            background: 'linear-gradient(135deg, var(--px-color-bg-card) 0%, var(--px-color-bg-purple) 50%, var(--px-color-bg-green) 100%)',
             border: '2px solid rgba(255,255,255,0.1)',
             borderRadius: '16px',
             padding: '20px',
@@ -139,8 +140,8 @@ export default function ResultScreen() {
           }}
         >
           <div style={{ fontSize: '48px', position: 'relative', zIndex: 10 }}>{p.emoji}</div>
-          <div style={{ fontSize: '18px', fontWeight: 900, color: '#C8FF50', position: 'relative', zIndex: 10 }}>{p.name}</div>
-          <div style={{ fontSize: '12px', color: '#B8B8C8', position: 'relative', zIndex: 10 }}>PlanetX · 星际人格认证</div>
+          <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--px-color-accent)', position: 'relative', zIndex: 10 }}>{p.name}</div>
+          <div style={{ fontSize: '12px', color: 'var(--px-color-text-muted)', position: 'relative', zIndex: 10 }}>PlanetX · 星际人格认证</div>
           <div
             style={{
               width: '80px', height: '80px', margin: '12px auto 0',
@@ -151,7 +152,7 @@ export default function ResultScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '12px',
-              color: '#B8B8C8',
+              color: 'var(--px-color-text-muted)',
               position: 'relative',
               zIndex: 10,
             }}
@@ -168,7 +169,7 @@ export default function ResultScreen() {
               borderRadius: '16px',
               fontWeight: 'bold',
               fontSize: '14px',
-              color: '#C8FF50',
+              color: 'var(--px-color-accent)',
               border: '1px solid rgba(200,255,80,0.3)',
               background: 'rgba(200,255,80,0.05)',
               cursor: 'pointer',
@@ -186,7 +187,7 @@ export default function ResultScreen() {
               fontWeight: 'bold',
               fontSize: '14px',
               color: 'white',
-              background: 'linear-gradient(90deg, #6B3FA0, #8B5CF6)',
+              background: 'linear-gradient(90deg, var(--px-color-purple-deep), var(--px-color-violet))',
               border: 'none',
               cursor: 'pointer',
               transition: 'all 0.2s',

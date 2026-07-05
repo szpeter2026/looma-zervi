@@ -43,8 +43,8 @@ export default function PlanetXHome() {
     <div
       style={{
         minHeight: '100vh',
-        background: '#080810',
-        color: '#E8E8F0',
+        background: 'var(--px-color-bg-page)',
+        color: 'var(--px-color-text-bright)',
         display: 'flex',
         justifyContent: 'center',
         overflowX: 'hidden',

@@ -344,4 +344,55 @@
   --z-modal: 1000;
   --z-toast: 1200;
   --z-tooltip: 1300;
+
+  /* ========================================================
+   * MODAL - component tokens
+   * ======================================================== */
+  --modal-padding-sm: 16px;
+  --modal-padding: 24px;
+  --modal-padding-lg: 32px;
+  --modal-radius: 12px;
+  --modal-border: 1px solid var(--color-border);
+  --modal-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+
+  /* ========================================================
+   * TOOLTIP - component tokens
+   * ======================================================== */
+  --tooltip-bg: var(--color-text-primary);
+  --tooltip-color: #fff;
+  --tooltip-padding: 8px 12px;
+  --tooltip-radius: 6px;
+  --tooltip-font-size: 0.75rem;
+  --tooltip-line-height: 1.4;
+  --tooltip-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --tooltip-arrow-size: 6px;
+
+  /* ========================================================
+   * PROGRESS BAR - component tokens
+   * ======================================================== */
+  --progress-height-sm: 4px;
+  --progress-height-md: 8px;
+  --progress-height-lg: 12px;
+  --progress-radius: 9999px;
+  --progress-transition: width 0.3s ease;
+
+  /* ========================================================
+   * TOGGLE - component tokens
+   * ======================================================== */
+  --toggle-radius: 9999px;
+  --toggle-knob-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --toggle-transition: background 0.2s ease, transform 0.2s ease;
+
+  /* ========================================================
+   * DATE PICKER - component tokens
+   * ======================================================== */
+  --datepicker-bg: var(--color-bg-card);
+  --datepicker-border: 1px solid var(--color-border);
+  --datepicker-radius: 8px;
+  --datepicker-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  --datepicker-cell-padding: 6px;
+  --datepicker-cell-radius: 4px;
+  --datepicker-cell-hover: var(--color-bg-hover);
+  --datepicker-cell-selected: var(--color-primary);
+  --datepicker-cell-disabled: var(--color-text-disabled);
 }

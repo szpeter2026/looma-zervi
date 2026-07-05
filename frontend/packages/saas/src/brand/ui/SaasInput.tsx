@@ -17,6 +17,7 @@ export default function SaasInput({
   type = "text",
   prefix,
   suffix,
+  onKeyDown,
 }: SaasInputProps) {
   const [focused, setFocused] = useState(false);
 
@@ -72,6 +73,7 @@ export default function SaasInput({
           type={type}
           value={value}
           onChange={(e) => onChange?.(e.target.value)}
+          onKeyDown={onKeyDown}
           placeholder={placeholder}
           disabled={disabled}
           style={inputStyle}
