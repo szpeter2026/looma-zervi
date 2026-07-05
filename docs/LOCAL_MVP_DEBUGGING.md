@@ -197,15 +197,105 @@ tail -f /tmp/looma-backend.log /tmp/planetx.log /tmp/saas.log
 ### 服务状态检查
 ```bash
 # 检查所有服务状态
-curl -s http://localhost:5200/health | jq .  # 后端
-curl -s http://localhost:5173 2>/dev/null && echo "PlanetX OK"  # PlanetX
-curl -s http://localhost:5174 2>/dev/null && echo "T-space OK"  # T-space
-docker ps | grep chromadb  # ChromaDB
+## 🔧 核心配置说明
+
+### API端点配置
+
+#### 1. PlanetX (C端) - `http://localhost:5173`
+PlanetX默认使用环境变量决定API后端地址：
+```bash
+# 启动脚本已设置正确的环境变量
+export VITE_API_BASE_URL=http://127.0.0.1:5200
+export VITE_API_BASE=http://127.0.0.1:5200
+export VITE_SAAS_URL=http://localhost:5174
+```
+
+**重要**: 如果不设置这些环境变量，PlanetX会默认连接到远程服务器 `http://1.14.202.161`。
+
+#### 2. T-space (B端) - `http://localhost:5174`
+T-space通过Vite代理连接到本地后端：
+```javascript
+// frontend/vite.config.ts
+server: {
+  proxy: {
+    '/v1': 'http://localhost:5200',
+  }
+}
+```
+
+#### 3. 小程序 - 微信开发者工具
+小程序配置位于 `frontend/packages/miniprogram/utils/config.ts`：
+```typescript
+export const API_BASE = 'http://127.0.0.1:5200'
+```
+
+#### 4. 验证API连接
+```bash
+# 测试PlanetX API配置
+./scripts/test-planetx-api.sh
+
+# 检查后端是否运行
+curl http://127.0.0.1:5200/health
+
+# 检查PlanetX页面
+curl -s http://localhost:5173 2>/dev/null && echo "✅ PlanetX运行正常"
+```
+
+### 数据库配置
+
+#### 1. 诗词向量库 (RAG)
+后端默认使用本地诗词向量库：
+```bash
+POETRY_CHROMA_PATH=/Users/jason/Projects/looma-zervi/data/poetry_full
+```
+
+如果向量库不存在，RAG功能会自动降级到文本匹配，不影响其他功能。
+
+#### 2. 通用向量库 (ChromaDB)
+```bash
+# 本地文件模式 (默认)
+CHROMA_PERSIST_DIR=./data/chroma
+
+# 或使用Docker容器
+docker run -d --name looma-chromadb -p 8000:8000 chromadb/chroma
+```
+
+#### 3. 主数据库 (SQLite)
+```bash
+DATABASE_PATH=./data/looma.db
 ```
 
 ## 🐛 常见问题
 
-### 1. 端口冲突
+### 1. PlanetX连接到远程服务器而非本地后端
+**现象**: PlanetX发送API请求到 `http://1.14.202.161` 而不是 `http://127.0.0.1:5200`
+
+**原因**: 环境变量 `VITE_API_BASE` 未设置
+
+**解决方案**:
+```bash
+# 方法1: 使用启动脚本（推荐）
+./scripts/start-full-mvp.sh
+# 或
+./scripts/start-demo.sh
+
+# 方法2: 手动设置环境变量
+cd frontend
+export VITE_API_BASE=http://127.0.0.1:5200
+export VITE_API_BASE_URL=http://127.0.0.1:5200
+pnpm --filter @looma/planetx dev
+
+# 方法3: 验证环境变量
+./scripts/test-planetx-api.sh
+```
+
+**验证**: 在浏览器控制台运行：
+```javascript
+console.log('API Base:', import.meta.env.VITE_API_BASE)
+// 应该显示: http://127.0.0.1:5200
+```
+
+### 2. 端口冲突
 如果端口被占用，可以修改配置：
 
 ```bash
@@ -217,7 +307,7 @@ FLASK_PORT=5201
 # T-space: "dev": "vite --port 5176"
 ```
 
-### 2. 依赖安装失败
+### 3. 依赖安装失败
 ```bash
 # 清理并重新安装
 cd backend
@@ -229,7 +319,7 @@ rm -rf node_modules pnpm-lock.yaml
 pnpm install
 ```
 
-### 3. 小程序构建问题
+### 4. 小程序构建问题
 ```bash
 # 清理构建缓存
 cd frontend/packages/miniprogram
@@ -240,20 +330,11 @@ pnpm run build:npm
 # 微信开发者工具: 工具 → 清除缓存 → 重新构建npm
 ```
 
-### 4. ChromaDB启动失败
+### 5. ChromaDB启动失败
 如果Docker不可用，后端会自动降级到本地文件模式：
 - 向量搜索功能受限
 - 诗词RAG可能不可用
 - 其他功能正常
-
-### 5. 诗词向量库缺失
-```bash
-# 检查诗词向量库
-ls -la data/poetry_full/
-
-# 如果不存在，RAG功能将降级到文本匹配
-# 不影响其他核心功能
-```
 
 ## 📊 MVP内测清单
 
