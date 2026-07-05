@@ -39,7 +39,7 @@ import type {
   AddCandidateRequest,
   AddCandidateResponse,
 } from "../types/enterprise";
-import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job, ResumeUploadResult, ParsedJob, JobUploadResult, CreditAnalysis, CheckCompanyRequest } from "../types/resume";
+import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job, ParsedJob, CreditAnalysis, CheckCompanyRequest } from "../types/resume";
 import type { Report, GenerateReportRequest } from "../types/misc";
 import { API_ROUTES } from "../constants/routes";
 
