@@ -53,7 +53,7 @@ bash scripts/start-miniprogram-local.sh
 ### 详细步骤
 
 #### 1. 配置小程序指向本地
-修改 `frontend/packages/miniprogram/src/config.ts`：
+修改 `frontend/packages/miniprogram/utils/config.ts`：
 ```typescript
 export const API_BASE = 'http://127.0.0.1:5200';
 ```
@@ -76,11 +76,11 @@ pnpm run build:npm
    - ☑️ 不校验合法域名
    - ☑️ 不校验 TLS 版本
 4. 工具 → 构建 npm
-5. 测试页面：
+5. 测试页面（核心链路）：
    - `pages/hub/index` - 主页面
-   - `pages/ask/index` - 提问
-   - `pages/auth/index` - 登录
-   - `pages/profile/index` - 分享/Consent
+   - `pages/ask/index` - 提问 + Consent: ask_rag
+   - `app.ts` / `pages/splash` - 登录: wechatLogin
+   - `pages/result/index` - 分享 + Consent: profile_share
 
 ## 验证分工
 
