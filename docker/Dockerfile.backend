@@ -2,26 +2,18 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ \
-    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONUNBUFFERED=1 \
+    FLASK_PORT=5200
 
-# Install Python dependencies
+# 内测机 apt 默认源极慢（CI 曾卡 1h+）；应用代码由 compose volume 挂载，镜像只装依赖
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' \
+    /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
-RUN pip install --no-cache-dir gunicorn -i https://mirrors.aliyun.com/pypi/simple/
 
-# Copy application code
-COPY . .
-
-# Create data directory
-RUN mkdir -p data chroma_data
-
-# Expose port
 EXPOSE 5200
 
-ENV FLASK_PORT=5200
-
-# Run with gunicorn (bind 5200 — see gunicorn_config.py)
+# 运行时 /app 由 bind mount 覆盖；此处仅声明启动命令
 CMD ["gunicorn", "--config", "gunicorn_config.py", "src.app:create_app()"]
