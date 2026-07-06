@@ -353,21 +353,32 @@ jobs:
           DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
           COMPOSE="docker compose -f ${DEPLOY_PATH}/docker/docker-compose.yml -p looma-zervi"
 
-          COUNT=$(${COMPOSE} exec -T backend \
-            python -c "from src.db.manager import DatabaseManager; db=DatabaseManager('/app/data/looma.db'); db.init_schema(); print(db.get_poetry_stats()['total'])" 2>/dev/null || echo "0")
+          count_poems() {
+            ${COMPOSE} exec -T backend \
+              python -c "from src.db.manager import DatabaseManager; db=DatabaseManager('/app/data/looma.db'); db.init_schema(); print(db.get_poetry_stats()['total'])" 2>/dev/null || echo "0"
+          }
 
+          COUNT="$(count_poems | tail -1 | tr -d '[:space:]')"
           if [ "${COUNT:-0}" -gt 0 ] 2>/dev/null; then
             echo "=== Poems table already has ${COUNT} entries, skipping import ==="
-            exit 0
+          else
+            echo "=== Running poetry import (ChromaDB → SQLite) ==="
+            ${COMPOSE} exec -T backend \
+              python scripts/import_poetry.py \
+                --source-dir /app/poetry_data \
+                --db-path /app/data/looma.db \
+                --batch-size 1000
+            COUNT="$(count_poems | tail -1 | tr -d '[:space:]')"
           fi
 
-          echo "=== Running poetry import (ChromaDB → SQLite) ==="
-          ${COMPOSE} exec -T backend \
-            python scripts/import_poetry.py \
-              --source-dir /app/poetry_data \
-              --db-path /app/data/looma.db \
-              --batch-size 1000
-          echo "=== Poetry import complete ==="
+          if [ "${COUNT:-0}" -le 0 ] 2>/dev/null; then
+            echo "=== Poetry import verification FAILED (total=${COUNT}) ==="
+            ${COMPOSE} logs --tail 20 backend || true
+            exit 1
+          fi
+          echo "=== Poetry import OK: ${COUNT} poems in SQLite ==="
+          curl -sf http://127.0.0.1/v1/poetry/stats | head -c 120
+          echo ""
           POETRY_IMPORT
 
       - name: Health check (local + nginx)
