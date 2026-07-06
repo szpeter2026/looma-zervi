@@ -2,7 +2,7 @@
 
 > **版本：** 1.0 · **日期：** 2026-07-06  
 > **受众：** Jason（前端）、@szbenyx（后端/运维）、内测志愿者协调人  
-> **关联文档：** [PRESSURE_TEST_ASK_CONTRACT_ADR.md](./PRESSURE_TEST_ASK_CONTRACT_ADR.md) · [LOCAL_MVP_DEBUGGING.md](./LOCAL_MVP_DEBUGGING.md) · [MINIPROGRAM_LOCAL_DEBUGGING.md](./MINIPROGRAM_LOCAL_DEBUGGING.md) · [TENCENT_CLOUD_COMMERCE.md](./TENCENT_CLOUD_COMMERCE.md) · [MCP底座交付说明_内测.md](./MCP底座交付说明_内测.md)
+> **关联文档：** [内测埋点与闭环漏斗方案.md](./内测埋点与闭环漏斗方案.md) · [PRESSURE_TEST_ASK_CONTRACT_ADR.md](./PRESSURE_TEST_ASK_CONTRACT_ADR.md) · [LOCAL_MVP_DEBUGGING.md](./LOCAL_MVP_DEBUGGING.md) · [MINIPROGRAM_LOCAL_DEBUGGING.md](./MINIPROGRAM_LOCAL_DEBUGGING.md) · [TENCENT_CLOUD_COMMERCE.md](./TENCENT_CLOUD_COMMERCE.md) · [MCP底座交付说明_内测.md](./MCP底座交付说明_内测.md)
 
 ---
 

@@ -15,9 +15,12 @@
 #   2. 前端入口 — PlanetX SPA / T 空间 SPA
 #   3. 公开 API — Poetry 诗词库 / Jobs 职位列表
 #   4. 认证闭环 — 注册 → 登录 → 访问受保护接口
-#   5. AI 核心链路 — 简历解析+匹配（可选，耗配额）
+#   5. 内测埋点 — 上报 / 非法拒绝 / 漏斗查询 / 微反馈
+#   6. 征信查证 — 企业信用评估
+#   7–8. Docker / AI（可选或手动）
+# 详见 docs/内测埋点与闭环漏斗方案.md
 # ============================================================
-set -e
+set -uo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -274,10 +277,93 @@ fi
 echo ""
 
 # ============================================================
-# Phase 6: 征信查证
+# Phase 6: 内测埋点与闭环漏斗
 # ============================================================
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Phase 6: 征信查证 — 企业信用评估${NC}"
+echo -e "${BLUE}  Phase 6: 内测埋点 — 上报 / 漏斗 / 微反馈${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo ""
+
+VERIFY_SESSION="verify-deploy-$(date +%s)"
+
+# 6.1 合法事件上报
+printf "  %-45s " "埋点上报 POST /v1/analytics/events"
+analytics_resp=$(curl -sf --connect-timeout 10 --max-time 30 \
+    -X POST "$BASE/v1/analytics/events" \
+    -H "Content-Type: application/json" \
+    -d "{\"events\":[{\"event_name\":\"trial_clicked\",\"platform\":\"planetx_web\",\"session_id\":\"$VERIFY_SESSION\",\"properties\":{\"source\":\"verify-deployment\"}}]}" 2>/dev/null)
+analytics_code=$?
+ingested=$(echo "$analytics_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ingested',0))" 2>/dev/null || echo "0")
+
+if [ $analytics_code -eq 0 ] && [ "$ingested" -ge 1 ] 2>/dev/null; then
+    echo -e "$PASS (ingested=$ingested)"
+    PASS_COUNT=$((PASS_COUNT + 1))
+else
+    echo -e "$FAIL (ingested=$ingested)"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+
+# 6.2 非法事件名应拒绝
+printf "  %-45s " "非法 event_name 应返回 400"
+bad_code=$(curl -s -o /dev/null -w '%{http_code}' \
+    --connect-timeout 10 --max-time 30 \
+    -X POST "$BASE/v1/analytics/events" \
+    -H "Content-Type: application/json" \
+    -d '{"events":[{"event_name":"invalid_event_xyz"}]}' 2>/dev/null)
+
+if [ "$bad_code" = "400" ]; then
+    echo -e "$PASS (HTTP $bad_code)"
+    PASS_COUNT=$((PASS_COUNT + 1))
+else
+    echo -e "$FAIL (HTTP $bad_code, expected 400)"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+
+# 6.3 漏斗查询（需 Phase 5 token）
+if [ -n "$TOKEN" ]; then
+    printf "  %-45s " "漏斗 GET /v1/analytics/funnel"
+    funnel_resp=$(curl -sf --connect-timeout 10 --max-time 30 \
+        -H "Authorization: Bearer $TOKEN" \
+        "$BASE/v1/analytics/funnel?days=90" 2>/dev/null)
+    funnel_code=$?
+    has_steps=$(echo "$funnel_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if 'steps' in d else 'no')" 2>/dev/null || echo "no")
+
+    if [ $funnel_code -eq 0 ] && [ "$has_steps" = "yes" ]; then
+        echo -e "$PASS"
+        PASS_COUNT=$((PASS_COUNT + 1))
+    else
+        echo -e "$FAIL"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
+else
+    printf "  %-45s " "漏斗 GET /v1/analytics/funnel"
+    echo -e "$WARN (无 token, 跳过)"
+    SKIP_COUNT=$((SKIP_COUNT + 1))
+fi
+
+# 6.4 微反馈
+printf "  %-45s " "微反馈 POST /v1/feedback/micro"
+fb_code=$(curl -s -o /dev/null -w '%{http_code}' \
+    --connect-timeout 10 --max-time 30 \
+    -X POST "$BASE/v1/feedback/micro" \
+    -H "Content-Type: application/json" \
+    -d "{\"context\":\"planetx_result\",\"score\":5,\"session_id\":\"$VERIFY_SESSION\",\"platform\":\"planetx_web\"}" 2>/dev/null)
+
+if [ "$fb_code" = "201" ]; then
+    echo -e "$PASS (HTTP $fb_code)"
+    PASS_COUNT=$((PASS_COUNT + 1))
+else
+    echo -e "$FAIL (HTTP $fb_code, expected 201)"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+
+echo ""
+
+# ============================================================
+# Phase 7: 征信查证
+# ============================================================
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  Phase 7: 征信查证 — 企业信用评估${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -287,10 +373,10 @@ check_endpoint "公司查证 POST /v1/credit/check-company" "POST" "$BASE/v1/cre
 echo ""
 
 # ============================================================
-# Phase 7: Docker 容器状态 (需 SSH)
+# Phase 8: Docker 容器状态 (需 SSH)
 # ============================================================
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Phase 7: Docker 容器状态 (可选，需 SSH 权限)${NC}"
+echo -e "${BLUE}  Phase 8: Docker 容器状态 (可选，需 SSH 权限)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -300,10 +386,10 @@ echo -e "     docker compose -f /opt/looma-zervi/docker/docker-compose.yml logs 
 echo ""
 
 # ============================================================
-# Phase 8: AI 核心链路 (可选，消耗 DeepSeek 配额)
+# Phase 9: AI 核心链路 (可选，消耗 DeepSeek 配额)
 # ============================================================
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Phase 8: AI 核心链路 (已跳过 — 手动按需测试)${NC}"
+echo -e "${BLUE}  Phase 9: AI 核心链路 (已跳过 — 手动按需测试)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
