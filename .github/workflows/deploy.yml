@@ -282,8 +282,15 @@ jobs:
           set -euo pipefail
           DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
           COMPOSE="docker compose -f ${DEPLOY_PATH}/docker/docker-compose.yml -p looma-zervi"
+          COMPOSE_FILE="${DEPLOY_PATH}/docker/docker-compose.yml"
 
-          echo "=== Free port 5200 (stop stale native gunicorn / old proxy) ==="
+          echo "=== Stop legacy stacks / free name looma-backend ==="
+          for proj in looma-zervi docker; do
+            docker compose -f "${COMPOSE_FILE}" -p "${proj}" down --remove-orphans 2>/dev/null || true
+          done
+          docker rm -f looma-backend looma-chromadb 2>/dev/null || true
+
+          echo "=== Free port 5200 (native gunicorn) ==="
           if command -v lsof >/dev/null 2>&1; then
             for pid in $(lsof -t -i :5200 2>/dev/null || true); do
               cmd=$(ps -p "$pid" -o comm= 2>/dev/null || true)
@@ -308,13 +315,25 @@ jobs:
             fi
           fi
 
-          echo "=== Build backend image (gunicorn :5200) ==="
           cd "${DEPLOY_PATH}/docker"
-          ${COMPOSE} build backend
+          HASH=$(sha256sum "${DEPLOY_PATH}/backend/requirements.txt" "${DEPLOY_PATH}/docker/Dockerfile.backend" | sha256sum | awk '{print $1}')
+          MARKER="/tmp/looma-backend-image.hash"
+          NEED_BUILD=1
+          if [ -f "${MARKER}" ] && [ "$(cat "${MARKER}")" = "${HASH}" ]; then
+            if docker image inspect looma-zervi-backend:latest >/dev/null 2>&1; then
+              NEED_BUILD=0
+              echo "=== Backend image up-to-date, skip rebuild ==="
+            fi
+          fi
+          if [ "${NEED_BUILD}" = "1" ]; then
+            echo "=== Build backend image (deps only, gunicorn :5200) ==="
+            DOCKER_BUILDKIT=1 ${COMPOSE} build backend
+            echo "${HASH}" > "${MARKER}"
+          fi
 
           echo "=== Start / recreate containers ==="
-          ${COMPOSE} up -d --remove-orphans --force-recreate backend
-          ${COMPOSE} up -d chromadb
+          ${COMPOSE} up -d --remove-orphans --force-recreate --no-build backend
+          ${COMPOSE} up -d --no-build chromadb
 
           echo "=== Wait for backend health ==="
           for i in $(seq 1 30); do
