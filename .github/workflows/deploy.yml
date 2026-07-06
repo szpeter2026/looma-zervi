@@ -1,19 +1,23 @@
 # ============================================================
-# Deploy — 合并到 main 后自动部署到腾讯云服务器
+# Deploy — 合并到 main 后自动部署到腾讯云内测机
 #
-# 完全自举：不需要手动 SSH 到服务器，一切通过 GitHub Secrets 配置
+# 目标机默认: 1.14.202.161 (ubuntu, /opt/looma-zervi)
 #
-# 需要的 GitHub Secrets:
-#   SSH_HOST          - 腾讯云服务器 IP
-#   SSH_USER          - SSH 用户名 (如 ubuntu)
-#   SSH_PRIVATE_KEY   - SSH 私钥 (你本地 ~/.ssh/id_rsa 的内容)
-#   DEPLOY_PATH       - 服务器项目路径 (如 /home/ubuntu/looma-zervi)
-#
-#   以下为应用运行时需要的环境变量（首次部署后生效）:
-#   ENV_JWT_SECRET        - JWT 签名密钥
-#   ENV_DEEPSEEK_API_KEY  - DeepSeek API Key
-#   ENV_DEEPSEEK_BASE_URL - DeepSeek API 地址
+# GitHub Secrets（必填）:
+#   SSH_HOST            - 1.14.202.161
+#   SSH_USER            - ubuntu
+#   SSH_PRIVATE_KEY     - looma_key.pem 全文
+#   ENV_JWT_SECRET      - JWT 签名密钥 (≥32 字符)
+#   ENV_DEEPSEEK_API_KEY
+#   ENV_DEEPSEEK_BASE_URL  (默认 https://api.deepseek.com/v1)
 #   ENV_ENV               - production
+#
+# GitHub Secrets / Variables（可选，有默认值）:
+#   DEPLOY_PATH           - 默认 /opt/looma-zervi
+#   DEPLOY_NGINX_MODE     - ip | full | domain（Repository Variable，默认 ip）
+#
+# 备案前: DEPLOY_NGINX_MODE=ip → nginx-looma-zervi-ip.conf
+# 备案后: 改为 domain + 更新 nginx 模板 server_name
 # ============================================================
 name: Deploy
 
@@ -26,10 +30,11 @@ concurrency:
   group: deploy
   cancel-in-progress: false
 
+env:
+  DEPLOY_PATH: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/looma-zervi' }}
+  DEPLOY_NGINX_MODE: ${{ vars.DEPLOY_NGINX_MODE != '' && vars.DEPLOY_NGINX_MODE || 'ip' }}
+
 jobs:
-  # ============================================
-  # 前端构建
-  # ============================================
   frontend-build:
     name: "Build Frontend"
     runs-on: ubuntu-latest
@@ -53,13 +58,13 @@ jobs:
       - name: Build PlanetX
         run: pnpm build:planetx
         env:
-          VITE_API_BASE: ""              # 同源请求，nginx 代理 /v1/ → backend
-          VITE_SAAS_URL: "/tspace/"      # 按钮跳转到同域 T 空间
+          VITE_API_BASE: ""
+          VITE_SAAS_URL: "/tspace/"
 
       - name: Build Saas (T-space)
         run: pnpm --filter @looma/saas exec vite build --base /tspace/
         env:
-          VITE_API_BASE: ""              # 同源请求
+          VITE_API_BASE: ""
 
       - name: Upload PlanetX artifact
         uses: actions/upload-artifact@v4
@@ -75,9 +80,6 @@ jobs:
           path: frontend/packages/saas/dist
           retention-days: 1
 
-  # ============================================
-  # 后端测试
-  # ============================================
   backend-test:
     name: "Backend Tests"
     runs-on: ubuntu-latest
@@ -111,10 +113,6 @@ jobs:
           CHROMA_PERSIST_DIR: /tmp/chroma_ci
         run: python -m pytest tests/ -v --tb=short
 
-  # ============================================
-  # 部署到服务器
-  # Docker 镜像由手动部署，CI 只负责代码同步 + 容器重启
-  # ============================================
   deploy:
     name: "Deploy to Server"
     runs-on: ubuntu-latest
@@ -124,7 +122,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 下载前端构建产物
       - name: Download PlanetX dist
         uses: actions/download-artifact@v4
         with:
@@ -137,11 +134,6 @@ jobs:
           name: saas-dist
           path: artifacts/saas
 
-      - name: List artifacts
-        run: |
-          echo "=== Frontend ===" && ls -lh artifacts/planetx/ artifacts/saas/ || true
-
-      # 配置 SSH
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.1
         with:
@@ -152,183 +144,234 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      # SSH 公共参数：保活 + 禁用严格主机检查（已通过 known_hosts 验证）
-      - name: Setup SSH alias
+      - name: Setup SSH env
         run: |
           echo 'SSH_CMD=ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o StrictHostKeyChecking=accept-new' >> $GITHUB_ENV
+          echo "DEPLOY_TARGET=${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" >> $GITHUB_ENV
 
-      # ========================================
-      # Step 1: 服务器自举 — 确保目录和 .env 存在
-      # ========================================
       - name: Bootstrap server
         run: |
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'BOOTSTRAP'
-          set -e
-          echo "=== Bootstrap server ==="
-          sudo chown -R $(whoami) ${{ secrets.DEPLOY_PATH }} 2>/dev/null || true
-          mkdir -p ${{ secrets.DEPLOY_PATH }}
-          sudo mkdir -p /var/www/planetx/dist /var/www/saas/dist
-          sudo chown -R $(whoami) /var/www/planetx /var/www/saas
-          ENV_FILE="${{ secrets.DEPLOY_PATH }}/backend/.env"
-          if [ ! -f "$ENV_FILE" ]; then
+          $SSH_CMD ${{ env.DEPLOY_TARGET }} "bash -s" << BOOTSTRAP
+          set -euo pipefail
+          DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
+          echo "=== Bootstrap server (DEPLOY_PATH=\${DEPLOY_PATH}) ==="
+          sudo mkdir -p "\${DEPLOY_PATH}" /var/www/planetx/dist /var/www/saas/dist "\${DEPLOY_PATH}/data" "\${DEPLOY_PATH}/logs"
+          sudo chown -R \$(whoami):\$(whoami) "\${DEPLOY_PATH}" /var/www/planetx /var/www/saas 2>/dev/null || true
+
+          ENV_FILE="\${DEPLOY_PATH}/backend/.env"
+          mkdir -p "\$(dirname "\${ENV_FILE}")"
+          if [ ! -f "\${ENV_FILE}" ]; then
             echo "=== Creating backend/.env ==="
-            mkdir -p "$(dirname "$ENV_FILE")"
-            printf '# Auto-generated by GitHub Actions\nJWT_SECRET=%s\nDEEPSEEK_API_KEY=%s\nDEEPSEEK_BASE_URL=%s\nENV=%s\nDATABASE_PATH=/app/data/looma.db\nFLASK_ENV=production\nCHROMA_MODE=remote\nCHROMA_HOST=chromadb\nCHROMA_PORT=8000\nPOETRY_CHROMA_PATH=/app/poetry_data\n' \
-              "${{ secrets.ENV_JWT_SECRET }}" \
-              "${{ secrets.ENV_DEEPSEEK_API_KEY }}" \
-              "${{ secrets.ENV_DEEPSEEK_BASE_URL }}" \
-              "${{ secrets.ENV_ENV }}" \
-              > "$ENV_FILE"
+            printf '%s\n' \
+              '# Auto-generated by GitHub Actions' \
+              'FLASK_ENV=production' \
+              'FLASK_PORT=5200' \
+              "JWT_SECRET=${{ secrets.ENV_JWT_SECRET }}" \
+              "DEEPSEEK_API_KEY=${{ secrets.ENV_DEEPSEEK_API_KEY }}" \
+              "DEEPSEEK_BASE_URL=${{ secrets.ENV_DEEPSEEK_BASE_URL != '' && secrets.ENV_DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1' }}" \
+              'DATABASE_PATH=/app/data/looma.db' \
+              'POETRY_CHROMA_PATH=/app/poetry_data' \
+              'CHROMA_MODE=remote' \
+              'CHROMA_HOST=chromadb' \
+              'CHROMA_PORT=8000' \
+              'WECHAT_DEV_MODE=true' \
+              > "\${ENV_FILE}"
             echo "=== .env created ==="
           else
-            echo "=== .env already exists, skipping ==="
+            echo "=== .env already exists, will normalize paths ==="
           fi
+
+          set_kv() {
+            local key="\$1" val="\$2"
+            if grep -q "^\${key}=" "\${ENV_FILE}"; then
+              sed -i "s|^\${key}=.*|\${key}=\${val}|" "\${ENV_FILE}"
+            else
+              echo "\${key}=\${val}" >> "\${ENV_FILE}"
+            fi
+          }
+          set_kv FLASK_PORT 5200
+          set_kv DATABASE_PATH /app/data/looma.db
+          set_kv POETRY_CHROMA_PATH /app/poetry_data
+          set_kv CHROMA_MODE remote
+          set_kv CHROMA_HOST chromadb
+          set_kv CHROMA_PORT 8000
+
           echo "=== Bootstrap done ==="
           BOOTSTRAP
 
-      # ========================================
-      # Step 2: 同步代码到服务器
-      # ========================================
       - name: Sync code to server
         run: |
           rsync -avz -e "$SSH_CMD" --delete \
             --exclude='.git' \
             --exclude='node_modules' \
-            --exclude='__pycache__' \
-            --exclude='*.pyc' \
-            --exclude='venv' \
-            --exclude='data/' \
-            --exclude='chroma_data/' \
+            --exclude='frontend/node_modules' \
+            --exclude='**/__pycache__' \
+            --exclude='**/*.pyc' \
+            --exclude='backend/venv' \
+            --exclude='backend/data' \
+            --exclude='data/poetry_full' \
             --exclude='.env' \
+            --exclude='backend/.env' \
             --exclude='frontend/' \
             ./ \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/
+            ${{ env.DEPLOY_TARGET }}:${{ env.DEPLOY_PATH }}/
 
-      # ========================================
-      # Step 2.5: 同步诗词库 ChromaDB 数据到服务器
-      # 160MB 静态数据集，不在 git 中，需单独传输
-      # ========================================
       - name: Sync poetry ChromaDB data
         run: |
-          echo "=== Syncing poetry ChromaDB data ==="
           if [ -d "data/poetry_full" ]; then
+            echo "=== Syncing poetry ChromaDB data ==="
             rsync -avz -e "$SSH_CMD" \
               data/poetry_full/ \
-              ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/data/poetry_full/
-            echo "=== Poetry data synced ==="
+              ${{ env.DEPLOY_TARGET }}:${{ env.DEPLOY_PATH }}/data/poetry_full/
           else
-            echo "=== data/poetry_full/ not found in repo, skipping (first-time manual upload needed) ==="
+            echo "=== data/poetry_full/ not in repo — using server copy if present ==="
           fi
 
-      # ========================================
-      # Step 2.6: 初始化 poetry-data Docker 卷
-      # 首次部署时将诗词库从服务器文件系统注入 Docker 命名卷
-      # ========================================
-      - name: Populate poetry Docker volume
+      - name: Upload frontend dist
         run: |
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'POETRY_VOLUME'
-          set -e
-          DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+          rsync -avz -e "$SSH_CMD" --delete \
+            artifacts/planetx/ \
+            ${{ env.DEPLOY_TARGET }}:/var/www/planetx/dist/
+          rsync -avz -e "$SSH_CMD" --delete \
+            artifacts/saas/ \
+            ${{ env.DEPLOY_TARGET }}:/var/www/saas/dist/
+
+      - name: Deploy nginx config
+        run: |
+          NGINX_MODE="${{ env.DEPLOY_NGINX_MODE }}"
+          DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
+          case "$NGINX_MODE" in
+            ip)     NGINX_SRC="nginx-looma-zervi-ip.conf" ;;
+            domain) NGINX_SRC="nginx-looma-zervi.conf" ;;
+            *)      NGINX_SRC="nginx-looma-zervi.conf" ;;
+          esac
+          echo "=== Nginx mode: ${NGINX_MODE} → ${NGINX_SRC} ==="
+          $SSH_CMD ${{ env.DEPLOY_TARGET }} "bash -s" << NGINX
+          set -euo pipefail
+          DEPLOY_PATH="${DEPLOY_PATH}"
+          NGINX_SRC="${NGINX_SRC}"
+          SRC="\${DEPLOY_PATH}/\${NGINX_SRC}"
+
+          if [ ! -f "\${SRC}" ]; then
+            echo "Missing \${SRC}, fallback to nginx-looma-zervi.conf"
+            SRC="\${DEPLOY_PATH}/nginx-looma-zervi.conf"
+          fi
+
+          sudo cp "\${SRC}" /etc/nginx/sites-available/looma-zervi
+          sudo ln -sf /etc/nginx/sites-available/looma-zervi /etc/nginx/sites-enabled/looma-zervi
+
+          # 备案前 IP 内测：looma 作为 default_server；保留其他站点可手动共存
+          if [ "${NGINX_MODE}" = "ip" ]; then
+            sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+          fi
+
+          # 旧域名配置（若存在）备份，不强制删除其他 conf.d
+          if [ -f /etc/nginx/sites-enabled/api.genz.ltd ]; then
+            sudo mv /etc/nginx/sites-enabled/api.genz.ltd \
+              "/etc/nginx/sites-enabled/api.genz.ltd.bak.\$(date +%Y%m%d%H%M%S)"
+          fi
+
+          sudo nginx -t
+          sudo nginx -s reload
+          echo "=== Nginx reloaded ==="
+          NGINX
+
+      - name: Build & restart Docker backend
+        run: |
+          $SSH_CMD ${{ env.DEPLOY_TARGET }} "bash -s" << 'DOCKER'
+          set -euo pipefail
+          DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
+          COMPOSE="docker compose -f ${DEPLOY_PATH}/docker/docker-compose.yml -p looma-zervi"
+
+          echo "=== Free port 5200 (stop stale native gunicorn / old proxy) ==="
+          if command -v lsof >/dev/null 2>&1; then
+            for pid in $(lsof -t -i :5200 2>/dev/null || true); do
+              cmd=$(ps -p "$pid" -o comm= 2>/dev/null || true)
+              if [ "$cmd" != "docker-proxy" ]; then
+                kill "$pid" 2>/dev/null || sudo kill "$pid" 2>/dev/null || true
+              fi
+            done
+          fi
+          sleep 2
+
+          echo "=== Populate poetry Docker volume if empty ==="
           VOLUME_NAME="looma-zervi_poetry-data"
-
-          # Check if volume already has data
-          if docker run --rm -v ${VOLUME_NAME}:/data alpine test -f /data/chroma.sqlite3 2>/dev/null; then
-            echo "=== Poetry volume already populated, skipping ==="
-            exit 0
+          if ! docker run --rm -v ${VOLUME_NAME}:/data alpine test -f /data/chroma.sqlite3 2>/dev/null; then
+            if [ -d "${DEPLOY_PATH}/data/poetry_full" ]; then
+              docker run --rm \
+                -v ${VOLUME_NAME}:/dest \
+                -v ${DEPLOY_PATH}/data/poetry_full:/src:ro \
+                alpine cp -a /src/. /dest/
+              echo "=== Poetry volume populated ==="
+            else
+              echo "=== No poetry source on server, skip volume init ==="
+            fi
           fi
 
-          # Check if source data exists on server
-          if [ ! -d "${DEPLOY_PATH}/data/poetry_full" ]; then
-            echo "=== Poetry source data not found on server, skipping volume init ==="
-            exit 0
-          fi
+          echo "=== Build backend image (gunicorn :5200) ==="
+          cd "${DEPLOY_PATH}/docker"
+          ${COMPOSE} build backend
 
-          echo "=== Populating poetry Docker volume from ${DEPLOY_PATH}/data/poetry_full ==="
-          docker run --rm \
-            -v ${VOLUME_NAME}:/dest \
-            -v ${DEPLOY_PATH}/data/poetry_full:/src:ro \
-            alpine cp -a /src/. /dest/
-          echo "=== Poetry volume populated ==="
-          POETRY_VOLUME
+          echo "=== Start / recreate containers ==="
+          ${COMPOSE} up -d --remove-orphans --force-recreate backend
+          ${COMPOSE} up -d chromadb
 
-      # ========================================
-      # Step 2.7: 导入诗词到 SQLite poems 表
-      # 首次部署后从 ChromaDB 抽取结构化数据写入 SQLite
-      # （browse/random/stats 端点依赖此表）
-      # ========================================
+          echo "=== Wait for backend health ==="
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:5200/health >/dev/null 2>&1; then
+              echo "Backend healthy after ${i}s"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:5200/health || { ${COMPOSE} logs --tail 40 backend; exit 1; }
+          DOCKER
+
       - name: Import poetry into SQLite
         run: |
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'POETRY_IMPORT'
-          set -e
-          DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+          $SSH_CMD ${{ env.DEPLOY_TARGET }} "bash -s" << 'POETRY_IMPORT'
+          set -euo pipefail
+          DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
+          COMPOSE="docker compose -f ${DEPLOY_PATH}/docker/docker-compose.yml -p looma-zervi"
 
-          # Check if poems table already has data
-          COUNT=$(docker compose -f ${DEPLOY_PATH}/docker/docker-compose.yml exec -T backend \
+          COUNT=$(${COMPOSE} exec -T backend \
             python -c "from src.db.manager import DatabaseManager; db=DatabaseManager('/app/data/looma.db'); db.init_schema(); print(db.get_poetry_stats()['total'])" 2>/dev/null || echo "0")
-          if [ "$COUNT" -gt 0 ] 2>/dev/null; then
+
+          if [ "${COUNT:-0}" -gt 0 ] 2>/dev/null; then
             echo "=== Poems table already has ${COUNT} entries, skipping import ==="
             exit 0
           fi
 
           echo "=== Running poetry import (ChromaDB → SQLite) ==="
-          docker compose -f ${DEPLOY_PATH}/docker/docker-compose.yml exec -T backend \
+          ${COMPOSE} exec -T backend \
             python scripts/import_poetry.py \
               --source-dir /app/poetry_data \
               --db-path /app/data/looma.db \
-              --batch-size 500
+              --batch-size 1000
           echo "=== Poetry import complete ==="
           POETRY_IMPORT
 
-      # ========================================
-      # Step 3: 上传前端 dist
-      # ========================================
-      - name: Upload PlanetX dist
+      - name: Health check (local + nginx)
         run: |
-          rsync -avz -e "$SSH_CMD" --delete \
-            artifacts/planetx/ \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/planetx/dist/
+          $SSH_CMD ${{ env.DEPLOY_TARGET }} "bash -s" << 'HEALTH'
+          set -euo pipefail
+          echo "=== Backend :5200 ==="
+          curl -sf http://127.0.0.1:5200/health
+          echo ""
+          echo "=== Nginx :80 /health ==="
+          curl -sf http://127.0.0.1/health
+          echo ""
+          echo "=== Poetry stats ==="
+          curl -sf http://127.0.0.1/v1/poetry/stats | head -c 200
+          echo ""
+          HEALTH
 
-      - name: Upload Saas dist
+      - name: Public health check
         run: |
-          rsync -avz -e "$SSH_CMD" --delete \
-            artifacts/saas/ \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/saas/dist/
-
-      # ========================================
-      # Step 4: 部署 Nginx 配置（首次/更新时）
-      # ========================================
-      - name: Deploy nginx config
-        run: |
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "sudo cp /etc/nginx/sites-enabled/api.genz.ltd /etc/nginx/sites-enabled/api.genz.ltd.bak.$(date +%Y%m%d%H%M%S) 2>/dev/null || true"
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "sudo cp ${{ secrets.DEPLOY_PATH }}/nginx-looma-zervi.conf /etc/nginx/sites-enabled/looma-zervi"
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "sudo rm -f /etc/nginx/sites-enabled/api.genz.ltd"
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "sudo nginx -t && sudo nginx -s reload"
-
-      # ========================================
-      # Step 5: 重启 Docker 服务 + 健康检查
-      # 镜像已手动部署，此处仅重启容器加载新代码
-      # ========================================
-      - name: Restart services & health check
-        run: |
-          DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
-
-          echo "=== Restarting backend (load new code via volume mount) ==="
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "docker compose -f ${DEPLOY_PATH}/docker/docker-compose.yml up -d --remove-orphans && \
-             docker compose -f ${DEPLOY_PATH}/docker/docker-compose.yml restart backend"
-
-          echo "=== Health check ==="
-          sleep 5
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "curl -sf http://localhost:5200/health && echo ' Backend OK' || echo ' Backend FAIL'"
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "curl -sf http://localhost/health && echo ' Nginx OK' || echo ' Nginx FAIL'"
+          echo "=== Public http://${{ secrets.SSH_HOST }}/health ==="
+          curl -sf --connect-timeout 15 "http://${{ secrets.SSH_HOST }}/health"
+          echo ""
 
       - name: Clean up old images
         run: |
-          $SSH_CMD ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "docker image prune -f"
+          $SSH_CMD ${{ env.DEPLOY_TARGET }} "docker image prune -f"

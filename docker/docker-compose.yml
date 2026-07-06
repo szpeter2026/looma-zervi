@@ -1,3 +1,5 @@
+name: looma-zervi
+
 services:
   # ============================================
   # Looma Backend (Flask)

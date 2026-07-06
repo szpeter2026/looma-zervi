@@ -24,4 +24,4 @@ EXPOSE 5200
 ENV FLASK_PORT=5200
 
 # Run with gunicorn (bind 5200 — see gunicorn_config.py)
-CMD ["gunicorn", "--config", "gunicorn_config.py", "run:app"]
+CMD ["gunicorn", "--config", "gunicorn_config.py", "src.app:create_app()"]

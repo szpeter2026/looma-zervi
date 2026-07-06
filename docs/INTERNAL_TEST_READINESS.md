@@ -89,6 +89,15 @@
 #### 1.1 服务器前置
 
 - [ ] 腾讯云实例就绪（建议 2C4G+，诗词向量库需磁盘空间）
+- [ ] **备案前 IP 内测**（当前云 IP `1.14.202.161`）：
+  - 安全组 **仅放行 TCP 80** 即可（Nginx 反代 `/v1/`、`/health` → `127.0.0.1:5200`）
+  - **不必**对公网放行 **5200**（gunicorn 只监听本机；更安全）
+  - SSH（PEM）：`chmod 400 key.pem`，参考 `scripts/ssh-looma-cloud.config.example` 写入 `~/.ssh/config`，或：
+    ```bash
+    SSH_KEY=~/path/to/key.pem SSH_USER=ubuntu ./scripts/deploy-cloud-internal-test.sh
+    ```
+  - 验收：`./scripts/test-cloud-connectivity.sh`
+  - 本地前端联调：`./scripts/start-local-against-cloud.sh`
 - [ ] 域名 + ICP 备案 + SSL（小程序/Web 必需 HTTPS）
 - [ ] 微信小程序：合法域名配置 `api.xxx.cn`
 - [ ] GitHub Secrets / 服务器 `.env` 已配置（见 §6）
@@ -167,7 +176,19 @@ pnpm --filter @looma/saas build
 - [ ] `WECHAT_DEV_MODE=false`，服务器配置真实 `WECHAT_APPID/SECRET`
 - [ ] 微信开发者工具 → 上传体验版 → 志愿者扫码
 
-也可使用 CI：`.github/workflows/deploy.yml`（push main 自动部署，需 Secrets 齐全）。
+也可使用 CI：`.github/workflows/deploy.yml`（push `main` 自动部署）。
+
+**GitHub Secrets 示例（内测机 `1.14.202.161`）：**
+
+| Secret | 值 |
+|--------|-----|
+| `SSH_HOST` | `1.14.202.161` |
+| `SSH_USER` | `ubuntu` |
+| `SSH_PRIVATE_KEY` | `looma_key.pem` 全文 |
+| `DEPLOY_PATH` | `/opt/looma-zervi`（可省略，workflow 默认此路径） |
+| `ENV_JWT_SECRET` / `ENV_DEEPSEEK_API_KEY` | 生产密钥 |
+
+**Repository Variable（可选）：** `DEPLOY_NGINX_MODE=ip`（备案前默认，使用 `nginx-looma-zervi-ip.conf`）
 
 #### 1.5 远端自动化验收 ⭐
 
@@ -426,7 +447,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 CORS_ORIGINS=https://xxx.cn,https://api.xxx.cn
 ```
 
-GitHub Actions Deploy 对应 Secrets：`ENV_JWT_SECRET`、`ENV_DEEPSEEK_API_KEY`、`SSH_*`、`DEPLOY_PATH`。
+GitHub Actions Deploy 对应 Secrets：`ENV_JWT_SECRET`、`ENV_DEEPSEEK_API_KEY`、`SSH_*`；`DEPLOY_PATH` 默认 **`/opt/looma-zervi`**。
 
 ---
 

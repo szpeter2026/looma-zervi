@@ -1,0 +1,13 @@
+# 复制到 ~/.ssh/config（或 include 此文件），并修改 IdentityFile 为你的 .pem 路径
+#
+#   chmod 400 /path/to/your-key.pem
+#   ssh looma-cloud
+#
+Host looma-cloud
+  HostName 1.14.202.161
+  User ubuntu
+  IdentityFile ~/.ssh/looma-internal-test.pem
+  # 或: IdentityFile ~/Downloads/looma_key.pem
+  IdentitiesOnly yes
+  AddKeysToAgent yes
+  ServerAliveInterval 30
