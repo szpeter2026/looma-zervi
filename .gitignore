@@ -81,3 +81,6 @@ frontend/test-results/
 # Local agent memory (do not commit)
 frontend/.workbuddy/
 .workbuddy/
+
+# Internal test credentials (copy from 内测志愿者账号与入口.example.md)
+docs/内测志愿者账号与入口.md

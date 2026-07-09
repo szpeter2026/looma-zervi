@@ -38,6 +38,7 @@ def search_poems():
     if not query:
         return jsonify(error="bad_request", message="q parameter required"), 400
 
+    search_backend = "chroma"
     try:
         from src.agents.poetry_search import search_poems as _search_poems
         poems = _search_poems(query, n_results=n_results)
@@ -45,12 +46,12 @@ def search_poems():
         logger.warning(f"Poetry search failed: {e}")
         poems = []
 
-    # Also try SQLite keyword fallback if ChromaDB returns nothing
+    # SQLite keyword fallback if ChromaDB returns nothing or times out
     if not poems:
+        search_backend = "sqlite"
         db = _get_db()
         result = db.get_poems(keyword=query, per_page=n_results)
         poems = result["items"]
-        # Transform SQLite format to match ChromaDB format
         poems = [
             {
                 "title": p["title"],
@@ -62,7 +63,13 @@ def search_poems():
             for p in poems
         ]
 
-    return jsonify(results=poems, query=query, count=len(poems))
+    mode = current_app.config.get("POETRY_SEARCH_MODE", "auto")
+    if mode == "sqlite":
+        search_backend = "sqlite"
+
+    return jsonify(
+        results=poems, query=query, count=len(poems), search_backend=search_backend
+    )
 
 
 # ── Browse / filter (SQLite) ──
