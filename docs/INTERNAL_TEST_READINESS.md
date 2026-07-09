@@ -343,6 +343,8 @@ cd backend && source venv/bin/activate && ./start_gunicorn.sh
 
 #### 4.3 志愿者测试指南（建议复制到 Issue / 飞书）
 
+**账号与入口：** 复制 [内测志愿者账号与入口.example.md](./内测志愿者账号与入口.example.md) 为本地 `内测志愿者账号与入口.md` 并填入凭证（已 `.gitignore`，勿提交）
+
 ```markdown
 ## 内测范围
 - PlanetX：注册/登录、人格测试、Ask、T 空间入口
