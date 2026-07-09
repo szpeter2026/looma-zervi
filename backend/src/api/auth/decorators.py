@@ -76,11 +76,12 @@ def optional_auth(f):
             token = auth_header[7:]
             try:
                 payload = verify_token(token)
+            except Exception:
+                pass  # Invalid token → fall through to guest
+            else:
                 g.user_id = payload["sub"]
                 g.user_tier = payload.get("tier", "free")
                 return f(*args, **kwargs)
-            except Exception:
-                pass  # Invalid token → fall through to guest
 
         import uuid
         g.user_id = f"guest-{str(uuid.uuid4())[:12]}"
