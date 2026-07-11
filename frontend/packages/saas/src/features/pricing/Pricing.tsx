@@ -1,5 +1,5 @@
 /**
- * Pricing Page — 套餐对比 + 内测 Stub 试用（价格来自 Looma /v1/payment/plans）
+ * Pricing Page — 套餐对比 + 支付（Stub / WeChat Pay）
  */
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -7,13 +7,17 @@ import {
   BRAND_SAAS,
   createAuthApi,
   createPaymentApi,
+  createEnterpriseApi,
   CLOSED_LOOP_EVENTS,
   trackEvent,
   type PaymentPlan,
   type PaymentRegion,
+  type ContactSalesRequest,
+  type WechatOrderResponse,
 } from "@looma/shared-core";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useSaasAuthStore } from "../auth/authStore";
+import SaasModal from "../../brand/ui/SaasModal";
 
 const BILLING_REGION: PaymentRegion = "CN";
 
@@ -79,9 +83,25 @@ export default function Pricing() {
   const { isAuthenticated, token, applySessionToken } = useSaasAuthStore();
   const navigate = useNavigate();
   const [plans, setPlans] = useState<PlanCard[]>([]);
+  const [stubMode, setStubMode] = useState(true);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [upgradingTier, setUpgradingTier] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactForm, setContactForm] = useState<ContactSalesRequest>({
+    company_name: "",
+    contact_name: "",
+    contact_email: "",
+    contact_phone: "",
+    scale: "",
+    message: "",
+  });
+
+  // WeChat Pay 状态
+  const [wechatOrder, setWechatOrder] = useState<WechatOrderResponse | null>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [pollingOrder, setPollingOrder] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +115,7 @@ export default function Pricing() {
           ...PLAN_META[plan.tier],
         }));
         setPlans([...cards, ENTERPRISE_CARD]);
+        setStubMode(resp.stub_mode ?? true);
       } catch {
         if (!cancelled) {
           setMessage("无法加载套餐价格，请稍后重试");
@@ -115,25 +136,117 @@ export default function Pricing() {
       navigate("/register?from=pricing");
       return;
     }
+
     setUpgradingTier(tier);
     setMessage(null);
     trackEvent(CLOSED_LOOP_EVENTS.TRIAL_CLICKED);
+
     try {
       const client = createSaasApiClient();
-      const resp = await createPaymentApi(client).upgrade(tier);
-      if (resp.access_token) {
-        await applySessionToken(resp.access_token);
+
+      if (stubMode) {
+        // 开发/测试模式：直接升级
+        const resp = await createPaymentApi(client).upgrade(tier);
+        if (resp.access_token) {
+          await applySessionToken(resp.access_token);
+        } else {
+          const refreshed = await createAuthApi(client).refresh();
+          await applySessionToken(refreshed.access_token);
+        }
+        const label = tier === "supporter" ? "支持者版" : "Pro 试用";
+        setMessage(`已开通 ${label}（内测 Stub，无需真实支付）`);
       } else {
-        const refreshed = await createAuthApi(client).refresh();
-        await applySessionToken(refreshed.access_token);
+        // 生产模式：走微信支付
+        const orderResp = await createPaymentApi(client).wechatOrder({
+          tier,
+          trade_type: "NATIVE", // PC Web 扫码支付
+        });
+        setWechatOrder(orderResp);
+        setPaymentModalOpen(true);
+
+        // 启动轮询检查支付状态
+        pollPaymentStatus(orderResp.out_trade_no);
       }
-      const label = tier === "supporter" ? "支持者版" : "Pro 试用";
-      setMessage(`已开通 ${label}（内测 Stub，无需真实支付）`);
-    } catch {
-      setMessage("升级失败，可能已是更高档位用户");
+    } catch (err: any) {
+      if (err?.status === 402) {
+        setMessage("此服务需要真实支付，请联系管理员开通");
+      } else {
+        setMessage("操作失败，请稍后重试");
+      }
     } finally {
       setUpgradingTier(null);
     }
+  };
+
+  /** 轮询支付状态（每 3 秒检查一次，最多 60 次 / 3 分钟） */
+  const pollPaymentStatus = async (outTradeNo: string) => {
+    setPollingOrder(true);
+    let attempts = 0;
+    const maxAttempts = 60;
+
+    const poll = async () => {
+      try {
+        const client = createSaasApiClient();
+        const status = await createPaymentApi(client).status();
+        if (status.tier !== "free" && status.status !== "inactive") {
+          // 支付成功
+          setPollingOrder(false);
+          setPaymentModalOpen(false);
+          setWechatOrder(null);
+          if (status.access_token) {
+            await applySessionToken(status.access_token);
+          }
+          setMessage(`已开通 ${status.plan.name}！`);
+          return;
+        }
+      } catch {
+        // 忽略轮询错误
+      }
+
+      attempts++;
+      if (attempts < maxAttempts) {
+        setTimeout(poll, 3000);
+      } else {
+        setPollingOrder(false);
+        setMessage("支付状态查询超时，如已完成支付请刷新页面");
+      }
+    };
+
+    poll();
+  };
+
+  const handleContactSubmit = async () => {
+    if (!contactForm.company_name.trim() || !contactForm.contact_name.trim() || !contactForm.contact_email.trim()) {
+      setMessage("请填写公司名称、联系人和邮箱");
+      return;
+    }
+    setContactSubmitting(true);
+    setMessage(null);
+    try {
+      const client = createSaasApiClient();
+      const resp = await createEnterpriseApi(client).contactSales(contactForm);
+      setMessage(resp.message);
+      setContactModalOpen(false);
+      setContactForm({
+        company_name: "",
+        contact_name: "",
+        contact_email: "",
+        contact_phone: "",
+        scale: "",
+        message: "",
+      });
+    } catch {
+        setMessage("提交失败，请稍后重试");
+    } finally {
+      setContactSubmitting(false);
+    }
+  };
+
+  /** 关闭支付弹窗 */
+  const handleClosePayment = () => {
+    setPaymentModalOpen(false);
+    setWechatOrder(null);
+    setPollingOrder(false);
   };
 
   return (
@@ -202,6 +315,14 @@ export default function Pricing() {
                 >
                   {upgradingTier === plan.tier ? "处理中…" : plan.actionLabel}
                 </button>
+              ) : plan.tier === "enterprise" ? (
+                <button
+                  onClick={() => setContactModalOpen(true)}
+                  className="w-full py-2.5 text-sm rounded-lg font-medium text-white"
+                  style={{ backgroundColor: "var(--color-primary)" }}
+                >
+                  联系我们
+                </button>
               ) : (
                 <button
                   disabled
@@ -223,22 +344,191 @@ export default function Pricing() {
         <p className="text-center text-sm mb-4" style={{ color: "var(--color-success)" }}>{message}</p>
       )}
 
-      <div
-        className="text-center rounded-xl p-6"
-        style={{ backgroundColor: "var(--color-bg-card)", boxShadow: "var(--shadow-sm)" }}
+      {stubMode ? (
+        <div
+          className="text-center rounded-xl p-6"
+          style={{ backgroundColor: "var(--color-bg-card)", boxShadow: "var(--shadow-sm)" }}
+        >
+          <p className="text-sm font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
+            🚀 开发模式 — Stub 支付开启
+          </p>
+          <p className="text-xs mb-3" style={{ color: "var(--color-text-muted)" }}>
+            升级按钮直接生效，无需真实支付。设置 PAYMENT_STUB_MODE=false 可启用微信支付流程。
+          </p>
+          {!isAuthenticated && (
+            <Link to="/register" className="text-sm" style={{ color: "var(--color-primary)" }}>
+              还没有账号？立即注册 →
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div
+          className="text-center rounded-xl p-6"
+          style={{ backgroundColor: "var(--color-bg-card)", boxShadow: "var(--shadow-sm)" }}
+        >
+          <p className="text-sm font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
+            💳 微信支付
+          </p>
+          <p className="text-xs mb-3" style={{ color: "var(--color-text-muted)" }}>
+            支持者 ¥9.9/月 · 专业版 ¥29.9/月 · 企业版请联系销售定制
+          </p>
+          {!isAuthenticated && (
+            <Link to="/register" className="text-sm" style={{ color: "var(--color-primary)" }}>
+              还没有账号？立即注册 →
+            </Link>
+          )}
+        </div>
+      )}
+
+      <SaasModal
+        isOpen={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+        title="联系销售 — 企业版定制"
+        size="sm"
+        footer={
+          <>
+            <button
+              onClick={() => setContactModalOpen(false)}
+              className="px-4 py-2 text-sm rounded-lg"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              取消
+            </button>
+            <button
+              onClick={() => void handleContactSubmit()}
+              disabled={contactSubmitting}
+              className="px-4 py-2 text-sm rounded-lg font-medium text-white disabled:opacity-60"
+              style={{ backgroundColor: "var(--color-primary)" }}
+            >
+              {contactSubmitting ? "提交中…" : "提交咨询"}
+            </button>
+          </>
+        }
       >
-        <p className="text-sm font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
-          🚀 内测期间，核心功能免费开放
-        </p>
-        <p className="text-xs mb-3" style={{ color: "var(--color-text-muted)" }}>
-          支持者 ¥9.9/月 · 境外 $1.99/月（同 tier）；Pro 试用为 Stub 升级，备案后将接入真实支付
-        </p>
-        {!isAuthenticated && (
-          <Link to="/register" className="text-sm" style={{ color: "var(--color-primary)" }}>
-            还没有账号？立即注册 →
-          </Link>
-        )}
-      </div>
+        <div className="space-y-4">
+          {[
+            { key: "company_name" as const, label: "公司名称", required: true },
+            { key: "contact_name" as const, label: "联系人", required: true },
+            { key: "contact_email" as const, label: "邮箱", required: true },
+            { key: "contact_phone" as const, label: "电话", required: false },
+            { key: "scale" as const, label: "团队规模", required: false },
+          ].map(({ key, label, required }) => (
+            <div key={key}>
+              <label className="block text-xs mb-1" style={{ color: "var(--color-text-muted)" }}>
+                {label}{required && " *"}
+              </label>
+              <input
+                type={key === "contact_email" ? "email" : "text"}
+                value={contactForm[key]}
+                onChange={(e) => setContactForm((f) => ({ ...f, [key]: e.target.value }))}
+                className="w-full px-3 py-2 text-sm rounded-lg border"
+                style={{
+                  borderColor: "var(--color-border)",
+                  backgroundColor: "var(--color-bg-surface)",
+                  color: "var(--color-text-primary)",
+                }}
+              />
+            </div>
+          ))}
+          <div>
+            <label className="block text-xs mb-1" style={{ color: "var(--color-text-muted)" }}>
+              需求描述
+            </label>
+            <textarea
+              value={contactForm.message}
+              onChange={(e) => setContactForm((f) => ({ ...f, message: e.target.value }))}
+              rows={3}
+              className="w-full px-3 py-2 text-sm rounded-lg border resize-none"
+              style={{
+                borderColor: "var(--color-border)",
+                backgroundColor: "var(--color-bg-surface)",
+                color: "var(--color-text-primary)",
+              }}
+              placeholder="请描述您的招聘场景和定制需求…"
+            />
+          </div>
+        </div>
+      </SaasModal>
+
+      {/* WeChat Pay 扫码支付弹窗 */}
+      <SaasModal
+        isOpen={paymentModalOpen}
+        onClose={handleClosePayment}
+        title={wechatOrder ? `微信支付 — ¥${wechatOrder.amount}/月` : "微信支付"}
+        size="sm"
+        footer={
+          <div className="flex justify-between items-center w-full">
+            <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              {pollingOrder ? "等待支付中..." : "扫码完成支付"}
+            </span>
+            <button
+              onClick={handleClosePayment}
+              className="px-4 py-2 text-sm rounded-lg"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              {pollingOrder ? "取消" : "关闭"}
+            </button>
+          </div>
+        }
+      >
+        <div className="flex flex-col items-center space-y-4 py-4">
+          {wechatOrder?.qr_code_url && wechatOrder.qr_code_url !== "stub://qr_code" ? (
+            <>
+              <p className="text-sm text-center" style={{ color: "var(--color-text-secondary)" }}>
+                请使用微信扫描二维码完成支付
+              </p>
+              {/* QR Code 渲染（需添加 qrcode 库，此处用占位提示） */}
+              <div
+                className="w-48 h-48 flex items-center justify-center rounded-lg"
+                style={{ backgroundColor: "var(--color-bg-surface)" }}
+              >
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(wechatOrder.qr_code_url)}`}
+                  alt="微信支付二维码"
+                  width={180}
+                  height={180}
+                  className="rounded"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center mb-2"
+                style={{ backgroundColor: "var(--color-bg-surface)" }}
+              >
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ color: "var(--color-primary)" }}>
+                  <path d="M21 12a9 9 0 1 1-9-9" />
+                  <path d="M21 3v6h-6" />
+                </svg>
+              </div>
+              <p className="text-sm text-center font-medium" style={{ color: "var(--color-text-primary)" }}>
+                {pollingOrder ? "请在手机上完成支付" : "准备支付"}
+              </p>
+              <p className="text-xs text-center" style={{ color: "var(--color-text-muted)" }}>
+                {wechatOrder
+                  ? `订单号：${wechatOrder.out_trade_no.slice(-16)}`
+                  : "正在创建支付订单..."}
+              </p>
+              {pollingOrder && (
+                <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                  支付成功后页面将自动刷新
+                </p>
+              )}
+            </>
+          )}
+          {wechatOrder && (
+            <div className="w-full pt-2" style={{ borderTop: "1px solid var(--color-border)" }}>
+              <div className="flex justify-between text-xs" style={{ color: "var(--color-text-muted)" }}>
+                <span>{wechatOrder.tier === "supporter" ? "支持者版" : "专业版"}</span>
+                <span>¥{wechatOrder.amount}/月</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </SaasModal>
     </div>
   );
 }

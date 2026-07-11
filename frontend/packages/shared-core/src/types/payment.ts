@@ -8,6 +8,9 @@ import type { Tier } from "./auth";
 /** 区域码（与 payment.v1.json regions 一致） */
 export type PaymentRegion = "CN" | "US";
 
+/** 支付方式 */
+export type PaymentTradeType = "NATIVE" | "JSAPI";
+
 /** 定价计划（GET /v1/payment/plans 单条） */
 export interface PaymentPlan {
   tier: Tier;
@@ -26,14 +29,16 @@ export interface PlansResponse {
   currency: string;
   payment_provider: "wechat" | "stripe";
   plans: PaymentPlan[];
+  stub_mode?: boolean;
 }
 
 /** GET /v1/payment/status 响应 */
 export interface PaymentStatus {
   tier: Tier;
   plan: PaymentPlan;
-  status: "active" | "expired" | "cancelled";
+  status: "active" | "expired" | "cancelled" | "inactive";
   expires_at: string | null;
+  stub_mode?: boolean;
 }
 
 /** POST /v1/payment/upgrade 请求 */
@@ -51,6 +56,35 @@ export interface UpgradeResponse {
   access_token?: string;
   token_type?: "bearer";
   expires_in?: number;
+}
+
+/** POST /v1/payment/wechat/order 请求 */
+export interface WechatOrderRequest {
+  tier: "supporter" | "pro";
+  trade_type?: PaymentTradeType;
+  openid?: string;
+}
+
+/** POST /v1/payment/wechat/order 响应 — JSAPI 参数 */
+export interface WechatJsapiParams {
+  appId: string;
+  timeStamp: string;
+  nonceStr: string;
+  package: string;
+  signType: "RSA";
+  paySign: string;
+}
+
+/** POST /v1/payment/wechat/order 响应 */
+export interface WechatOrderResponse {
+  order_id: string;
+  out_trade_no: string;
+  prepay_id: string;
+  qr_code_url: string;
+  amount: number;
+  currency: string;
+  tier: Tier;
+  jsapi_params?: WechatJsapiParams;
 }
 
 /** 契约内 supporter 区域定价（文档/测试对照用） */
