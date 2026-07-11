@@ -115,6 +115,29 @@ export interface MissionCompleteResponse {
   level: number;
 }
 
+/** PlanetX 舰队内 1:1 匹配结果（POST /v1/game/match） */
+export interface FleetMatchCandidate {
+  user_id: string;
+  name: string;
+  personality_type: string;
+  personality_emoji: string;
+  match_score: number;
+  reason: string;
+}
+
+export interface FleetMatchResponse {
+  matched: boolean;
+  match: FleetMatchCandidate;
+  self: {
+    user_id: string;
+    personality_type: string;
+    personality_emoji: string;
+  };
+  fleet_id: string;
+  fleet_name: string;
+  candidates_considered: number;
+}
+
 export interface Fleet {
   id: string;
   name: string;
@@ -166,3 +189,64 @@ export type GameScreen =
   | "shop";
 
 export type SharePlatform = "wechat" | "moment" | "copy" | "qq" | "weibo";
+
+// ── HarmonyOS 答题游戏 (Quiz Game) ──
+
+export interface QuizGameOption {
+  id: string;
+  text: string;
+  value: number;
+}
+
+export interface QuizGameQuestion {
+  id: string;
+  text: string;
+  type: "single" | "multiple";
+  order: number;
+  options: QuizGameOption[];
+}
+
+export interface QuizStartResponse {
+  session_id: string;
+  questions: QuizGameQuestion[];
+  total: number;
+}
+
+export interface QuizAnswerRequest {
+  session_id: string;
+  question_id: string;
+  option_ids: string[];
+}
+
+export interface QuizAnswerResponse {
+  correct: boolean;
+  score: number;
+  explanation: string;
+  completed: boolean;
+  next_question?: QuizGameQuestion;
+}
+
+export interface QuizResultResponse {
+  session_id: string;
+  total_score: number;
+  total_questions: number;
+  correct_count: number;
+  result_type: string;
+  insights: string[];
+}
+
+export interface QuizHistoryItem {
+  id: string;
+  total_score: number;
+  total_questions: number;
+  correct_count: number;
+  result_type: string;
+  status: string;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface QuizHistoryResponse {
+  sessions: QuizHistoryItem[];
+  total: number;
+}

@@ -439,3 +439,92 @@ def test_full_game_flow(authed_client, second_authed_client):
     data = resp.get_json()
     assert data["member_count"] == 2
     assert len(data["members"]) == 2
+
+
+# ── Fleet match ──
+
+def test_match_requires_personality(authed_client):
+    """Match without personality should 400."""
+    resp = authed_client.post("/v1/game/match", json={})
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "personality_required"
+
+
+def test_match_requires_fleet(authed_client):
+    """Match without fleet should 400."""
+    authed_client.post("/v1/game/profile-sync", json={
+        "personality_type": "星云艺术家",
+    })
+    resp = authed_client.post("/v1/game/match", json={})
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "fleet_required"
+
+
+def test_match_fleet_too_small(authed_client):
+    """Solo fleet cannot match."""
+    authed_client.post("/v1/game/profile-sync", json={
+        "personality_type": "星云艺术家",
+    })
+    authed_client.post("/v1/game/fleet/create", json={"name": "Solo Fleet"})
+    resp = authed_client.post("/v1/game/match", json={})
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "fleet_too_small"
+
+
+def test_match_complementary_personality(authed_client, second_authed_client):
+    """Complementary types should score highest."""
+    # Captain: 星云艺术家
+    authed_client.post("/v1/game/profile-sync", json={
+        "personality_type": "星云艺术家",
+    })
+    resp = authed_client.post("/v1/game/fleet/create", json={"name": "Match Fleet"})
+    fleet_id = resp.get_json()["id"]
+
+    # Mate: complementary 黑洞程序员
+    second_authed_client.post("/v1/game/profile-sync", json={
+        "personality_type": "黑洞程序员",
+        "personality_detail": '{"emoji":"💻"}',
+    })
+    second_authed_client.post("/v1/game/fleet/join", json={"fleet_id": fleet_id})
+
+    resp = authed_client.post("/v1/game/match", json={})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["matched"] is True
+    assert data["match"]["user_id"] == second_authed_client.user_id
+    assert data["match"]["personality_type"] == "黑洞程序员"
+    assert data["match"]["match_score"] == 95
+    assert "互补" in data["match"]["reason"]
+    assert data["self"]["personality_type"] == "星云艺术家"
+
+
+def test_match_prefers_complementary_over_same(authed_client, second_authed_client, client):
+    """When multiple candidates exist, complementary beats same-type."""
+    authed_client.post("/v1/game/profile-sync", json={"personality_type": "星云艺术家"})
+    resp = authed_client.post("/v1/game/fleet/create", json={"name": "Trio Fleet"})
+    fleet_id = resp.get_json()["id"]
+
+    # Same-type member
+    second_authed_client.post("/v1/game/profile-sync", json={"personality_type": "星云艺术家"})
+    second_authed_client.post("/v1/game/fleet/join", json={"fleet_id": fleet_id})
+
+    # Complementary member
+    resp3 = client.post("/v1/auth/register", json={
+        "email": "gamer3@test.com",
+        "password": "password123",
+        "name": "Game Tester 3",
+    })
+    token3 = resp3.get_json()["access_token"]
+    uid3 = resp3.get_json()["user"]["id"]
+    headers3 = {"Authorization": f"Bearer {token3}"}
+    client.post("/v1/game/profile-sync", headers=headers3, json={
+        "personality_type": "黑洞程序员",
+    })
+    client.post("/v1/game/fleet/join", headers=headers3, json={"fleet_id": fleet_id})
+
+    resp = authed_client.post("/v1/game/match", json={})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["match"]["user_id"] == uid3
+    assert data["match"]["match_score"] == 95
+    assert data["candidates_considered"] == 2
