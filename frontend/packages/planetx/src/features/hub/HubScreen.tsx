@@ -19,7 +19,7 @@ export default function HubScreen() {
   }[] = [
     { id: 'personality', icon: '🔮', name: '星际人格测试', reward: '+50 XP · 解锁专属星球身份', xp: 50 },
     { id: 'team', icon: '🤝', name: '组建3人舰队', reward: '+80 XP · 解锁隐藏星图', xp: 80, requires: 'personality' },
-    { id: 'match', icon: '🎯', name: '首次星际匹配', reward: '+100 XP · 获得匹配星图', xp: 100, requires: 'team' },
+    { id: 'match', icon: '🎯', name: '首次星际匹配', reward: '+40 XP · 获得匹配星图', xp: 40, requires: 'team' },
     { id: 'share', icon: '📡', name: '发送星际信号', reward: '+30 XP · 邀请好友获得额外能量', xp: 30, requires: 'personality' },
   ]
 
@@ -79,7 +79,12 @@ export default function HubScreen() {
             return (
               <button
                 key={m.id}
-                onClick={() => { if (!locked && m.id === 'personality') setScreen('quiz') }}
+                onClick={() => {
+                  if (locked || done) return
+                  if (m.id === 'personality') setScreen('quiz')
+                  else if (m.id === 'match') setScreen('match')
+                  else if (m.id === 'share') setScreen('result')
+                }}
                 disabled={locked}
                 style={{
                   display: 'flex',

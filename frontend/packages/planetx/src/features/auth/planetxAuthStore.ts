@@ -390,9 +390,9 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
     if (!token) return
     try {
       const client = getApiClient()
-      const data = await client.post<Fleet>('/v1/game/fleet/create')
+      const data = await client.post<Fleet & { invite_code: string; team_size: number }>('/v1/game/fleet/create')
       if (data) {
-        set({ fleet: data, teamSize: 1, fleetMembers: [data.captain_id] })
+        set({ fleet: data, teamSize: data.team_size ?? 1, fleetMembers: [data.captain_id] })
         get().setToast('舰队创建成功！发送邀请码给好友加入 🚀')
       }
     } catch (e) {
