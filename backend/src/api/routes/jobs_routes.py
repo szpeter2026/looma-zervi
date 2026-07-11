@@ -3,10 +3,14 @@ Jobs routes blueprint.
 Ownership: szbenyx
 
 Endpoints:
-  GET  /v1/jobs/list    - List persisted jobs (fallback to mock)
-  POST /v1/jobs/upload  - Upload JD file (PDF/DOCX), auto-parsed via MarkItDown + LLM
-  POST /v1/jobs/parse   - Parse plain job description text to structured data
-  POST /v1/jobs/match   - Match resume to job listings via multi-dimension LLM scoring
+  GET  /v1/jobs/          - List jobs (alias of /list, for HarmonyOS)
+  GET  /v1/jobs/list      - List persisted jobs (fallback to mock)
+  GET  /v1/jobs/search    - Search jobs by keyword
+  GET  /v1/jobs/recommend - AI-recommended jobs for current user
+  GET  /v1/jobs/<job_id>  - Get job detail by ID
+  POST /v1/jobs/upload    - Upload JD file (PDF/DOCX), auto-parsed via MarkItDown + LLM
+  POST /v1/jobs/parse     - Parse plain job description text to structured data
+  POST /v1/jobs/match     - Match resume to job listings via multi-dimension LLM scoring
 """
 import io
 import json
@@ -280,3 +284,91 @@ def job_match():
     except Exception as e:
         logger.error(f"Job match failed: {e}")
         return jsonify(error="match_failed", message=str(e)), 500
+
+
+# ── HarmonyOS 对齐端点 ──
+
+
+@jobs_bp.route("/", methods=["GET"], strict_slashes=False)
+@optional_auth
+def list_jobs_root():
+    """List available jobs (HarmonyOS alias for /list)."""
+    return list_jobs()
+
+
+@jobs_bp.route("/search", methods=["GET"])
+@optional_auth
+def search_jobs():
+    """Search jobs by keyword query parameter.
+
+    Query: ?q=前端&location=深圳&page=1&size=20
+    """
+    q = (request.args.get("q") or "").strip().lower()
+    location = (request.args.get("location") or "").strip().lower()
+    if not q and not location:
+        # No filter → return all
+        return list_jobs()
+
+    persisted = _get_persisted_jobs()
+    source = persisted if persisted else MOCK_JOBS
+
+    filtered = []
+    for j in source:
+        title = (j.get("title") or "").lower()
+        company = (j.get("company") or "").lower()
+        desc = (j.get("description") or "").lower()
+        loc = (j.get("location") or "").lower()
+        tags_text = " ".join(j.get("tags") or []) if j.get("tags") else ""
+
+        matches = True
+        if q:
+            matches = q in title or q in company or q in desc or q in tags_text
+        if matches and location:
+            matches = location in loc
+
+        if matches:
+            filtered.append(j)
+
+    return jsonify(jobs=filtered, total=len(filtered))
+
+
+# 注意：/recommend 必须注册在 /<job_id> 之前，否则 "recommend" 会
+# 被 Flask 当作 job_id 捕获，导致 404。
+@jobs_bp.route("/recommend", methods=["GET"])
+@require_auth
+def recommend_jobs():
+    """AI-recommended jobs for the current user.
+
+    Currently returns top-scored mock jobs; future: personalization via user profile.
+    """
+    # Build a simple sorted list with simulated match_score
+    persisted = _get_persisted_jobs()
+    source = persisted if persisted else MOCK_JOBS
+
+    # Simulate match scores based on job index (MVP)
+    import random
+    random.seed(g.user_id)
+    scored = []
+    for j in source:
+        j_copy = dict(j)
+        j_copy["match_score"] = random.randint(60, 99)
+        scored.append(j_copy)
+
+    scored.sort(key=lambda x: x.get("match_score", 0), reverse=True)
+    top = scored[:10]
+
+    return jsonify(jobs=top, total=len(top))
+
+
+@jobs_bp.route("/<job_id>", methods=["GET"])
+@optional_auth
+def job_detail(job_id: str):
+    """Get job detail by ID (HarmonyOS JobDetailPage)."""
+    persisted = _get_persisted_jobs()
+    source = persisted if persisted else MOCK_JOBS
+
+    for j in source:
+        if j.get("id") == job_id:
+            return jsonify(job=j)
+
+    return jsonify(error="not_found", message=f"Job {job_id} not found"), 404

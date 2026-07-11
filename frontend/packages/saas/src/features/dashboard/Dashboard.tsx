@@ -18,6 +18,21 @@ interface HealthStatus {
   vector_store_size?: number;
 }
 
+/** 兼容后端 `{ status: "ok" }` 与 Dashboard 期望的 `{ status: "healthy" }` */
+function normalizeHealth(data: Record<string, unknown>): HealthStatus {
+  const raw = data.status;
+  const healthy = raw === "healthy" || raw === "ok";
+  return {
+    status: healthy ? "healthy" : "degraded",
+    version: String(data.version ?? "v1"),
+    uptime_seconds: Number(data.uptime_seconds ?? 0),
+    llm_provider: typeof data.llm_provider === "string" ? data.llm_provider : undefined,
+    embedding_model: typeof data.embedding_model === "string" ? data.embedding_model : undefined,
+    vector_store_size:
+      typeof data.vector_store_size === "number" ? data.vector_store_size : undefined,
+  };
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export default function Dashboard() {
@@ -29,10 +44,10 @@ export default function Dashboard() {
   }, [isAuthenticated, fetchQuota]);
 
   useEffect(() => {
-    if (!API_BASE) return;
-    fetch(`${API_BASE.replace(/\/$/, "")}/health`)
+    const base = API_BASE ? API_BASE.replace(/\/$/, "") : "";
+    fetch(`${base}/health`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => data && setHealth(data))
+      .then((data) => data && setHealth(normalizeHealth(data)))
       .catch(() => {});
   }, []);
 
@@ -322,7 +337,7 @@ export default function Dashboard() {
       </div>
 
       {/* 版本信息 */}
-      {health && (
+      {health && health.uptime_seconds > 0 && (
         <p className="text-xs text-center" style={{ color: "var(--color-text-muted)" }}>
           v{health.version} · 已运行 {Math.floor(health.uptime_seconds / 3600)}h
           {Math.floor((health.uptime_seconds % 3600) / 60)}m

@@ -92,6 +92,16 @@ class Config:
     PSYCHOLOGY_API_TYPE = os.getenv("PSYCHOLOGY_API_TYPE", "local")
     SENTINO_API_KEY = os.getenv("SENTINO_API_KEY", "")
 
+    # Payment — stub mode disables real payment (dev default on)
+    PAYMENT_STUB_MODE = os.getenv("PAYMENT_STUB_MODE", "true").lower() == "true"
+
+    # WeChat Pay API v3 (生产环境）
+    WECHAT_MCHID = os.getenv("WECHAT_MCHID", "")
+    WECHAT_API_V3_KEY = os.getenv("WECHAT_API_V3_KEY", "")
+    WECHAT_SERIAL_NO = os.getenv("WECHAT_SERIAL_NO", "")
+    WECHAT_PRIVATE_KEY_PATH = os.getenv("WECHAT_PRIVATE_KEY_PATH", "")
+    WECHAT_NOTIFY_URL = os.getenv("WECHAT_NOTIFY_URL", "")
+
     @property
     def is_production(self):
         return self.FLASK_ENV == "production"
@@ -156,3 +166,9 @@ def _refresh_config():
     Config.PSYCHOLOGY_ENABLED = os.getenv("PSYCHOLOGY_ENABLED", "true").lower() == "true"
     Config.PSYCHOLOGY_API_TYPE = os.getenv("PSYCHOLOGY_API_TYPE", "local")
     Config.SENTINO_API_KEY = os.getenv("SENTINO_API_KEY", "")
+    Config.PAYMENT_STUB_MODE = os.getenv("PAYMENT_STUB_MODE", "true").lower() == "true"
+    Config.WECHAT_MCHID = os.getenv("WECHAT_MCHID", "")
+    Config.WECHAT_API_V3_KEY = os.getenv("WECHAT_API_V3_KEY", "")
+    Config.WECHAT_SERIAL_NO = os.getenv("WECHAT_SERIAL_NO", "")
+    Config.WECHAT_PRIVATE_KEY_PATH = os.getenv("WECHAT_PRIVATE_KEY_PATH", "")
+    Config.WECHAT_NOTIFY_URL = os.getenv("WECHAT_NOTIFY_URL", "")

@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS fleets (
     name            TEXT NOT NULL,
     captain_id      TEXT NOT NULL,
     description     TEXT DEFAULT '',
+    invite_code     TEXT UNIQUE,
     created_at      TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (captain_id) REFERENCES users(id)
 );
@@ -147,6 +148,90 @@ CREATE TABLE IF NOT EXISTS candidates (
 );
 
 CREATE INDEX IF NOT EXISTS idx_candidates_enterprise ON candidates(enterprise_id);
+
+-- ============================================
+-- Enterprise: job_posts (szbenyx — HR 职位发布)
+-- ============================================
+CREATE TABLE IF NOT EXISTS job_posts (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    company         TEXT DEFAULT '',
+    description     TEXT DEFAULT '',
+    requirements    TEXT DEFAULT '',
+    status          TEXT DEFAULT 'active',     -- active | closed | draft
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_posts_user ON job_posts(user_id);
+CREATE INDEX IF NOT EXISTS idx_job_posts_status ON job_posts(user_id, status);
+
+-- ============================================
+-- Enterprise: sales_inquiries (szbenyx — 企业版联系销售)
+-- ============================================
+CREATE TABLE IF NOT EXISTS sales_inquiries (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT,
+    company_name    TEXT NOT NULL,
+    contact_name    TEXT NOT NULL,
+    contact_email   TEXT NOT NULL,
+    contact_phone   TEXT DEFAULT '',
+    scale           TEXT DEFAULT '',
+    message         TEXT DEFAULT '',
+    status          TEXT DEFAULT 'new',        -- new | contacted | closed
+    created_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sales_inquiries_status ON sales_inquiries(status);
+
+-- ============================================
+-- Payment: orders (szbenyx — 支付订单)
+-- ============================================
+CREATE TABLE IF NOT EXISTS orders (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    plan_id         TEXT NOT NULL,
+    tier            TEXT NOT NULL,
+    amount          REAL NOT NULL,
+    currency        TEXT NOT NULL DEFAULT 'CNY',
+    out_trade_no    TEXT UNIQUE NOT NULL,
+    transaction_id  TEXT,
+    status          TEXT DEFAULT 'pending',     -- pending | paid | expired | refunded
+    prepay_id       TEXT,
+    qr_code_url     TEXT,
+    metadata_json   TEXT DEFAULT '{}',
+    created_at      TEXT DEFAULT (datetime('now')),
+    paid_at         TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_trade_no ON orders(out_trade_no);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+
+-- ============================================
+-- Payment: subscriptions (szbenyx — 用户订阅状态)
+-- ============================================
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL UNIQUE,
+    tier            TEXT NOT NULL,
+    plan_id         TEXT NOT NULL,
+    status          TEXT DEFAULT 'active',      -- active | expired | cancelled
+    started_at      TEXT DEFAULT (datetime('now')),
+    expires_at      TEXT NOT NULL,
+    auto_renew      INTEGER DEFAULT 0,
+    cancel_at_period_end INTEGER DEFAULT 0,
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_expires ON subscriptions(expires_at);
 
 -- ============================================
 -- Growth: invite_codes (joint ownership)
@@ -520,6 +605,28 @@ CREATE TABLE IF NOT EXISTS product_events (
 
 CREATE INDEX IF NOT EXISTS idx_product_events_name ON product_events(event_name);
 CREATE INDEX IF NOT EXISTS idx_product_events_time ON product_events(created_at);
+
+-- ============================================
+-- Game: quiz_sessions (HarmonyOS 答题游戏)
+-- ============================================
+CREATE TABLE IF NOT EXISTS quiz_sessions (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    questions_json  TEXT NOT NULL DEFAULT '[]',   -- JSON array of all QuizQuestion
+    current_index   INTEGER NOT NULL DEFAULT 0,
+    answers_json    TEXT NOT NULL DEFAULT '[]',   -- JSON array of {question_id, option_ids, score}
+    total_score     INTEGER NOT NULL DEFAULT 0,
+    total_questions INTEGER NOT NULL DEFAULT 0,
+    correct_count   INTEGER NOT NULL DEFAULT 0,
+    status          TEXT NOT NULL DEFAULT 'active', -- active | completed
+    result_type     TEXT DEFAULT '',
+    insights_json   TEXT DEFAULT '[]',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at    TEXT DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_sessions_user ON quiz_sessions(user_id, created_at);
 """
 
 
@@ -580,6 +687,15 @@ class DatabaseManager:
         """Initialize all tables. Safe to call on every startup."""
         with self.get_conn() as conn:
             conn.executescript(SCHEMA_SQL)
+            # Migration: add invite_code to existing fleets tables
+            try:
+                conn.execute("ALTER TABLE fleets ADD COLUMN invite_code TEXT UNIQUE")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_fleets_invite_code ON fleets(invite_code)")
+            except sqlite3.OperationalError:
+                pass
 
     # ============================================
     # User operations (joint)
@@ -667,6 +783,21 @@ class DatabaseManager:
             ).fetchone()
         return dict(row) if row else None
 
+    def get_game_profiles_for_users(self, user_ids: list):
+        """Batch-fetch game profiles joined with display name for fleet matching."""
+        if not user_ids:
+            return []
+        placeholders = ",".join("?" * len(user_ids))
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                f"""SELECT gp.*, u.name AS display_name
+                    FROM game_profiles gp
+                    JOIN users u ON u.id = gp.user_id
+                    WHERE gp.user_id IN ({placeholders})""",
+                tuple(user_ids),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def add_xp(self, user_id: str, xp_amount: int):
         with self.get_conn() as conn:
             conn.execute(
@@ -688,14 +819,16 @@ class DatabaseManager:
     # Fleet operations (Jason)
     # ============================================
     def create_fleet(self, captain_id: str, name: str, description: str = ""):
-        """Create a new fleet. Captain is auto-added as first member."""
+        """Create a new fleet. Captain is auto-added as first member.
+        Generates a unique 8-char invite_code for sharing."""
         fleet_id = str(uuid.uuid4())
         member_id = str(uuid.uuid4())
+        invite_code = str(uuid.uuid4())[:8].upper()
         with self.get_conn() as conn:
             conn.execute(
-                """INSERT INTO fleets (id, name, captain_id, description)
-                   VALUES (?, ?, ?, ?)""",
-                (fleet_id, name, captain_id, description)
+                """INSERT INTO fleets (id, name, captain_id, description, invite_code)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (fleet_id, name, captain_id, description, invite_code)
             )
             conn.execute(
                 """INSERT INTO fleet_members (id, fleet_id, user_id)
@@ -703,6 +836,14 @@ class DatabaseManager:
                 (member_id, fleet_id, captain_id)
             )
         return fleet_id
+
+    def get_fleet_by_invite_code(self, invite_code: str):
+        """Look up a fleet by its invite_code."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM fleets WHERE invite_code = ?", (invite_code.upper(),)
+            ).fetchone()
+        return dict(row) if row else None
 
     def get_fleet_by_id(self, fleet_id: str):
         """Get fleet details by ID."""
@@ -1649,3 +1790,346 @@ class DatabaseManager:
                 k: v for k, v in counts.items() if k not in funnel_events
             },
         }
+
+    # ============================================
+    # Quiz sessions (HarmonyOS 答题游戏)
+    # ============================================
+    def create_quiz_session(self, user_id: str, questions_json: str) -> dict:
+        """Create a new quiz session. Returns session dict."""
+        import json as _json
+        questions = _json.loads(questions_json)
+        total = len(questions)
+        session_id = str(uuid.uuid4())
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO quiz_sessions
+                   (id, user_id, questions_json, total_questions, status)
+                   VALUES (?, ?, ?, ?, 'active')""",
+                (session_id, user_id, questions_json, total),
+            )
+            row = conn.execute(
+                "SELECT * FROM quiz_sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+        return dict(row) if row else {}
+
+    def get_quiz_session(self, session_id: str) -> dict | None:
+        """Get a quiz session by ID."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM quiz_sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def submit_quiz_answer(self, session_id: str, question_id: str,
+                           option_ids: list[str], score: int) -> dict | None:
+        """Record an answer and advance to next question. Returns updated session."""
+        import json as _json
+        with self.get_conn() as conn:
+            session = conn.execute(
+                "SELECT * FROM quiz_sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            if not session:
+                return None
+
+            s = dict(session)
+            answers = _json.loads(s["answers_json"])
+            answers.append({
+                "question_id": question_id,
+                "option_ids": option_ids,
+                "score": score,
+            })
+
+            new_index = s["current_index"] + 1
+            new_score = s["total_score"] + score
+            new_correct = s["correct_count"] + (1 if score > 0 else 0)
+            is_completed = new_index >= s["total_questions"]
+
+            status = "completed" if is_completed else "active"
+            completed_at = None
+            if is_completed:
+                from datetime import datetime, timezone, timedelta
+                _SHA_TZ = timezone(timedelta(hours=8))
+                completed_at = datetime.now(_SHA_TZ).strftime("%Y-%m-%dT%H:%M:%S%z")
+
+            conn.execute(
+                """UPDATE quiz_sessions SET
+                   answers_json = ?, current_index = ?, total_score = ?,
+                   correct_count = ?, status = ?, completed_at = ?
+                   WHERE id = ?""",
+                (
+                    _json.dumps(answers, ensure_ascii=False),
+                    new_index,
+                    new_score,
+                    new_correct,
+                    status,
+                    completed_at,
+                    session_id,
+                ),
+            )
+
+            row = conn.execute(
+                "SELECT * FROM quiz_sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def complete_quiz_session(self, session_id: str, result_type: str = "",
+                              insights_json: str = "[]") -> dict | None:
+        """Mark a quiz session as completed and set result metadata."""
+        with self.get_conn() as conn:
+            from datetime import datetime, timezone, timedelta
+            _SHA_TZ = timezone(timedelta(hours=8))
+            completed_at = datetime.now(_SHA_TZ).strftime("%Y-%m-%dT%H:%M:%S%z")
+            conn.execute(
+                """UPDATE quiz_sessions SET
+                   status = 'completed', result_type = ?, insights_json = ?,
+                   completed_at = ?
+                   WHERE id = ?""",
+                (result_type, insights_json, completed_at, session_id),
+            )
+            row = conn.execute(
+                "SELECT * FROM quiz_sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_quiz_history(self, user_id: str, limit: int = 20) -> list[dict]:
+        """Get quiz session history for a user."""
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT id, total_score, total_questions, correct_count,
+                   result_type, status, created_at, completed_at
+                   FROM quiz_sessions
+                   WHERE user_id = ? AND status = 'completed'
+                   ORDER BY created_at DESC LIMIT ?""",
+                (user_id, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ============================================
+    # Job posts (szbenyx)
+    # ============================================
+    def count_active_job_posts(self, user_id: str) -> int:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT COUNT(*) as cnt FROM job_posts
+                   WHERE user_id = ? AND status = 'active'""",
+                (user_id,),
+            ).fetchone()
+        return row["cnt"] if row else 0
+
+    def create_job_post(self, user_id: str, data: dict) -> dict:
+        post_id = str(uuid.uuid4())
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO job_posts
+                   (id, user_id, title, company, description, requirements, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    post_id,
+                    user_id,
+                    data["title"],
+                    data.get("company", ""),
+                    data.get("description", ""),
+                    data.get("requirements", ""),
+                    data.get("status", "active"),
+                ),
+            )
+            row = conn.execute("SELECT * FROM job_posts WHERE id = ?", (post_id,)).fetchone()
+        return dict(row)
+
+    def get_job_posts_by_user(self, user_id: str) -> list[dict]:
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM job_posts WHERE user_id = ?
+                   ORDER BY created_at DESC""",
+                (user_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_job_post(self, post_id: str, user_id: str) -> dict | None:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM job_posts WHERE id = ? AND user_id = ?",
+                (post_id, user_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def update_job_post(self, post_id: str, user_id: str, data: dict) -> dict | None:
+        fields = []
+        values = []
+        for key in ("title", "company", "description", "requirements", "status"):
+            if key in data:
+                fields.append(f"{key} = ?")
+                values.append(data[key])
+        if not fields:
+            return self.get_job_post(post_id, user_id)
+        fields.append("updated_at = datetime('now')")
+        values.extend([post_id, user_id])
+        with self.get_conn() as conn:
+            conn.execute(
+                f"UPDATE job_posts SET {', '.join(fields)} WHERE id = ? AND user_id = ?",
+                values,
+            )
+        return self.get_job_post(post_id, user_id)
+
+    def delete_job_post(self, post_id: str, user_id: str) -> bool:
+        with self.get_conn() as conn:
+            cur = conn.execute(
+                "DELETE FROM job_posts WHERE id = ? AND user_id = ?",
+                (post_id, user_id),
+            )
+        return cur.rowcount > 0
+
+    def count_enterprise_candidates(self, enterprise_id: str) -> int:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) as cnt FROM candidates WHERE enterprise_id = ?",
+                (enterprise_id,),
+            ).fetchone()
+        return row["cnt"] if row else 0
+
+    # ============================================
+    # Sales inquiries (szbenyx)
+    # ============================================
+    def create_sales_inquiry(self, data: dict) -> dict:
+        inquiry_id = str(uuid.uuid4())
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO sales_inquiries
+                   (id, user_id, company_name, contact_name, contact_email,
+                    contact_phone, scale, message)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    inquiry_id,
+                    data.get("user_id"),
+                    data["company_name"],
+                    data["contact_name"],
+                    data["contact_email"],
+                    data.get("contact_phone", ""),
+                    data.get("scale", ""),
+                    data.get("message", ""),
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM sales_inquiries WHERE id = ?", (inquiry_id,)
+            ).fetchone()
+        return dict(row)
+
+    # ============================================
+    # Orders (szbenyx — 支付订单)
+    # ============================================
+    def create_order(self, user_id: str, plan_id: str, tier: str,
+                     amount: float, currency: str = "CNY",
+                     out_trade_no: str | None = None,
+                     prepay_id: str = "", qr_code_url: str = "",
+                     metadata_json: dict | None = None) -> dict:
+        order_id = str(uuid.uuid4())
+        if out_trade_no is None:
+            out_trade_no = f"LOOMA{_dt_now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:8].upper()}"
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO orders
+                   (id, user_id, plan_id, tier, amount, currency, out_trade_no,
+                    prepay_id, qr_code_url, metadata_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    order_id, user_id, plan_id, tier, amount, currency,
+                    out_trade_no, prepay_id, qr_code_url,
+                    json.dumps(metadata_json or {}, ensure_ascii=False),
+                ),
+            )
+            row = conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
+        return dict(row)
+
+    def get_order_by_out_trade_no(self, out_trade_no: str) -> dict | None:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM orders WHERE out_trade_no = ?", (out_trade_no,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_order_by_id(self, order_id: str) -> dict | None:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM orders WHERE id = ?", (order_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def mark_order_paid(self, out_trade_no: str, transaction_id: str) -> dict | None:
+        with self.get_conn() as conn:
+            conn.execute(
+                """UPDATE orders SET status = 'paid', transaction_id = ?,
+                   paid_at = datetime('now') WHERE out_trade_no = ?""",
+                (transaction_id, out_trade_no),
+            )
+            row = conn.execute(
+                "SELECT * FROM orders WHERE out_trade_no = ?", (out_trade_no,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_user_orders(self, user_id: str, limit: int = 20) -> list[dict]:
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM orders WHERE user_id = ?
+                   ORDER BY created_at DESC LIMIT ?""",
+                (user_id, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ============================================
+    # Subscriptions (szbenyx — 用户订阅)
+    # ============================================
+    def upsert_subscription(self, user_id: str, tier: str, plan_id: str,
+                            expires_at: str, auto_renew: bool = False) -> dict:
+        from datetime import timedelta
+        sub_id = str(uuid.uuid4())
+        now = _dt_now().isoformat()
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO subscriptions (id, user_id, tier, plan_id,
+                   status, started_at, expires_at, auto_renew)
+                   VALUES (?, ?, ?, ?, 'active', ?, ?, ?)
+                   ON CONFLICT(user_id) DO UPDATE SET
+                     tier = excluded.tier,
+                     plan_id = excluded.plan_id,
+                     status = 'active',
+                     expires_at = excluded.expires_at,
+                     auto_renew = excluded.auto_renew,
+                     updated_at = datetime('now')""",
+                (sub_id, user_id, tier, plan_id, now, expires_at, 1 if auto_renew else 0),
+            )
+            row = conn.execute(
+                "SELECT * FROM subscriptions WHERE user_id = ?", (user_id,),
+            ).fetchone()
+        return dict(row)
+
+    def get_subscription(self, user_id: str) -> dict | None:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM subscriptions WHERE user_id = ?", (user_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def cancel_subscription(self, user_id: str, at_period_end: bool = False) -> bool:
+        with self.get_conn() as conn:
+            cur = conn.execute(
+                """UPDATE subscriptions SET
+                   cancel_at_period_end = ?, updated_at = datetime('now')
+                   WHERE user_id = ?""",
+                (1 if at_period_end else 0, user_id),
+            )
+        return cur.rowcount > 0
+
+    def expire_subscription(self, user_id: str) -> bool:
+        """Mark subscription as expired and downgrade user to free."""
+        with self.get_conn() as conn:
+            cur = conn.execute(
+                """UPDATE subscriptions SET status = 'expired',
+                   updated_at = datetime('now') WHERE user_id = ?""",
+                (user_id,),
+            )
+            if cur.rowcount > 0:
+                conn.execute(
+                    "UPDATE users SET tier = 'free', updated_at = datetime('now') WHERE id = ?",
+                    (user_id,),
+                )
+        return cur.rowcount > 0

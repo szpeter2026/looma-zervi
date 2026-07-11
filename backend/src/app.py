@@ -20,6 +20,7 @@ def create_app(env="development"):
     from src.api.routes.auth_routes import auth_bp
     from src.api.routes.game_routes import game_bp
     from src.api.routes.enterprise_routes import enterprise_bp
+    from src.api.routes.job_post_routes import job_post_bp
     from src.api.routes.ask_routes import ask_bp
     from src.api.routes.jobs_routes import jobs_bp
     from src.api.routes.resume_routes import resume_bp
@@ -37,6 +38,7 @@ def create_app(env="development"):
     app.register_blueprint(auth_bp, url_prefix="/v1/auth")
     app.register_blueprint(game_bp, url_prefix="/v1/game")
     app.register_blueprint(enterprise_bp, url_prefix="/v1/enterprise")
+    app.register_blueprint(job_post_bp, url_prefix="/v1")
     app.register_blueprint(ask_bp, url_prefix="/v1")
     app.register_blueprint(jobs_bp, url_prefix="/v1/jobs")
     app.register_blueprint(resume_bp, url_prefix="/v1/resume")
@@ -77,23 +79,35 @@ def create_app(env="development"):
                     "GET  /v1/game/profile",
                     "POST /v1/game/profile-sync",
                     "POST /v1/game/mission-complete",
+                    "POST /v1/game/match",
                     "POST /v1/game/fleet/create",
                     "POST /v1/game/fleet/join",
                     "GET  /v1/game/fleet/mine",
                     "POST /v1/game/fleet/leave",
+                    "POST /v1/game/start",
+                    "POST /v1/game/answer",
+                    "GET  /v1/game/result",
+                    "GET  /v1/game/history",
                 ],
                 "ask": ["POST /v1/ask", "POST /v1/feedback/rate", "GET  /v1/feedback/last-query"],
                 "quota": ["GET /v1/quota"],
                 "jobs": [
+                    "GET  /v1/jobs",
                     "GET  /v1/jobs/list",
+                    "GET  /v1/jobs/search",
+                    "GET  /v1/jobs/recommend",
+                    "GET  /v1/jobs/<job_id>",
                     "POST /v1/jobs/upload",
                     "POST /v1/jobs/parse",
                     "POST /v1/jobs/match",
                 ],
                 "resume": [
+                    "GET  /v1/resume/list",
+                    "GET  /v1/resume/analysis",
                     "POST /v1/resume/parse",
                     "POST /v1/resume/upload",
                     "POST /v1/resume/improve",
+                    "DELETE /v1/resume/<resume_id>",
                 ],
                 "reports": ["POST /v1/reports/generate", "GET /v1/reports/list"],
                 "payment": [
@@ -118,7 +132,17 @@ def create_app(env="development"):
                     "POST /v1/enterprise/join",
                     "GET  /v1/enterprise/profile",
                     "GET  /v1/enterprise/candidates",
+                    "GET  /v1/enterprise/candidate/<id>",
                     "POST /v1/enterprise/candidates/add",
+                    "POST /v1/enterprise/candidates/import-share",
+                    "POST /v1/enterprise/contact-sales",
+                ],
+                "job_posts": [
+                    "POST /v1/job-posts",
+                    "GET  /v1/job-posts",
+                    "PUT  /v1/job-posts/<id>",
+                    "DELETE /v1/job-posts/<id>",
+                    "GET  /v1/job-posts/<id>/matches",
                 ],
             },
         )
@@ -142,7 +166,7 @@ def create_app(env="development"):
             db.init_schema()
 
             # Auto-seed beta users in dev mode
-            if app.config.get("ENV") == "development":
+            if app.config.get("FLASK_ENV") == "development":
                 try:
                     seeded = db.seed_beta_users()
                     if seeded:

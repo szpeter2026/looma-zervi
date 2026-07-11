@@ -10,20 +10,26 @@ Endpoints:
   GET  /v1/enterprise/candidate/<id>      - Get candidate detail (HR profile view)
   POST /v1/enterprise/candidates/add      - Add a candidate manually
   POST /v1/enterprise/candidates/import-share - Import candidate from PlanetX share code
+  POST /v1/enterprise/contact-sales       - Submit enterprise sales inquiry
 """
 from __future__ import annotations
 
 import json
+import logging
+import os
 import uuid
 from flask import Blueprint, request, jsonify, current_app, g
 
-from src.api.auth.decorators import require_auth, require_tier
+from src.api.auth.decorators import require_auth, require_tier, optional_auth
 from src.analytics.events import (
     log_product_event,
     platform_from_request,
     EVENT_CANDIDATE_IMPORTED,
     EVENT_CANDIDATE_IMPORT_DUPLICATE,
 )
+from src.utils.tier_limits import get_candidate_limit, is_at_limit
+
+logger = logging.getLogger("looma.enterprise")
 
 enterprise_bp = Blueprint("enterprise", __name__)
 
@@ -54,6 +60,37 @@ def _candidate_response(row: dict) -> dict:
     result = dict(row)
     result["profile_data"] = _parse_profile_data(result.get("profile_data"))
     return result
+
+
+def _candidate_capacity_error(tier: str, current: int):
+    limit = get_candidate_limit(tier)
+    if limit == 0:
+        return jsonify(
+            error="forbidden",
+            message="需要升级至支持者版才能管理候选人",
+            upgrade={"tier": "supporter"},
+        ), 403
+    return jsonify(
+        error="quota_exceeded",
+        message=f"候选人池已达上限（{limit}人），请升级套餐",
+        limit=limit,
+        current=current,
+        upgrade={"tier": "pro" if tier == "supporter" else "enterprise"},
+    ), 429
+
+
+def _check_candidate_capacity(conn, enterprise_id: str, tier: str):
+    limit = get_candidate_limit(tier)
+    if limit == 0:
+        return _candidate_capacity_error(tier, 0)
+    if limit is not None:
+        count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM candidates WHERE enterprise_id = ?",
+            (enterprise_id,),
+        ).fetchone()["cnt"]
+        if is_at_limit(count, tier, resource="candidate"):
+            return _candidate_capacity_error(tier, count)
+    return None
 
 
 @enterprise_bp.route("/create", methods=["POST"])
@@ -151,13 +188,15 @@ def enterprise_profile():
 
 @enterprise_bp.route("/candidates", methods=["GET"])
 @require_auth
+@require_tier("supporter")
 def list_candidates():
     """List candidates for the current user's enterprise."""
     db = current_app._db
+    tier = g.user_tier
+    limit = get_candidate_limit(tier)
 
     try:
         with db.get_conn() as conn:
-            # Find user's enterprise
             eu_row = conn.execute(
                 "SELECT enterprise_id, role FROM enterprise_users WHERE user_id = ?",
                 (g.user_id,)
@@ -168,18 +207,28 @@ def list_candidates():
 
             enterprise_id = dict(eu_row)["enterprise_id"]
 
-            rows = conn.execute(
-                "SELECT * FROM candidates WHERE enterprise_id = ? ORDER BY created_at DESC",
-                (enterprise_id,)
-            ).fetchall()
+            query = (
+                "SELECT * FROM candidates WHERE enterprise_id = ? "
+                "ORDER BY created_at DESC"
+            )
+            if limit is not None:
+                query += f" LIMIT {limit}"
 
-        return jsonify(candidates=[_candidate_response(dict(r)) for r in rows])
+            rows = conn.execute(query, (enterprise_id,)).fetchall()
+            total = db.count_enterprise_candidates(enterprise_id)
+
+        return jsonify(
+            candidates=[_candidate_response(dict(r)) for r in rows],
+            limit=limit,
+            total=total,
+        )
     except Exception as e:
         return jsonify(error="list_failed", message=str(e)), 500
 
 
 @enterprise_bp.route("/candidate/<candidate_id>", methods=["GET"])
 @require_auth
+@require_tier("supporter")
 def get_candidate(candidate_id: str):
     """Get a single candidate with full profile data (HR view)."""
     db = current_app._db
@@ -205,6 +254,7 @@ def get_candidate(candidate_id: str):
 
 @enterprise_bp.route("/candidates/import-share", methods=["POST"])
 @require_auth
+@require_tier("supporter")
 def import_candidate_from_share():
     """Import a PlanetX job seeker into the enterprise via profile share code."""
     data = request.get_json() or {}
@@ -222,6 +272,10 @@ def import_candidate_from_share():
                 return jsonify(error="not_found", message="请先创建或加入企业"), 404
 
             enterprise_id = eu["enterprise_id"]
+
+            blocked = _check_candidate_capacity(conn, enterprise_id, g.user_tier)
+            if blocked:
+                return blocked
 
             invite = conn.execute(
                 "SELECT * FROM invite_codes WHERE code = ? AND tier_grant = ?",
@@ -321,6 +375,7 @@ def import_candidate_from_share():
 
 @enterprise_bp.route("/candidates/add", methods=["POST"])
 @require_auth
+@require_tier("supporter")
 def add_candidate():
     """Add a candidate to the enterprise."""
     data = request.get_json() or {}
@@ -347,7 +402,10 @@ def add_candidate():
 
             enterprise_id = dict(eu_row)["enterprise_id"]
 
-            import json
+            blocked = _check_candidate_capacity(conn, enterprise_id, g.user_tier)
+            if blocked:
+                return blocked
+
             conn.execute(
                 """INSERT INTO candidates (id, enterprise_id, name, email, phone, profile_data)
                    VALUES (?, ?, ?, ?, ?, ?)""",
@@ -358,3 +416,77 @@ def add_candidate():
         return jsonify(name=name, email=email, status="new"), 201
     except Exception as e:
         return jsonify(error="add_failed", message=str(e)), 500
+
+
+def _notify_sales_webhook(inquiry: dict):
+    """MVP: POST inquiry to DingTalk/Feishu webhook if configured."""
+    webhook_url = os.getenv("SALES_WEBHOOK_URL", "").strip()
+    if not webhook_url:
+        logger.info("[sales] new inquiry %s (no webhook configured)", inquiry.get("id"))
+        return
+
+    try:
+        import urllib.request
+        payload = json.dumps({
+            "msg_type": "text",
+            "content": {
+                "text": (
+                    f"【企业版咨询】\n"
+                    f"公司：{inquiry.get('company_name')}\n"
+                    f"联系人：{inquiry.get('contact_name')}\n"
+                    f"邮箱：{inquiry.get('contact_email')}\n"
+                    f"电话：{inquiry.get('contact_phone') or '未填'}\n"
+                    f"规模：{inquiry.get('scale') or '未填'}\n"
+                    f"留言：{inquiry.get('message') or '无'}"
+                ),
+            },
+        }, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            webhook_url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        logger.warning("[sales] webhook notify failed: %s", e)
+
+
+@enterprise_bp.route("/contact-sales", methods=["POST"])
+@optional_auth
+def contact_sales():
+    """Submit an enterprise sales inquiry (auth optional)."""
+    data = request.get_json() or {}
+    company_name = (data.get("company_name") or "").strip()
+    contact_name = (data.get("contact_name") or "").strip()
+    contact_email = (data.get("contact_email") or "").strip()
+
+    if not company_name or not contact_name or not contact_email:
+        return jsonify(
+            error="bad_request",
+            message="company_name, contact_name, contact_email required",
+        ), 400
+
+    db = current_app._db
+    user_id = getattr(g, "user_id", None)
+    if user_id and str(user_id).startswith("guest-"):
+        user_id = None
+
+    try:
+        inquiry = db.create_sales_inquiry({
+            "user_id": user_id,
+            "company_name": company_name,
+            "contact_name": contact_name,
+            "contact_email": contact_email,
+            "contact_phone": (data.get("contact_phone") or "").strip(),
+            "scale": (data.get("scale") or "").strip(),
+            "message": (data.get("message") or "").strip(),
+        })
+        _notify_sales_webhook(inquiry)
+        return jsonify(
+            ok=True,
+            id=inquiry["id"],
+            message="已收到您的咨询，我们会尽快联系您",
+        ), 201
+    except Exception as e:
+        return jsonify(error="submit_failed", message=str(e)), 500

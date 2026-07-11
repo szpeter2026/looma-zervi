@@ -33,10 +33,21 @@ def _auth_headers(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _upgrade_tier(client, token, tier="supporter"):
+    resp = client.post(
+        "/v1/payment/upgrade",
+        json={"tier": tier},
+        headers=_auth_headers(token),
+    )
+    assert resp.status_code == 200
+    return resp.get_json().get("access_token") or token
+
+
 def test_profile_share_view_and_import(client):
     """Closed loop: seeker syncs profile → share code → HR views → HR imports."""
     seeker_token = _register(client, "seeker@test.com")
     hr_token = _register(client, "hr@test.com")
+    hr_token = _upgrade_tier(client, hr_token, "supporter")
 
     personality = {
         "name": "星云艺术家",
@@ -122,17 +133,24 @@ def test_referral_use_rejects_profile_share_code(client):
 def test_game_profile_returns_mission_ids(client):
     token = _register(client, "g1@test.com")
 
-    client.post(
+    complete_resp = client.post(
         "/v1/game/mission-complete",
         headers=_auth_headers(token),
         json={"mission_id": "personality", "xp_reward": 50},
     )
+    assert complete_resp.status_code == 200
+    complete_data = complete_resp.get_json()
+    # total_xp must equal actual profile xp, not double-count the reward
+    assert complete_data["xp_earned"] == 50
+    assert complete_data["total_xp"] == 50
+    assert complete_data["level"] == 1
 
     profile_resp = client.get("/v1/game/profile", headers=_auth_headers(token))
     assert profile_resp.status_code == 200
     data = profile_resp.get_json()
     assert data["missions_completed"] == ["personality"]
-    assert data["xp"] >= 50
+    assert data["xp"] == 50
+    assert data["level"] == 1
 
 
 def test_credit_check_requires_consent_then_succeeds(client):

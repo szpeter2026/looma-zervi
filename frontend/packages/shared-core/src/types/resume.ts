@@ -158,3 +158,35 @@ export interface ResumeUploadResult {
   resume_id: string | null;
   error?: string;
 }
+
+// ── HarmonyOS 简历管理 ──
+
+export interface ResumeListItem {
+  id: string;
+  title: string;
+  filename: string;
+  file_size: number;
+  uploaded_at: string;
+  extracted: ParsedResume;
+}
+
+export interface ResumeListResponse {
+  resumes: ResumeListItem[];
+  total: number;
+}
+
+export interface ResumeAnalysisResult {
+  overall_score: number;
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
+  matched_roles: string[];
+  summary: string;
+}
+
+export interface ResumeAnalysisResponse {
+  resume_id: string;
+  title: string;
+  extracted: ParsedResume;
+  analysis: ResumeAnalysisResult | null;
+}

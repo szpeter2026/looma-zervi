@@ -43,3 +43,53 @@ export interface AddCandidateResponse {
   email?: string;
   status: string;
 }
+
+export interface ContactSalesRequest {
+  company_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string;
+  scale?: string;
+  message?: string;
+}
+
+export interface ContactSalesResponse {
+  ok: boolean;
+  id: string;
+  message: string;
+}
+
+export interface JobPost {
+  id: string;
+  user_id: string;
+  title: string;
+  company?: string;
+  description?: string;
+  requirements?: string | string[];
+  status: "active" | "closed" | "draft";
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface JobPostListResponse {
+  job_posts: JobPost[];
+  limit: number | null;
+  count: number;
+}
+
+export interface JobPostMatch {
+  candidate: Candidate;
+  match_score: number;
+}
+
+export interface JobPostMatchesResponse {
+  job_post: JobPost;
+  matches: JobPostMatch[];
+  total: number;
+}
+
+export interface CandidateListResponse {
+  candidates: Candidate[];
+  limit: number | null;
+  total: number;
+}

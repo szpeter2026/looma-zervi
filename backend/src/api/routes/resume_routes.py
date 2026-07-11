@@ -3,9 +3,12 @@ Resume routes blueprint.
 Ownership: szbenyx
 
 Endpoints:
-  POST /v1/resume/parse   - Parse plain resume text to structured data
-  POST /v1/resume/upload  - Upload resume file (PDF/DOCX), auto-parsed via MarkItDown + LLM
-  POST /v1/resume/improve - Generate improvement suggestions for a parsed resume
+  GET  /v1/resume/list      - List user's uploaded resumes
+  GET  /v1/resume/analysis  - Get AI analysis for a specific resume
+  POST /v1/resume/parse     - Parse plain resume text to structured data
+  POST /v1/resume/upload    - Upload resume file (PDF/DOCX), auto-parsed via MarkItDown + LLM
+  POST /v1/resume/improve   - Generate improvement suggestions for a parsed resume
+  DELETE /v1/resume/<resume_id> - Delete a resume
 """
 import io
 import json
@@ -236,3 +239,143 @@ def improve_resume():
     except Exception as e:
         logger.error(f"Resume improve failed: {e}")
         return jsonify(error="improve_failed", message=str(e)), 500
+
+
+# ── HarmonyOS 对齐端点 ──
+
+
+@resume_bp.route("/list", methods=["GET"])
+@require_auth
+def list_resumes():
+    """List all resumes uploaded by the current user.
+
+    Returns resumes stored in the documents table with doc_type='resume'.
+    """
+    db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
+    from src.db.manager import DatabaseManager
+    db = DatabaseManager(db_path)
+
+    try:
+        with db.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT id, title, file_path, file_size, metadata, created_at
+                   FROM documents
+                   WHERE doc_type = 'resume'
+                   ORDER BY created_at DESC LIMIT 50"""
+            ).fetchall()
+    except Exception as e:
+        logger.error(f"Failed to list resumes: {e}")
+        return jsonify(resumes=[], total=0)
+
+    resumes = []
+    for r in rows:
+        meta = json.loads(r["metadata"] or "{}")
+        extracted = meta.get("extracted") or {}
+        resumes.append({
+            "id": str(r["id"]),
+            "title": r["title"] or "未命名简历",
+            "filename": r["file_path"],
+            "file_size": r["file_size"],
+            "uploaded_at": r["created_at"],
+            "extracted": extracted,
+        })
+
+    return jsonify(resumes=resumes, total=len(resumes))
+
+
+@resume_bp.route("/analysis", methods=["GET"])
+@require_auth
+def analysis_resume():
+    """Get AI analysis summary for a specific resume.
+
+    Query: ?resume_id=xxx
+    """
+    resume_id = (request.args.get("resume_id") or "").strip()
+    if not resume_id:
+        return jsonify(error="bad_request", message="resume_id required"), 400
+
+    db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
+    from src.db.manager import DatabaseManager
+    db = DatabaseManager(db_path)
+
+    try:
+        with db.get_conn() as conn:
+            row = conn.execute(
+                """SELECT id, title, file_path, metadata, created_at
+                   FROM documents
+                   WHERE id = ? AND doc_type = 'resume'""",
+                (resume_id,)
+            ).fetchone()
+    except Exception as e:
+        logger.error(f"Failed to load resume for analysis: {e}")
+        return jsonify(error="not_found", message="简历不存在"), 404
+
+    if not row:
+        return jsonify(error="not_found", message="简历不存在"), 404
+
+    meta = json.loads(row["metadata"] or "{}")
+    extracted = meta.get("extracted") or {}
+    markdown_text = meta.get("markdown", "")[:4000]
+
+    # Generate analysis via LLM
+    try:
+        from src.agents.central_brain import _call_llm
+        import re as _re
+
+        prompt = (
+            "你是一位资深HR。请分析以下简历，给出综合评估。"
+            "输出 JSON 格式：\n"
+            "{\n"
+            '  "overall_score": 数字(0-100),\n'
+            '  "strengths": ["优势1", "优势2"],\n'
+            '  "weaknesses": ["不足1", "不足2"],\n'
+            '  "suggestions": ["建议1", "建议2"],\n'
+            '  "matched_roles": ["适合岗位1"],\n'
+            '  "summary": "综合评语"\n'
+            "}\n\n"
+            f"简历内容：\n{markdown_text}"
+        )
+
+        response = _call_llm(prompt)
+        if response:
+            resp = response.strip()
+            if "```" in resp:
+                m = _re.search(r"```(?:json)?\s*([\s\S]*?)```", resp)
+                if m:
+                    resp = m.group(1).strip()
+            analysis = json.loads(resp)
+        else:
+            analysis = None
+    except Exception as e:
+        logger.warning(f"Resume analysis LLM failed: {e}")
+        analysis = None
+
+    return jsonify(
+        resume_id=str(row["id"]),
+        title=row["title"],
+        extracted=extracted,
+        analysis=analysis,
+    )
+
+
+@resume_bp.route("/<resume_id>", methods=["DELETE"])
+@require_auth
+def delete_resume(resume_id: str):
+    """Delete a resume by ID."""
+    db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
+    from src.db.manager import DatabaseManager
+    db = DatabaseManager(db_path)
+
+    try:
+        with db.get_conn() as conn:
+            cur = conn.execute(
+                "DELETE FROM documents WHERE id = ? AND doc_type = 'resume'",
+                (resume_id,)
+            )
+            if cur.rowcount == 0:
+                return jsonify(error="not_found", message="简历不存在"), 404
+    except Exception as e:
+        logger.error(f"Failed to delete resume {resume_id}: {e}")
+        return jsonify(error="delete_failed", message=str(e)), 500
+
+    return jsonify(message="deleted", resume_id=resume_id)
