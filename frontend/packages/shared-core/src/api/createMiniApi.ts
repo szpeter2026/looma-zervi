@@ -25,11 +25,17 @@ import type {
   GameProfile,
   MissionCompleteRequest,
   MissionCompleteResponse,
+  FleetMatchResponse,
   CreateFleetRequest,
   FleetResponse,
   JoinFleetRequest,
   MyFleetResponse,
   ProfileSyncRequest,
+  QuizStartResponse,
+  QuizAnswerRequest,
+  QuizAnswerResponse,
+  QuizResultResponse,
+  QuizHistoryResponse,
 } from "../types/game";
 import type {
   CreateEnterpriseRequest,
@@ -39,7 +45,7 @@ import type {
   AddCandidateRequest,
   AddCandidateResponse,
 } from "../types/enterprise";
-import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job, ParsedJob, CreditAnalysis, CheckCompanyRequest } from "../types/resume";
+import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job, ParsedJob, CreditAnalysis, CheckCompanyRequest, ResumeListResponse, ResumeAnalysisResponse } from "../types/resume";
 import type { Report, GenerateReportRequest } from "../types/misc";
 import { API_ROUTES } from "../constants/routes";
 
@@ -131,6 +137,9 @@ export function createGameApi(client: MiniApiClientInterface) {
     missionComplete: (payload: MissionCompleteRequest) =>
       client.post<MissionCompleteResponse>(API_ROUTES.GAME_MISSION_COMPLETE, payload),
 
+    /** Fleet 1:1 personality match (PlanetX domain) */
+    match: () => client.post<FleetMatchResponse>(API_ROUTES.GAME_MATCH),
+
     /** Create a new fleet */
     createFleet: (payload: CreateFleetRequest) =>
       client.post<FleetResponse>(API_ROUTES.GAME_FLEET_CREATE, payload),
@@ -147,6 +156,21 @@ export function createGameApi(client: MiniApiClientInterface) {
 
     /** Leave current fleet */
     leaveFleet: () => client.post<{ message: string }>(API_ROUTES.GAME_FLEET_LEAVE),
+
+    // ── HarmonyOS 答题游戏 ──
+    /** Start a new quiz session */
+    quizStart: () => client.post<QuizStartResponse>(API_ROUTES.GAME_QUIZ_START),
+
+    /** Submit an answer for the current question */
+    quizAnswer: (payload: QuizAnswerRequest) =>
+      client.post<QuizAnswerResponse>(API_ROUTES.GAME_QUIZ_ANSWER, payload),
+
+    /** Get quiz result by session_id */
+    quizResult: (sessionId: string) =>
+      client.get<QuizResultResponse>(API_ROUTES.GAME_QUIZ_RESULT, { session_id: sessionId }),
+
+    /** Get user's quiz history */
+    quizHistory: () => client.get<QuizHistoryResponse>(API_ROUTES.GAME_QUIZ_HISTORY),
   };
 }
 
@@ -233,6 +257,18 @@ export function createResumeApi(client: MiniApiClientInterface) {
     upload: (_file: any) => {
       throw new Error('File upload not supported in miniprogram');
     },
+
+    // ── HarmonyOS 简历管理 ──
+    /** List all resumes uploaded by current user */
+    list: () => client.get<ResumeListResponse>(API_ROUTES.RESUME_LIST),
+
+    /** Get AI analysis for a specific resume */
+    analysis: (resumeId: string) =>
+      client.get<ResumeAnalysisResponse>(API_ROUTES.RESUME_ANALYSIS, { resume_id: resumeId }),
+
+    /** Delete a resume by ID */
+    delete: (resumeId: string) =>
+      client.delete<{ message: string; resume_id: string }>(`${API_ROUTES.RESUME_DELETE}/${resumeId}`),
   };
 }
 
@@ -243,6 +279,21 @@ export function createJobsApi(client: MiniApiClientInterface) {
   return {
     /** List available jobs (persisted + mock fallback) */
     list: () => client.get<{ jobs: Job[]; total: number }>(API_ROUTES.JOBS_LIST),
+
+    /** List jobs via root alias (HarmonyOS) */
+    listAll: () => client.get<{ jobs: Job[]; total: number }>(API_ROUTES.JOBS_ROOT),
+
+    /** Search jobs by keyword and/or location */
+    search: (params: { q?: string; location?: string; page?: number; size?: number }) =>
+      client.get<{ jobs: Job[]; total: number }>(API_ROUTES.JOBS_SEARCH, params),
+
+    /** Get job detail by ID */
+    detail: (jobId: string) =>
+      client.get<{ job: Job }>(`${API_ROUTES.JOBS_DETAIL}/${jobId}`),
+
+    /** Get AI-recommended jobs for current user (requires auth) */
+    recommend: () =>
+      client.get<{ jobs: (Job & { match_score: number })[]; total: number }>(API_ROUTES.JOBS_RECOMMEND),
 
     /** Upload JD file for AI parsing - not supported in miniprogram */
     upload: (_file: any) => {

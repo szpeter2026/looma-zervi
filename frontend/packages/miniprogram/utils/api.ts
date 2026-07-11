@@ -93,7 +93,10 @@ export const gameApi = {
     }
     return createGameApi(apiClient).missionComplete(request)
   },
-  
+
+  // match — 舰队内 1:1 人格配对
+  match: () => createGameApi(apiClient).match(),
+
   // createFleet
   createFleet: (name: string) => {
     const request: CreateFleetRequest = {

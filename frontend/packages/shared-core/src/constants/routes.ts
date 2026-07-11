@@ -20,10 +20,16 @@ export const API_ROUTES = {
   GAME_PROFILE_SYNC: "/v1/game/profile-sync",
   GAME_PROFILE: "/v1/game/profile",
   GAME_MISSION_COMPLETE: "/v1/game/mission-complete",
+  GAME_MATCH: "/v1/game/match",
   GAME_FLEET_CREATE: "/v1/game/fleet/create",
   GAME_FLEET_JOIN: "/v1/game/fleet/join",
   GAME_FLEET_MINE: "/v1/game/fleet/mine",
   GAME_FLEET_LEAVE: "/v1/game/fleet/leave",
+  // Game — HarmonyOS 答题游戏
+  GAME_QUIZ_START: "/v1/game/start",
+  GAME_QUIZ_ANSWER: "/v1/game/answer",
+  GAME_QUIZ_RESULT: "/v1/game/result",
+  GAME_QUIZ_HISTORY: "/v1/game/history",
 
   // Referral / growth
   REFERRAL_CREATE: "/v1/referral/create",
@@ -39,6 +45,11 @@ export const API_ROUTES = {
   ENTERPRISE_CANDIDATE: "/v1/enterprise/candidate",
   ENTERPRISE_CANDIDATES_ADD: "/v1/enterprise/candidates/add",
   ENTERPRISE_CANDIDATES_IMPORT_SHARE: "/v1/enterprise/candidates/import-share",
+  ENTERPRISE_CONTACT_SALES: "/v1/enterprise/contact-sales",
+
+  // Job posts (HR 职位发布)
+  JOB_POSTS: "/v1/job-posts",
+  JOB_POST: "/v1/job-posts",
 
   // Ask / RAG / Feedback
   ASK: "/v1/ask",
@@ -50,11 +61,20 @@ export const API_ROUTES = {
   JOBS_MATCH: "/v1/jobs/match",
   JOBS_UPLOAD: "/v1/jobs/upload",
   JOBS_PARSE: "/v1/jobs/parse",
+  // Jobs — HarmonyOS 首页 / 求职门面
+  JOBS_ROOT: "/v1/jobs",               // GET — 职位列表（alias of /list）
+  JOBS_SEARCH: "/v1/jobs/search",      // GET — 关键字搜索
+  JOBS_RECOMMEND: "/v1/jobs/recommend",// GET — AI 推荐
+  JOBS_DETAIL: "/v1/jobs",             // GET /:id — 拼接方式: `${JOBS_DETAIL}/${jobId}`
 
   // Resume
   RESUME_PARSE: "/v1/resume/parse",
   RESUME_UPLOAD: "/v1/resume/upload",
   RESUME_IMPROVE: "/v1/resume/improve",
+  // Resume — HarmonyOS 简历管理
+  RESUME_LIST: "/v1/resume/list",        // GET — 用户简历列表
+  RESUME_ANALYSIS: "/v1/resume/analysis",// GET — AI 分析 (?resume_id=xxx)
+  RESUME_DELETE: "/v1/resume",           // DELETE /:id — 拼接方式: `${RESUME_DELETE}/${resumeId}`
 
   // Reports
   REPORTS_GENERATE: "/v1/reports/generate",
@@ -64,6 +84,8 @@ export const API_ROUTES = {
   PAYMENT_PLANS: "/v1/payment/plans",
   PAYMENT_STATUS: "/v1/payment/status",
   PAYMENT_UPGRADE: "/v1/payment/upgrade",
+  PAYMENT_WECHAT_ORDER: "/v1/payment/wechat/order",
+  PAYMENT_WECHAT_NOTIFY: "/v1/payment/wechat/notify",
 
   // Credit (company evaluation — tripod leg 3: Resume → Job → Company)
   CREDIT_ANALYZE: "/v1/credit/analyze",

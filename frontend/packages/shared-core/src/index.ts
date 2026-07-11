@@ -25,6 +25,7 @@ export {
   createChatApi,
   createGameApi,
   createEnterpriseApi,
+  createJobPostApi,
   createReferralApi,
   createResumeApi,
   createJobsApi,
@@ -84,6 +85,8 @@ export type {
   ProfileSyncRequest,
   MissionCompleteRequest,
   MissionCompleteResponse,
+  FleetMatchCandidate,
+  FleetMatchResponse,
   CreateFleetRequest,
   JoinFleetRequest,
   FleetResponse,
@@ -150,6 +153,12 @@ export type {
   Candidate,
   AddCandidateRequest,
   AddCandidateResponse,
+  ContactSalesRequest,
+  ContactSalesResponse,
+  JobPost,
+  JobPostListResponse,
+  JobPostMatchesResponse,
+  CandidateListResponse,
 } from "./types/enterprise";
 
 export type {
@@ -180,6 +189,10 @@ export type {
   UpgradeRequest,
   UpgradeResponse,
   PaymentRegion,
+  PaymentTradeType,
+  WechatOrderRequest,
+  WechatOrderResponse,
+  WechatJsapiParams,
 } from "./types/payment";
 
 export {

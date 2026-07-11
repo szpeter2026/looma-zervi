@@ -40,7 +40,7 @@ Page({
 
     const nextStep = this.data.step + 1
     if (nextStep >= QUIZ_QUESTIONS.length) {
-      this.finishQuiz()
+      void this.finishQuiz()
     } else {
       setTimeout(() => {
         this.setData({
@@ -51,9 +51,10 @@ Page({
     }
   },
 
-  finishQuiz() {
+  async finishQuiz() {
     const personality = computePersonality(this.traitCounts)
 
+    // 1. 立即更新本地状态（用户无需等待网络也能看到结果页）
     store.set('personalityType', personality as any)
     store.set('quizTraitCounts', this.traitCounts)
     store.completeMission('personality')
@@ -64,20 +65,31 @@ Page({
 
     const xpReward = MISSION_XP.personality
 
-    gameApi.syncProfile({
-      personality_type: personality.name,
-      personality_detail: JSON.stringify(personality),
-    }).catch(() => {})
+    // 2. 同步人格结果到后端（失败不阻塞，已持久化本地状态）
+    try {
+      await gameApi.syncProfile({
+        personality_type: personality.name,
+        personality_detail: JSON.stringify(personality),
+      })
+    } catch {
+      // 后端同步失败时，本地已完成状态仍保留
+    }
 
-    gameApi.completeMission('personality', xpReward).then((data: any) => {
+    // 3. 完成后端 mission-complete，并用返回值校准 XP/等级
+    try {
+      const data: any = await gameApi.completeMission('personality', xpReward)
       if (data?.total_xp != null) {
-        // 使用完整的 profile 更新，包括 xp 和 level
-        store.applyGameProfile({ xp: data.total_xp, level: data.level })
+        store.applyGameProfile({
+          xp: data.total_xp,
+          level: data.level,
+          missions_completed: store.get('missionsCompleted'),
+        })
       }
-    }).catch(() => {})
+    } catch {
+      // 后端失败不影响本地已完成状态
+    }
 
-    setTimeout(() => {
-      wx.redirectTo({ url: '/pages/result/index' })
-    }, 500)
+    // 4. 跳转到结果页
+    wx.redirectTo({ url: '/pages/result/index' })
   },
 })

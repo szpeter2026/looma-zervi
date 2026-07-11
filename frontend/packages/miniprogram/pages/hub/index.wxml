@@ -39,15 +39,50 @@
 
   <!-- Team Tab -->
   <view wx:elif="{{activeTab === 'team'}}" class="tab-content">
-    <view class="card team-card">
-      <view class="team-icon">🚀</view>
-      <view wx:if="{{teamSize > 0}}" class="team-info">
-        <view class="team-title">舰队成员: {{teamSize}}人</view>
-        <view class="team-desc">集齐3人解锁隐藏星图</view>
+    <!-- No fleet -->
+    <view wx:if="{{!fleet}}" class="card team-empty-card">
+      <view class="team-icon-large">🚀</view>
+      <view class="team-title">尚未组建舰队</view>
+      <view class="team-desc">完成人格测试后可创建舰队，邀请好友加入</view>
+      <view class="fleet-actions">
+        <button class="btn-create" bindtap="onCreateFleetTap" loading="{{fleetCreating}}">🚀 创建舰队</button>
+        <button class="btn-join" bindtap="showJoinFleetModal">🔗 加入舰队</button>
       </view>
-      <view wx:else class="team-info">
-        <view class="team-title">尚未组建舰队</view>
-        <view class="team-desc">完成人格测试后可创建舰队</view>
+    </view>
+
+    <!-- Has fleet -->
+    <view wx:else class="card fleet-detail-card">
+      <view class="fleet-header">
+        <view class="team-icon-large">🚀</view>
+        <view class="fleet-name">{{fleet.name}}</view>
+        <view class="fleet-member-count">舰队成员: {{teamSize}}/3</view>
+      </view>
+
+      <!-- Invite code section -->
+      <view class="invite-section" bindtap="onCopyInviteCode">
+        <view class="invite-label">舰队邀请码</view>
+        <view class="invite-code">{{fleet.invite_code || '加载中...'}}</view>
+        <view class="invite-hint">点击复制邀请码</view>
+      </view>
+
+      <!-- Member slots -->
+      <view class="member-slots">
+        <view class="member-slot filled">
+          <view class="slot-avatar">🧑‍🚀</view>
+          <view class="slot-name">我</view>
+        </view>
+        <view class="member-slot {{teamSize >= 2 ? 'filled' : ''}}">
+          <view class="slot-avatar">{{teamSize >= 2 ? '🦊' : '❓'}}</view>
+          <view class="slot-name">{{teamSize >= 2 ? '船员' : '虚位以待'}}</view>
+        </view>
+        <view class="member-slot {{teamSize >= 3 ? 'filled' : ''}}">
+          <view class="slot-avatar">{{teamSize >= 3 ? '🐼' : '❓'}}</view>
+          <view class="slot-name">{{teamSize >= 3 ? '船员' : '虚位以待'}}</view>
+        </view>
+      </view>
+
+      <view class="fleet-actions">
+        <button class="btn-create" bindtap="onCopyInviteCode">📋 复制邀请码</button>
       </view>
     </view>
   </view>
@@ -76,6 +111,24 @@
       <view class="stat-card">
         <view class="stat-value">{{xp}}</view>
         <view class="stat-label">总能量</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Join Fleet Modal -->
+  <view wx:if="{{showFleetModal}}" class="modal-overlay" bindtap="hideJoinFleetModal">
+    <view class="modal-content" catchtap="nohandle">
+      <view class="modal-title">加入舰队</view>
+      <input
+        class="fleet-join-input"
+        placeholder="输入舰队邀请码"
+        value="{{fleetJoinCode}}"
+        bindinput="onJoinCodeInput"
+        auto-focus
+      />
+      <view class="modal-actions">
+        <button class="btn-secondary" bindtap="hideJoinFleetModal">取消</button>
+        <button class="btn-primary" bindtap="onJoinFleetConfirm" loading="{{fleetJoining}}">确认加入</button>
       </view>
     </view>
   </view>

@@ -6,6 +6,7 @@
     "pages/profile/index",
     "pages/quiz/index",
     "pages/result/index",
+    "pages/match/index",
     "pages/auth/index"
   ],
   "window": {

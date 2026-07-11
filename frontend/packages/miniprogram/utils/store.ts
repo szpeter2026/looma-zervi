@@ -15,6 +15,26 @@ import {
 } from '../types/index'
 import { hydratePersonality } from '../constants/quiz'
 
+const STORAGE_KEY = 'planetx_store_v1'
+
+// 需要持久化的字段（避免 UI 瞬时状态如 achievement 被保存）
+const PERSISTED_KEYS: (keyof StoreState)[] = [
+  'token',
+  'user',
+  'identity',
+  'personalityType',
+  'personalityDetail',
+  'level',
+  'xp',
+  'xpToNext',
+  'missionsCompleted',
+  'fleet',
+  'teamSize',
+  'fleetMembers',
+  'quizStep',
+  'quizTraitCounts',
+]
+
 interface StoreState {
   // Auth
   token: string | null
@@ -60,6 +80,43 @@ const state: StoreState = {
   personalityDetail: undefined,
 }
 
+/** Hydrate in-memory state from local storage on module load */
+function hydrateFromStorage() {
+  try {
+    const raw = wx.getStorageSync(STORAGE_KEY)
+    if (!raw) return
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    for (const key of PERSISTED_KEYS) {
+      if (parsed[key] !== undefined) {
+        ;(state as any)[key] = parsed[key]
+      }
+    }
+    // 重建 personalityType 对象（存储的是普通对象，类型系统需要 any）
+    const restored = state.personalityType
+    if (restored && typeof restored === 'object') {
+      state.personalityType = restored as any
+    }
+  } catch (e) {
+    console.warn('[Store] hydrate failed:', e)
+  }
+}
+
+/** Persist current state to local storage */
+function persistToStorage() {
+  try {
+    const toPersist: Partial<StoreState> = {}
+    for (const key of PERSISTED_KEYS) {
+      ;(toPersist as any)[key] = state[key]
+    }
+    wx.setStorageSync(STORAGE_KEY, toPersist)
+  } catch (e) {
+    console.warn('[Store] persist failed:', e)
+  }
+}
+
+// 启动时从本地恢复
+hydrateFromStorage()
+
 export const store = {
   get: <K extends keyof StoreState>(key: K): StoreState[K] => state[key],
 
@@ -67,6 +124,7 @@ export const store = {
 
   set: <K extends keyof StoreState>(key: K, value: StoreState[K]) => {
     state[key] = value
+    persistToStorage()
   },
 
   /** Update game profile from backend response */
@@ -114,6 +172,7 @@ export const store = {
     if (fleet !== undefined) state.fleet = fleet
     if (team_size !== undefined) state.teamSize = team_size
     if (fleet_members !== undefined) state.fleetMembers = fleet_members
+    persistToStorage()
     eventBus.emit('profile:loaded', state)
   },
 
@@ -133,6 +192,7 @@ export const store = {
         desc: `你已晋升为 Lv.${state.level}`,
       })
     }
+    persistToStorage()
     eventBus.emit('xp:added', { xp: state.xp, level: state.level })
   },
 
@@ -140,6 +200,7 @@ export const store = {
   completeMission(id: MissionId) {
     if (state.missionsCompleted.includes(id)) return
     state.missionsCompleted = [...state.missionsCompleted, id]
+    persistToStorage()
   },
 
   /** Set achievement popup */
@@ -170,5 +231,10 @@ export const store = {
     state.quizStep = 0
     state.quizTraitCounts = {}
     state.achievement = null
+    try {
+      wx.removeStorageSync(STORAGE_KEY)
+    } catch (e) {
+      console.warn('[Store] removeStorage failed:', e)
+    }
   },
 }

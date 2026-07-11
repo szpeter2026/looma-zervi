@@ -4,6 +4,7 @@
  */
 import { eventBus } from '../../utils/event-bus'
 import { store } from '../../utils/store'
+import { gameApi } from '../../utils/api'
 import { IDENTITY_LABELS, hydratePersonality } from '../../types/index'
 import type { MissionId, Identity } from '../../types/index'
 
@@ -20,13 +21,19 @@ Page({
     personalityTagline: '',
     missionsCompleted: [] as string[],
     teamSize: 0,
+    fleet: null as any,
+    fleetMembers: [] as string[],
 
     // UI
     activeTab: 'missions',
+    showFleetModal: false,
+    fleetJoinCode: '',
+    fleetJoining: false,
+    fleetCreating: false,
     missions: [
       { id: 'personality', icon: '🔮', name: '星际人格测试', reward: '+50 XP · 解锁专属星球身份', xp: 50, requires: '' },
       { id: 'team', icon: '🤝', name: '组建3人舰队', reward: '+80 XP · 解锁隐藏星图', xp: 80, requires: 'personality' },
-      { id: 'match', icon: '🎯', name: '首次星际匹配', reward: '+100 XP · 获得匹配星图', xp: 100, requires: 'team' },
+      { id: 'match', icon: '🎯', name: '首次星际匹配', reward: '+40 XP · 获得匹配星图', xp: 40, requires: 'team' },
       { id: 'share', icon: '📡', name: '发送星际信号', reward: '+30 XP · 邀请好友获得额外能量', xp: 30, requires: 'personality' },
     ],
   },
@@ -58,17 +65,57 @@ Page({
         app.loadProfile()
       }
     }
+
+    // Also refresh fleet data if user is logged in
+    this.loadFleetData()
   },
 
   onUnload() {
     if (this._profileHandler) eventBus.off('profile:loaded', this._profileHandler)
   },
 
+  async loadFleetData() {
+    const token = store.get('token')
+    if (!token) return
+    try {
+      const data: any = await gameApi.getMyFleet()
+      if (data?.fleet) {
+        store.set('fleet', data.fleet)
+        store.set('teamSize', data.team_size ?? data.member_count ?? 0)
+        store.set('fleetMembers', data.fleet_members ?? [])
+        this.refreshFromStore()
+
+        // 检查是否达成3人舰队任务
+        const teamSize = store.get('teamSize')
+        const completed = store.get('missionsCompleted')
+        if (teamSize >= 3 && !completed.includes('team')) {
+          this.completeFleetMission()
+        }
+      }
+    } catch {
+      // fleet data is optional
+    }
+  },
+
+  async completeFleetMission() {
+    try {
+      const data: any = await gameApi.completeMission('team', 80)
+      store.completeMission('team')
+      if (data?.total_xp != null) {
+        store.applyGameProfile({ xp: data.total_xp, level: data.level, missions_completed: store.get('missionsCompleted') })
+      }
+      store.setAchievement({ title: '🤝 舰队集结完毕！', desc: '3人成团 · 隐藏星图已解锁' })
+      this.refreshFromStore()
+    } catch {
+      // mission may already be completed
+    }
+  },
+
   refreshFromStore() {
     const s = store.getAll()
     // 使用 hydratePersonality 获取完整的 PersonalityType 对象
     const personalityObj = hydratePersonality(s.personalityType, s.personalityDetail)
-    
+
     this.setData({
       level: s.level,
       xp: s.xp,
@@ -80,6 +127,8 @@ Page({
       personalityTagline: personalityObj?.tagline || '',
       missionsCompleted: s.missionsCompleted,
       teamSize: s.teamSize,
+      fleet: s.fleet,
+      fleetMembers: s.fleetMembers,
     })
   },
 
@@ -108,9 +157,9 @@ Page({
     if (id === 'personality') {
       wx.navigateTo({ url: '/pages/quiz/index' })
     } else if (id === 'team') {
-      wx.showToast({ title: '舰队功能即将上线', icon: 'none' })
+      this.onTeamMissionTap()
     } else if (id === 'match') {
-      wx.showToast({ title: '匹配功能即将上线', icon: 'none' })
+      wx.navigateTo({ url: '/pages/match/index' })
     } else if (id === 'share') {
       if (!this.data.personalityName && !this.data.missionsCompleted.includes('personality')) {
         wx.showToast({ title: '请先完成人格测试', icon: 'none' })
@@ -118,5 +167,87 @@ Page({
       }
       wx.navigateTo({ url: '/pages/result/index' })
     }
+  },
+
+  // ── Fleet operations ──
+
+  onTeamMissionTap() {
+    // 如果已有舰队，展示舰队详情
+    if (this.data.fleet) {
+      this.setData({ activeTab: 'team' })
+      return
+    }
+    // 否则弹窗让用户选择创建还是加入
+    wx.showActionSheet({
+      itemList: ['创建舰队', '加入舰队'],
+      success: (res) => {
+        if (res.tapIndex === 0) {
+          this.onCreateFleetTap()
+        } else {
+          this.showJoinFleetModal()
+        }
+      },
+    })
+  },
+
+  async onCreateFleetTap() {
+    if (this.data.fleetCreating) return
+    this.setData({ fleetCreating: true })
+    try {
+      const data: any = await gameApi.createFleet('星际舰队')
+      store.set('fleet', { id: data.id, name: data.name, invite_code: data.invite_code, captain_id: data.captain_id })
+      store.set('teamSize', data.team_size ?? 1)
+      store.set('fleetMembers', [])
+      this.refreshFromStore()
+      wx.showToast({ title: '舰队创建成功！', icon: 'success' })
+    } catch (err: any) {
+      const msg = err?.message || err?.error || '创建失败'
+      wx.showToast({ title: msg, icon: 'none' })
+    } finally {
+      this.setData({ fleetCreating: false })
+    }
+  },
+
+  showJoinFleetModal() {
+    this.setData({ showFleetModal: true, fleetJoinCode: '' })
+  },
+
+  hideJoinFleetModal() {
+    this.setData({ showFleetModal: false, fleetJoinCode: '' })
+  },
+
+  onJoinCodeInput(e: any) {
+    this.setData({ fleetJoinCode: e.detail.value })
+  },
+
+  async onJoinFleetConfirm() {
+    const code = this.data.fleetJoinCode.trim()
+    if (!code) {
+      wx.showToast({ title: '请输入邀请码', icon: 'none' })
+      return
+    }
+    if (this.data.fleetJoining) return
+    this.setData({ fleetJoining: true })
+    try {
+      await gameApi.joinFleet(code)
+      this.hideJoinFleetModal()
+      wx.showToast({ title: '加入舰队成功！', icon: 'success' })
+      // 刷新舰队数据
+      await this.loadFleetData()
+    } catch (err: any) {
+      const msg = err?.message || err?.error || '加入失败'
+      wx.showToast({ title: msg, icon: 'none' })
+    } finally {
+      this.setData({ fleetJoining: false })
+    }
+  },
+
+  onCopyInviteCode() {
+    const code = this.data.fleet?.invite_code || ''
+    if (!code) return
+    wx.setClipboardData({
+      data: code,
+      success: () => wx.showToast({ title: '邀请码已复制！', icon: 'success' }),
+    })
   },
 })

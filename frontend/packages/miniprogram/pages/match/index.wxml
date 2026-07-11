@@ -1,0 +1,57 @@
+<star-bg />
+<view class="page-container">
+  <!-- Scanning -->
+  <view wx:if="{{phase === 'scanning'}}" class="scan-panel">
+    <view class="scan-orbit">
+      <view class="scan-core">🎯</view>
+      <view class="scan-ring"></view>
+    </view>
+    <view class="scan-title">首次星际匹配</view>
+    <view class="scan-status">{{statusText}}</view>
+    <view class="scan-hint">仅在舰队范围内寻找互补人格</view>
+  </view>
+
+  <!-- Result: 匹配星图 -->
+  <view wx:elif="{{phase === 'result'}}" class="result-panel">
+    <view class="result-label">匹配星图已生成</view>
+    <view class="fleet-chip" wx:if="{{fleetName}}">舰队 · {{fleetName}}</view>
+
+    <view class="pair-row">
+      <view class="pair-card self">
+        <view class="pair-emoji">{{selfEmoji}}</view>
+        <view class="pair-role">你</view>
+        <view class="pair-type">{{selfType}}</view>
+      </view>
+
+      <view class="pair-link">
+        <view class="score">{{matchScore}}</view>
+        <view class="score-label">契合度</view>
+      </view>
+
+      <view class="pair-card other">
+        <view class="pair-emoji">{{matchEmoji}}</view>
+        <view class="pair-role">{{matchName}}</view>
+        <view class="pair-type">{{matchType}}</view>
+      </view>
+    </view>
+
+    <view class="reason-box">{{matchReason}}</view>
+
+    <view
+      class="btn-primary {{completing ? 'disabled' : ''}}"
+      bindtap="onConfirmMatch"
+    >
+      {{completed ? '已解锁 · 返回母舰' : (completing ? '同步中…' : '确认匹配 · 解锁星图 +40 XP')}}
+    </view>
+    <view class="btn-ghost" bindtap="onBack">稍后再说</view>
+  </view>
+
+  <!-- Error -->
+  <view wx:else class="error-panel">
+    <view class="error-icon">📡</view>
+    <view class="error-title">匹配信号中断</view>
+    <view class="error-msg">{{errorMessage}}</view>
+    <view class="btn-primary" bindtap="onRetry">重新扫描</view>
+    <view class="btn-ghost" bindtap="onBack">返回母舰</view>
+  </view>
+</view>

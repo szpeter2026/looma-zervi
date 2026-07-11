@@ -25,11 +25,17 @@ import type {
   GameProfile,
   MissionCompleteRequest,
   MissionCompleteResponse,
+  FleetMatchResponse,
   CreateFleetRequest,
   FleetResponse,
   JoinFleetRequest,
   MyFleetResponse,
   ProfileSyncRequest,
+  QuizStartResponse,
+  QuizAnswerRequest,
+  QuizAnswerResponse,
+  QuizResultResponse,
+  QuizHistoryResponse,
 } from "../types/game";
 import type {
   CreateEnterpriseRequest,
@@ -38,8 +44,15 @@ import type {
   Candidate,
   AddCandidateRequest,
   AddCandidateResponse,
+  ContactSalesRequest,
+  ContactSalesResponse,
+  JobPost,
+  JobPostListResponse,
+  JobPostMatch,
+  JobPostMatchesResponse,
+  CandidateListResponse,
 } from "../types/enterprise";
-import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job, ResumeUploadResult, ParsedJob, JobUploadResult, CreditAnalysis, CheckCompanyRequest } from "../types/resume";
+import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job, ResumeUploadResult, ParsedJob, JobUploadResult, CreditAnalysis, CheckCompanyRequest, ResumeListResponse, ResumeAnalysisResponse } from "../types/resume";
 import type { Report, GenerateReportRequest } from "../types/misc";
 import { API_ROUTES } from "../constants/routes";
 
@@ -168,6 +181,9 @@ export function createGameApi(client: ApiClient) {
     missionComplete: (payload: MissionCompleteRequest) =>
       client.post<MissionCompleteResponse>(API_ROUTES.GAME_MISSION_COMPLETE, payload),
 
+    /** Fleet 1:1 personality match (PlanetX domain) */
+    match: () => client.post<FleetMatchResponse>(API_ROUTES.GAME_MATCH),
+
     /** Create a new fleet */
     createFleet: (payload: CreateFleetRequest) =>
       client.post<FleetResponse>(API_ROUTES.GAME_FLEET_CREATE, payload),
@@ -184,6 +200,21 @@ export function createGameApi(client: ApiClient) {
 
     /** Leave current fleet */
     leaveFleet: () => client.post<{ message: string }>(API_ROUTES.GAME_FLEET_LEAVE),
+
+    // ── HarmonyOS 答题游戏 ──
+    /** Start a new quiz session */
+    quizStart: () => client.post<QuizStartResponse>(API_ROUTES.GAME_QUIZ_START),
+
+    /** Submit an answer for the current question */
+    quizAnswer: (payload: QuizAnswerRequest) =>
+      client.post<QuizAnswerResponse>(API_ROUTES.GAME_QUIZ_ANSWER, payload),
+
+    /** Get quiz result by session_id */
+    quizResult: (sessionId: string) =>
+      client.get<QuizResultResponse>(API_ROUTES.GAME_QUIZ_RESULT, { session_id: sessionId }),
+
+    /** Get user's quiz history */
+    quizHistory: () => client.get<QuizHistoryResponse>(API_ROUTES.GAME_QUIZ_HISTORY),
   };
 }
 
@@ -207,7 +238,7 @@ export function createEnterpriseApi(client: ApiClient) {
     profile: () => client.get<EnterpriseProfile>(API_ROUTES.ENTERPRISE_PROFILE),
 
     /** List candidates for the enterprise */
-    candidates: () => client.get<{ candidates: Candidate[] }>(API_ROUTES.ENTERPRISE_CANDIDATES),
+    candidates: () => client.get<CandidateListResponse>(API_ROUTES.ENTERPRISE_CANDIDATES),
 
     /** Add a candidate to the enterprise */
     addCandidate: (payload: AddCandidateRequest) =>
@@ -222,6 +253,31 @@ export function createEnterpriseApi(client: ApiClient) {
       client.post<Candidate>(API_ROUTES.ENTERPRISE_CANDIDATES_IMPORT_SHARE, {
         share_code: shareCode,
       }),
+
+    /** Submit enterprise sales inquiry */
+    contactSales: (payload: ContactSalesRequest) =>
+      client.post<ContactSalesResponse>(API_ROUTES.ENTERPRISE_CONTACT_SALES, payload),
+  };
+}
+
+// ============================================================
+// Job Post API (HR 职位发布)
+// ============================================================
+export function createJobPostApi(client: ApiClient) {
+  return {
+    list: () => client.get<JobPostListResponse>(API_ROUTES.JOB_POSTS),
+
+    create: (payload: Pick<JobPost, "title" | "company" | "description" | "requirements" | "status">) =>
+      client.post<JobPost>(API_ROUTES.JOB_POSTS, payload),
+
+    update: (postId: string, payload: Partial<Pick<JobPost, "title" | "company" | "description" | "requirements" | "status">>) =>
+      client.put<JobPost>(`${API_ROUTES.JOB_POST}/${postId}`, payload),
+
+    remove: (postId: string) =>
+      client.delete<{ ok: boolean }>(`${API_ROUTES.JOB_POST}/${postId}`),
+
+    matches: (postId: string) =>
+      client.get<JobPostMatchesResponse>(`${API_ROUTES.JOB_POST}/${postId}/matches`),
   };
 }
 
@@ -268,6 +324,18 @@ export function createResumeApi(client: ApiClient) {
 
     /** Upload resume file for AI parsing (PDF/DOCX → structured JSON) */
     upload: (file: File) => client.upload<ResumeUploadResult>(API_ROUTES.RESUME_UPLOAD, file, "file"),
+
+    // ── HarmonyOS 简历管理 ──
+    /** List all resumes uploaded by current user */
+    list: () => client.get<ResumeListResponse>(API_ROUTES.RESUME_LIST),
+
+    /** Get AI analysis for a specific resume */
+    analysis: (resumeId: string) =>
+      client.get<ResumeAnalysisResponse>(API_ROUTES.RESUME_ANALYSIS, { resume_id: resumeId }),
+
+    /** Delete a resume by ID */
+    delete: (resumeId: string) =>
+      client.delete<{ message: string; resume_id: string }>(`${API_ROUTES.RESUME_DELETE}/${resumeId}`),
   };
 }
 
@@ -278,6 +346,21 @@ export function createJobsApi(client: ApiClient) {
   return {
     /** List available jobs (persisted + mock fallback) */
     list: () => client.get<{ jobs: Job[]; total: number }>(API_ROUTES.JOBS_LIST),
+
+    /** List jobs via root alias (HarmonyOS) */
+    listAll: () => client.get<{ jobs: Job[]; total: number }>(API_ROUTES.JOBS_ROOT),
+
+    /** Search jobs by keyword and/or location */
+    search: (params: { q?: string; location?: string; page?: number; size?: number }) =>
+      client.get<{ jobs: Job[]; total: number }>(API_ROUTES.JOBS_SEARCH, params),
+
+    /** Get job detail by ID */
+    detail: (jobId: string) =>
+      client.get<{ job: Job }>(`${API_ROUTES.JOBS_DETAIL}/${jobId}`),
+
+    /** Get AI-recommended jobs for current user (requires auth) */
+    recommend: () =>
+      client.get<{ jobs: (Job & { match_score: number })[]; total: number }>(API_ROUTES.JOBS_RECOMMEND),
 
     /** Upload JD file for AI parsing (PDF/DOCX → structured JSON) */
     upload: (file: File) => client.upload<JobUploadResult>(API_ROUTES.JOBS_UPLOAD, file, "file"),
@@ -416,9 +499,16 @@ export function createPaymentApi(client: ApiClient) {
     /** Get current user subscription status */
     status: () => client.get<import("../types/payment").PaymentStatus>(API_ROUTES.PAYMENT_STATUS),
 
-    /** Upgrade tier (stub: no real payment) */
+    /** Upgrade tier (stub mode only; blocked in production → use wechatOrder instead) */
     upgrade: (tier: "supporter" | "pro") =>
       client.post<import("../types/payment").UpgradeResponse>(API_ROUTES.PAYMENT_UPGRADE, { tier }),
+
+    /** Create WeChat Pay order (production mode) */
+    wechatOrder: (payload: import("../types/payment").WechatOrderRequest) =>
+      client.post<import("../types/payment").WechatOrderResponse>(
+        API_ROUTES.PAYMENT_WECHAT_ORDER,
+        payload,
+      ),
   };
 }
 

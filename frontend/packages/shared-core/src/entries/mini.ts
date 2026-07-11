@@ -82,6 +82,8 @@ export type {
   ProfileSyncRequest,
   MissionCompleteRequest,
   MissionCompleteResponse,
+  FleetMatchCandidate,
+  FleetMatchResponse,
   CreateFleetRequest,
   JoinFleetRequest,
   FleetResponse,
