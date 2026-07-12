@@ -90,7 +90,7 @@
 | CN-P1-2 | 微信实单 0.01 元 | `PAYMENT_STUB_MODE=false` + 商户号 + notify 回调 | [ ] |
 | CN-P1-3 | 小程序合法域名 | 微信公众平台配置 `api.szbolent.com.cn` | [ ] |
 | CN-P1-4 | szbolent-portal 接 Looma | `looma.ts` + Pricing 拉 API | [ ] |
-| CN-P1-5 | 职位发布 + 联系销售 | HR 闭环 E2E | [ ] |
+| CN-P1-5 | 合伙人闭环 | 发布机会 → 候选人池 → 匹配 E2E（`/v1/job-posts`） | [ ] |
 | CN-P1-6 | 社交同心环（若本迭代） | Hub 静态环 / 图谱 API | [ ] |
 | CN-P1-7 | 订阅到期降级 | cron 或手动验 `subscriptions` 表 | [ ] |
 | CN-P1-8 | 闭环脚本 | `API_BASE=... ./scripts/verify-closed-loop.sh` 全绿 | [ ] |

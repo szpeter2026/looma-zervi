@@ -1,11 +1,26 @@
 # 多端客户体验战略：Web + PWA 与分组落地指南
 
-> **版本：** 1.0 · **日期：** 2026-07-12  
+> **版本：** 1.1 · **日期：** 2026-07-12  
 > **分支：** 大陆主开发 `main` · 海外 `release/overseas`  
 > **用途：** 组队逐项落地；从**客户体验（CX）**而非技术栈拆组  
-> **关联：** [DUAL_TRACK_ACCEPTANCE_CHECKLIST.md](./DUAL_TRACK_ACCEPTANCE_CHECKLIST.md) · [OVERSEAS_DEPLOY.md](./OVERSEAS_DEPLOY.md) · [HARMONY_FRONTEND_ALIGNMENT.md](./HARMONY_FRONTEND_ALIGNMENT.md)
+> **关联：** [DUAL_TRACK_ACCEPTANCE_CHECKLIST.md](./DUAL_TRACK_ACCEPTANCE_CHECKLIST.md) · [OVERSEAS_DEPLOY.md](./OVERSEAS_DEPLOY.md) · [API_PARTNER_ALIGNMENT.md](./API_PARTNER_ALIGNMENT.md) · [HARMONY_FRONTEND_ALIGNMENT.md](./HARMONY_FRONTEND_ALIGNMENT.md)
 
 ---
+
+## 0. 产品信念（分组前提）
+
+**我们不相信「企业」作为信用主体，只相信「个人」及其可验证的信用。**
+
+因此产品中**不存在**传统 B 端叙事（HR 替公司招人、企业招聘 SaaS）。  
+与之对应的是 **合伙人（Partner）**：以个人身份发布机会、积累候选人池、用 tier 与行为建立信用。
+
+| 不存在 | 存在 |
+|--------|------|
+| 企业 HR 招聘工作台 | **合伙人**个人工作台 |
+| 公司主体招聘信用 | **个人信用** + 行为记录 + tier |
+| `/v1/enterprise/jobs` 式企业职位域 | `/v1/job-posts`（归属 `user_id` 的合伙人发布） |
+
+代码里 `saas` 包、`tspace` 域、`enterprise` API 命名是**历史实现壳**；体验分组与对外叙事统一用 **合伙人**，见 [API_PARTNER_ALIGNMENT.md](./API_PARTNER_ALIGNMENT.md)。
 
 ## 1. PWA 是什么
 
@@ -38,7 +53,7 @@
 
 Web + PWA 的正确定位
   = PlanetX Web 的「交付形态升级」
-  ≠ 替代微信小程序、鸿蒙、企业 SaaS 独立壳
+  ≠ 替代微信小程序、鸿蒙、合伙人工作台独立壳
 ```
 
 | 能显著缓解 | 不能替代 |
@@ -60,7 +75,7 @@ Web + PWA 的正确定位
   G1 获客与信任          → 还没注册，要建立信任
   G2 大陆职业成长（C）   → 微信生态内求职 / 闯关
   G3 海外职业成长（C）   → genz.ltd / USD / Google / Stripe
-  G4 企业招聘（B）       → HR 发布职位、看候选人
+  G4 合伙人（个人信用）   → 个人发机会、建候选人池、看匹配
   G5 鸿蒙轻量求职        → 元服务 / 答题 / 岗位浏览
 
   横切：G0 平台与契约    → 所有组共用，不直接面向终端客户
@@ -74,7 +89,7 @@ Web + PWA 的正确定位
 | **G1 获客与信任** | 看懂产品、价格、法律主体，敢付费 | genz-web（Vercel） | 可选轻量 PWA（低优先） | 海外运营 / 前端 |
 | **G2 大陆 C 端成长** | 登录 → 闯关 → 匹配 → 微信升级 | **微信小程序**（主）+ PlanetX Web（辅） | Web 辅线可加 PWA，**不替代小程序** | 小程序 + PlanetX |
 | **G3 海外 C 端成长** | 英文成长伙伴 → Google 登录 → Stripe | **PlanetX Web + PWA**（主） | **主战场，优先落地 PWA** | PlanetX + 海外部署 |
-| **G4 企业招聘 B 端** | 发职位、筛候选人、看匹配 | T-space SaaS（:5174 / tspace 域） | 桌面 Web 即可，PWA 增益有限 | SaaS / B 端 |
+| **G4 合伙人成长** | 以个人信用发机会、撮合匹配 | T-space 工作台（`saas` 壳） | 桌面 Web 为主，PWA 可选 | 合伙人前端 + API |
 | **G5 鸿蒙轻量体验** | 快问快答、浏览岗位、轻量答题 | Harmony 独立仓（ArkTS） | 不适用 | Harmony 前端 |
 
 ---
@@ -161,22 +176,33 @@ Web + PWA 的正确定位
 
 ---
 
-### G4 · 企业招聘 B 端体验
+### G4 · 合伙人成长体验（个人信用，非企业招聘）
 
-**画像：** HR / 招聘负责人，桌面为主，重表格与职位管理。
+**画像：** 有行业资源与判断力的**个人合伙人**（猎头、资深从业者、社群 KOL 等），以**个人信用**而非公司名义撮合机会。
 
-**旅程：** 注册 → Dashboard → 发职位 → 看候选人 → 升级企业套餐。
+**信念：** 不信任企业主体；信任可累积的个人行为、tier 与匹配质量。
+
+**旅程：** 注册 → 建立合伙人档案 → 发布机会（`job-posts`）→ 导入/积累候选人 → 查看匹配 → 按 tier 扩展配额。
 
 | 阶段 | 体验目标 | 落地项 | 优先级 | 主载体 |
 |------|----------|--------|--------|--------|
-| 效率 | 大屏信息密度与操作路径短 | T-space SaaS UI | P0 | saas :5174 |
-| 商业 | 职位限额与 tier 清晰 | `job_post_routes` + tier | P0 | SaaS + API |
-| 海外 | 英文 HR 工作流（可选） | `tspace.genz.ltd` 部署 | P1 | SaaS |
-| 安装 | 桌面快捷方式 | PWA 可选，非必须 | P3 | — |
+| 身份 | 我是「合伙人」而非某公司员工 | 个人档案 + tier 徽章；文案去 HR/企业化 | P0 | T-space 工作台 |
+| 发布 | 以个人名义发布机会 | `POST /v1/job-posts`（归属 `user_id`） | P0 | API + [合伙人对照表](./API_PARTNER_ALIGNMENT.md) |
+| 撮合 | 看匹配质量，而非「筛简历」 | `GET /v1/job-posts/:id/matches` | P0 | 合伙人 Dashboard |
+| 信用 | 配额与 tier 挂钩，激励负责任发布 | `tier_limits` + supporter/pro 档位 | P0 | G0 契约 |
+| 池化 | 从分享码导入候选人（人际信用链） | `import-share` / 候选人池 API | P1 | 合伙人 API |
+| 海外 | 英文合伙人工作台（可选） | `tspace.genz.ltd` | P1 | saas 包 |
 
-**PWA 在本组：** 优先级低；**响应式桌面 Web** 优先。
+**与 C 端工具区分（必读）：**
 
-**验收：** 双线清单 § CN-P1-4 / CN-P1-5；海外 § OS-P1-5。
+| 路径 | 谁用 | 做什么 |
+|------|------|--------|
+| `/v1/job-posts` | **合伙人** | 持久化发布机会 + 看匹配 |
+| `/v1/jobs/*` | **求职者（C 端）** | 上传 JD → AI 解析 → 自助匹配 |
+
+**PWA 在本组：** 优先级低；合伙人多为桌面深度操作，**响应式 Web 工作台**优先。
+
+**验收：** [API_PARTNER_ALIGNMENT.md](./API_PARTNER_ALIGNMENT.md) §8 勾验；双线清单 § CN-P1-5（合伙人闭环）。
 
 ---
 
@@ -205,7 +231,7 @@ Web + PWA 的正确定位
 | **平台组** | G0 | CORE-P0 全绿；CORS / region 文档更新 |
 | **海外增长组** | G1 + G3 营销与转化 | Stripe 审核通过；Google OAuth E2E |
 | **PlanetX 组** | G2 + G3 产品 | 小程序支付闭环；PlanetX PWA manifest v0 |
-| **SaaS 组** | G4 | 职位 / 候选人 E2E；tspace 海外部署评估 |
+| **合伙人组** | G4 | 合伙人 Dashboard E2E；`/v1/job-posts` 联调；去企业化文案 |
 | **Harmony 组** | G5 | 对齐文档内 P0 端点联调 |
 
 **协作规则：**
@@ -226,7 +252,7 @@ Web + PWA 的正确定位
 | **M3** | 支付闭环 | Stripe Checkout 回跳 PWA | 5d |
 | **M4** | 推送（可选） | Web Push 海外通知 | P2 |
 
-**不纳入首期 PWA：** G2 小程序、G4 SaaS、G5 Harmony、G1 静态营销站。
+**不纳入首期 PWA：** G2 小程序、G4 合伙人工作台、G5 Harmony、G1 静态营销站。
 
 ---
 
@@ -237,7 +263,7 @@ Web + PWA 的正确定位
 | G1 | `frontend/packages/genz-web` | genz.ltd（Vercel） |
 | G2 小程序 | `frontend/packages/miniprogram` | 微信 |
 | G2/G3 Web | `frontend/packages/planetx` | genz.ltd / :5173 |
-| G4 | `frontend/packages/saas` | tspace.genz.ltd / :5174 |
+| G4 合伙人 | `frontend/packages/saas`（T-space 工作台壳） | tspace.genz.ltd / :5174 |
 | G0 | `shared-core` + `backend/` | api.genz.ltd |
 | G5 | 独立 Harmony 仓 | 元服务 |
 
@@ -251,6 +277,7 @@ Web + PWA 的正确定位
 | 能否根本解决多端？ | **否**；契约统一 + 体验分组才是根本 |
 | PWA 优先投哪？ | **G3 海外 C 端** |
 | 大陆主战场？ | **G2 微信小程序**，Web+PWA 辅助 |
+| 合伙人 vs 企业？ | **只有合伙人（个人信用）**；无企业 HR B 端叙事 |
 | 与海外分支关系？ | `release/overseas` 先行 G1/G3；合并能力回 `main` 供 G2 |
 
 ---
@@ -259,4 +286,5 @@ Web + PWA 的正确定位
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-07-12 | 1.1 | G4 由「企业招聘 B 端」改为「合伙人 / 个人信用」；新增 §0 产品信念 |
 | 2026-07-12 | 1.0 | 首版：PWA 定义、五组 CX 划分、各组 backlog 与 PWA 路线图 |
