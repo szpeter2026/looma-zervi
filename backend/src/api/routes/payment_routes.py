@@ -75,8 +75,6 @@ def list_plans():
         request.headers.get("Accept-Language"),
     )
     payload = list_plans_for_region(region)
-    # 附加 stub_mode 标志，前端据此调整支付流程
-    payload["stub_mode"] = _is_stub_mode()
     return jsonify(**payload)
 
 
@@ -118,7 +116,6 @@ def payment_status():
         plan=plan,
         status=sub_status,
         expires_at=expires_at,
-        stub_mode=_is_stub_mode(),
     )
 
 
