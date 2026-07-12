@@ -49,7 +49,14 @@ On overseas VPS after `git pull`:
 bash scripts/deploy-genz-web.sh
 ```
 
-Nginx serves `/var/www/genz-web` at `genz.ltd` and `www.genz.ltd`.
+Nginx serves `/var/www/genz-web` at `genz.ltd` and `www.genz.ltd`. `vercel.json` includes clean URL rewrites for `/pricing` and `/legal/*` if deploying to Vercel.
+
+## Hong Kong legal entity (one file)
+
+```js
+// assets/config.js
+legalEntityName: "YEDALL LIMITED",
+```
 
 ## Pricing note (non-blocking)
 

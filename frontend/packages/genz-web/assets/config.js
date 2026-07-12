@@ -6,9 +6,9 @@
  * This is the only file to change for footer + Terms entity naming.
  */
 window.GENZ_SITE = {
-  legalEntityName: "[Legal entity name pending]",
-  brandName: "GenZ",
+  legalEntityName: "YEDALL LIMITED",
   productName: "PlanetX",
+  brandName: "GenZ",
   tagline: "AI Career Growth Partner",
   supportEmail: "support@genz.ltd",
   siteUrl: "https://genz.ltd",
