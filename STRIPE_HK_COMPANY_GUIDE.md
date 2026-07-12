@@ -13,7 +13,7 @@
 **1. 网站必须先上线**
 - Stripe 审核员会实际打开 `genz.ltd` 查看内容，空白页或 404 直接拒
 - 网站必须包含：产品介绍 + 定价页面 + 服务条款 + 退款政策 + 隐私政策 + 联系方式
-- 联系方式用公司域名邮箱（`support@genz.ltd`），不要用 Gmail/QQ 邮箱
+- 联系方式用公司域名邮箱（`zervi@genz.ltd`），不要用 Gmail/QQ 邮箱
 - 这是审核被拒的第一大原因，**材料齐全但网站没内容 = 白等**
 
 **2. 不要用 VPN / 大陆 IP 注册**
@@ -100,7 +100,7 @@
   - Stripe 强制要求
 
 - [ ] **联系页面**
-  - 邮箱（建议用公司域名邮箱，如 `support@genz.ltd`）
+  - 邮箱（建议用公司域名邮箱，如 `zervi@genz.ltd`）
   - 不要用 Gmail / QQ 邮箱作为唯一联系方式
 
 ---
@@ -291,7 +291,7 @@ cd /opt/looma-zervi && docker-compose restart backend
 - [ ] /terms 服务条款页面
 - [ ] /refund 退款政策页面
 - [ ] /privacy 隐私政策页面
-- [ ] 公司域名邮箱（support@genz.ltd）
+- [ ] 公司域名邮箱（zervi@genz.ltd）
 
 ### 注册中
 - [ ] 选 Hong Kong

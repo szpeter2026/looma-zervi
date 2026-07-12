@@ -1,16 +1,10 @@
-/**
- * GenZ site config
- *
- * STRIPE BLOCKER — before merchant review, set legalEntityName to your Hong Kong
- * company English name (must match Companies Registry + Stripe application).
- * This is the only file to change for footer + Terms entity naming.
- */
+/* GenZ site configuration — update legalEntityName / supportEmail here only */
 window.GENZ_SITE = {
   legalEntityName: "YEDALL LIMITED",
   productName: "PlanetX",
   brandName: "GenZ",
   tagline: "AI Career Growth Partner",
-  supportEmail: "support@genz.ltd",
+  supportEmail: "zervi@genz.ltd",
   siteUrl: "https://genz.ltd",
   apiBase: "https://api.genz.ltd",
 };

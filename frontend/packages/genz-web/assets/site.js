@@ -28,7 +28,7 @@
   }
 
   function injectSupportEmail() {
-    var email = cfg.supportEmail || "support@genz.ltd";
+    var email = cfg.supportEmail || "zervi@genz.ltd";
     qsa("[data-support-email]").forEach(function (el) {
       if (el.tagName === "A") {
         el.href = "mailto:" + email;
@@ -57,8 +57,8 @@
       '<a href="/legal/privacy.html">Privacy</a>' +
       '<a href="/legal/terms.html">Terms</a>' +
       '<a href="/legal/refund.html">Refund &amp; Cancellation</a>' +
-      '<a data-support-email href="mailto:' + (cfg.supportEmail || "support@genz.ltd") + '">' +
-      (cfg.supportEmail || "support@genz.ltd") +
+      '<a data-support-email href="mailto:' + (cfg.supportEmail || "zervi@genz.ltd") + '">' +
+      (cfg.supportEmail || "zervi@genz.ltd") +
       "</a>" +
       "</div>" +
       "</div>";
@@ -114,7 +114,7 @@
   function waitlistMailto(planName) {
     return (
       "mailto:" +
-      (cfg.supportEmail || "support@genz.ltd") +
+      (cfg.supportEmail || "zervi@genz.ltd") +
       "?subject=" +
       encodeURIComponent("PlanetX waitlist — " + planName)
     );
