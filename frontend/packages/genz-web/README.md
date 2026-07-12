@@ -1,76 +1,57 @@
 # GenZ Web — genz.ltd (Stripe review site)
 
-Overseas marketing site for **PlanetX — Genzer AI Career Growth Partner**.
+**Branch:** `release/overseas`  
+**Brand:** GenZ · **Product:** PlanetX · **Tagline:** AI Career Growth Partner
 
-**Git branch:** `release/overseas` (Gitee `origin/release/overseas` — not a local-only branch).
+Marketing static site for Stripe merchant review and USD subscription positioning.
+Pricing aligns with `backend/contracts/payment.v1.json` (region=US).
 
-Used for Stripe merchant review and USD subscription positioning. Pricing aligns with
-`backend/contracts/payment.v1.json` (region=US).
-
-See also: `docs/OVERSEAS_DEPLOY.md` (Vultr + Cloudflare + Stripe webhook on this branch).
-
-## Domain note
-
-| URL | Role on `release/overseas` |
-|-----|----------------------------|
-| `https://genz.ltd` | PlanetX SPA + API fallback (nginx) — see `OVERSEAS_DEPLOY.md` |
-| `https://www.genz.ltd` | Optional: deploy **this** static `genz-web` package for Stripe review / legal pages |
-| `https://api.genz.ltd` | Looma API + Stripe webhook |
-
-If both apex and `www` are used, add a Cloudflare redirect `www` → `genz.ltd` or vice versa before Stripe submission so the Business URL matches the live site.
+See: `docs/OVERSEAS_DEPLOY.md`
 
 ## Pages
 
-| Path | File |
-|------|------|
+| URL | File |
+|-----|------|
 | `/` | `index.html` |
 | `/pricing` | `pricing.html` |
 | `/legal/privacy` | `legal/privacy.html` |
 | `/legal/terms` | `legal/terms.html` |
 | `/legal/refund` | `legal/refund.html` |
 
+## Stripe blockers (before submission)
+
+1. **`assets/config.js` → `legalEntityName`** — Hong Kong company English name (CR + Stripe must match)
+2. **Deploy to VPS** — `bash scripts/deploy-genz-web.sh` (or full `deploy-overseas.sh`)
+3. **Paid tier CTAs** — show **Join waitlist** until Stripe Checkout is wired (not "Subscribe")
+
+## Hong Kong legal entity (one file)
+
+```js
+// assets/config.js
+legalEntityName: "Your Company Limited",
+```
+
+Updates footer + Terms automatically.
+
 ## Local preview
 
 ```bash
 cd frontend/packages/genz-web
 pnpm dev
-# open http://localhost:5180
+# http://localhost:5180
 ```
 
-## Deploy (Vercel)
+## Production deploy
 
-1. Import this repo (or subdirectory) in Vercel.
-2. Set **Root Directory** to `frontend/packages/genz-web`.
-3. Point `www.genz.ltd` to the Vercel project.
-4. Ensure HTTPS is enabled.
+On overseas VPS after `git pull`:
 
-`vercel.json` includes clean URL rewrites for `/pricing` and `/legal/*`.
-
-## Hong Kong legal entity name
-
-When the English company name is confirmed, update **one file only**:
-
-```js
-// assets/config.js
-legalEntityName: "Your Hong Kong Company Limited",
+```bash
+bash scripts/deploy-genz-web.sh
 ```
 
-This value is injected into the site footer and Terms of Service automatically.
+Nginx serves `/var/www/genz-web` at `genz.ltd` and `www.genz.ltd`.
 
-## Stripe checklist
+## Pricing note (non-blocking)
 
-- Business URL: `https://www.genz.ltd`
-- Product: AI career growth SaaS (digital subscription)
-- USD plans: Free / Supporter $1.99 / Pro $5.99 (live from API or fallback)
-- Support email: `support@genz.ltd`
-- Policies: Privacy, Terms, Refund & Cancellation (all linked in footer)
-
-## API
-
-Pricing page fetches:
-
-```text
-GET https://api.genz.ltd/v1/payment/plans?region=US
-```
-
-Add `https://www.genz.ltd` to backend `CORS_ORIGINS` if the browser fetch is blocked in production.
+Supporter at $1.99/mo has high Stripe fee ratio (~18%). Consider raising to $4.99+ or
+Free → Pro only in a future `payment.v1.json` revision.

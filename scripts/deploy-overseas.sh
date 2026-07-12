@@ -96,7 +96,7 @@ sed -i 's|^RATE_LIMIT_STORAGE_URI=.*|RATE_LIMIT_STORAGE_URI=redis://redis:6379/1
 
 # Set domain-specific configs
 sed -i "s|GOOGLE_REDIRECT_URI=.*|GOOGLE_REDIRECT_URI=https://${API_SUBDOMAIN}/v1/auth/google/callback|" backend/.env
-sed -i "s|CORS_ORIGINS=.*|CORS_ORIGINS=https://${DOMAIN},https://${TSPACE_SUBDOMAIN},https://${API_SUBDOMAIN}|g" backend/.env
+sed -i "s|CORS_ORIGINS=.*|CORS_ORIGINS=https://${DOMAIN},https://www.${DOMAIN},https://${TSPACE_SUBDOMAIN},https://${API_SUBDOMAIN}|g" backend/.env
 sed -i "s|DEPLOY_REGION=.*|DEPLOY_REGION=SG|" backend/.env
 
 # Add Stripe success/cancel URLs if not present
@@ -129,7 +129,21 @@ for i in $(seq 1 12); do
 done
 
 # ============================
-# 7. Nginx config (host-level, reverse proxy to Docker)
+# 7. Deploy genz-web static site (genz.ltd marketing / Stripe review)
+# ============================
+log "Deploying genz-web to /var/www/genz-web..."
+GENZ_WEB_SRC="${APP_DIR}/frontend/packages/genz-web"
+GENZ_WEB_DEST="/var/www/genz-web"
+mkdir -p "${GENZ_WEB_DEST}"
+rsync -a --delete \
+    --exclude README.md \
+    --exclude package.json \
+    --exclude vercel.json \
+    "${GENZ_WEB_SRC}/" "${GENZ_WEB_DEST}/"
+log "genz-web deployed ($(find "${GENZ_WEB_DEST}" -type f | wc -l) files)."
+
+# ============================
+# 8. Nginx config (host-level, reverse proxy to Docker)
 # ============================
 log "Installing Nginx config..."
 cp "${APP_DIR}/docker/nginx.conf" /etc/nginx/nginx.conf
@@ -138,7 +152,7 @@ systemctl restart nginx
 systemctl enable nginx
 
 # ============================
-# 8. Firewall
+# 9. Firewall
 # ============================
 log "Configuring UFW..."
 ufw default deny incoming
@@ -148,7 +162,7 @@ ufw allow 'Nginx Full'
 ufw --force enable
 
 # ============================
-# 9. Health check
+# 10. Health check
 # ============================
 log "Running health checks..."
 IP=$(curl -s -4 ifconfig.me || echo "unknown")

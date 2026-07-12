@@ -49,7 +49,7 @@
       '<div class="footer-grid">' +
       '<div>' +
       "<strong>" + (cfg.brandName || "GenZ") + " · " + (cfg.productName || "PlanetX") + "</strong><br>" +
-      (cfg.tagline || "Genzer AI Career Growth Partner") +
+      (cfg.tagline || "AI Career Growth Partner") +
       "<p>© " + year + " " + entity + ". All rights reserved.</p>" +
       "</div>" +
       '<div class="footer-links">' +
@@ -111,19 +111,26 @@
     return "$" + plan.price_monthly;
   }
 
+  function waitlistMailto(planName) {
+    return (
+      "mailto:" +
+      (cfg.supportEmail || "support@genz.ltd") +
+      "?subject=" +
+      encodeURIComponent("PlanetX waitlist — " + planName)
+    );
+  }
+
   function renderPricingCard(plan, popular) {
     var card = document.createElement("article");
     card.className = "card" + (popular ? " popular" : "");
     var cta =
       plan.tier === "free"
-        ? '<a class="btn btn-secondary" href="mailto:' +
-          (cfg.supportEmail || "support@genz.ltd") +
-          '?subject=PlanetX%20Free%20Account">Start free</a>'
-        : '<a class="btn btn-primary" href="mailto:' +
-          (cfg.supportEmail || "support@genz.ltd") +
-          "?subject=Subscribe%20to%20" +
-          encodeURIComponent(plan.name) +
-          '">Subscribe</a>';
+        ? '<a class="btn btn-secondary" href="' +
+          waitlistMailto("Free") +
+          '">Get started free</a>'
+        : '<a class="btn btn-primary" href="' +
+          waitlistMailto(plan.name) +
+          '">Join waitlist</a>';
 
     card.innerHTML =
       (popular ? '<div class="badge">Most popular</div>' : "") +
