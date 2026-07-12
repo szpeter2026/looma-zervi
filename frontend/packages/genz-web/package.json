@@ -1,0 +1,10 @@
+{
+  "name": "@looma/genz-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GenZ / PlanetX overseas marketing site for www.genz.ltd (Stripe review + USD subscriptions)",
+  "scripts": {
+    "dev": "npx --yes serve . -p 5180",
+    "preview": "npx --yes serve . -p 5180"
+  }
+}

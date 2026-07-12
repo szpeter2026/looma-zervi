@@ -8,6 +8,7 @@
     "dev:saas": "pnpm --filter @looma/saas dev",
     "build:planetx": "pnpm --filter @looma/planetx build",
     "build:saas": "pnpm --filter @looma/saas build",
+    "dev:genz-web": "pnpm --filter @looma/genz-web dev",
     "build:all": "pnpm --filter @looma/shared-core build && pnpm build:planetx && pnpm build:saas",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
