@@ -70,15 +70,16 @@ def test_funnel_stats_after_closed_loop(client):
         headers={"Authorization": f"Bearer {hr_token}"},
         json={"name": "Funnel Corp"},
     )
-    client.post(
-        "/v1/enterprise/candidates/import-share",
-        headers={"Authorization": f"Bearer {hr_token}"},
-        json={"share_code": code},
-    )
+    # 需要升级为付费 tier 才能导入候选人
     client.post(
         "/v1/payment/upgrade",
         headers={"Authorization": f"Bearer {hr_token}"},
         json={"tier": "pro"},
+    )
+    client.post(
+        "/v1/enterprise/candidates/import-share",
+        headers={"Authorization": f"Bearer {hr_token}"},
+        json={"share_code": code},
     )
 
     stats = client.get(

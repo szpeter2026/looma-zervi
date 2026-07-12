@@ -48,7 +48,6 @@ import type {
   ContactSalesResponse,
   JobPost,
   JobPostListResponse,
-  JobPostMatch,
   JobPostMatchesResponse,
   CandidateListResponse,
 } from "../types/enterprise";
