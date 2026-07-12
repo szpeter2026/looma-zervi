@@ -218,6 +218,13 @@ def create_wechat_order():
     trade_type = data.get("trade_type", "NATIVE").upper()
     openid = data.get("openid", "")
 
+    # 方案 A：JSAPI 支付时若前端未传 openid，从用户 DB 自动填充
+    if trade_type == "JSAPI" and not openid:
+        db = current_app._db
+        user = db.get_user_by_id(g.user_id)
+        if user and user.get("wechat_openid"):
+            openid = user["wechat_openid"]
+
     if new_tier not in UPGRADABLE_TIERS:
         return jsonify(error="bad_request", message="Invalid tier. Choose: supporter, pro"), 400
 
@@ -254,6 +261,13 @@ def create_wechat_order():
     amount_fen = TIER_PRICE_FEN[new_tier]
     out_trade_no = generate_out_trade_no()
     description = f"Looma {plan['name']}"
+
+    # JSAPI 必须有关联的 openid（已从 DB 自动填充，若仍为空则报错）
+    if trade_type == "JSAPI" and not openid:
+        return jsonify(
+            error="openid_required",
+            message="JSAPI payment requires a WeChat openid. Please ensure the user has logged in via WeChat miniprogram.",
+        ), 400
 
     if trade_type == "JSAPI" and openid:
         from src.payment.wechat_pay import create_jsapi_order

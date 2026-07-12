@@ -78,7 +78,7 @@ class MBTITextAnalyzer:
             prompt = (
                 f"根据以下自述文本分析用户的MBTI性格类型。只输出4字母MBTI类型（如INTJ）和一个简短描述。\n\n"
                 f"用户自述：{text[:500]}\n\n"
-                f"请输出 JSON：{\"type\": \"XXXX\", \"description\": \"...\"}"
+                '请输出 JSON：{"type": "XXXX", "description": "..."}'
             )
             response = _call_llm(prompt)
             if response:

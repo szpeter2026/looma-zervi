@@ -21,6 +21,8 @@ export const API_ROUTES = {
   GAME_PROFILE: "/v1/game/profile",
   GAME_MISSION_COMPLETE: "/v1/game/mission-complete",
   GAME_MATCH: "/v1/game/match",
+  GAME_MATCH_ACK: "/v1/game/match/acknowledge",
+  GAME_MATCH_CONSENSUS: "/v1/game/match/consensus",
   GAME_FLEET_CREATE: "/v1/game/fleet/create",
   GAME_FLEET_JOIN: "/v1/game/fleet/join",
   GAME_FLEET_MINE: "/v1/game/fleet/mine",

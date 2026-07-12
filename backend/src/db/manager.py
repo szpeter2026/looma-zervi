@@ -54,6 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_users_wechat_openid ON users(wechat_openid);
 CREATE TABLE IF NOT EXISTS game_profiles (
     id                  TEXT PRIMARY KEY,
     user_id             TEXT NOT NULL,
+    identity            TEXT,                  -- PlanetX: explorer | captain | wanderer
     personality_type    TEXT,                  -- MBTI or custom type
     personality_detail  TEXT,                  -- JSON blob with full analysis
     xp                  INTEGER DEFAULT 0,
@@ -696,6 +697,10 @@ class DatabaseManager:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_fleets_invite_code ON fleets(invite_code)")
             except sqlite3.OperationalError:
                 pass
+            try:
+                conn.execute("ALTER TABLE game_profiles ADD COLUMN identity TEXT")
+            except sqlite3.OperationalError:
+                pass
 
     # ============================================
     # User operations (joint)
@@ -775,6 +780,25 @@ class DatabaseManager:
                      updated_at = datetime('now')""",
                 (str(uuid.uuid4()), user_id, personality_type, personality_detail)
             )
+
+    def update_game_identity(self, user_id: str, identity: str):
+        """Persist PlanetX onboarding identity (explorer | captain | wanderer)."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT id FROM game_profiles WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            if row:
+                conn.execute(
+                    """UPDATE game_profiles SET identity = ?, updated_at = datetime('now')
+                       WHERE user_id = ?""",
+                    (identity, user_id),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO game_profiles (id, user_id, identity)
+                       VALUES (?, ?, ?)""",
+                    (str(uuid.uuid4()), user_id, identity),
+                )
 
     def get_game_profile(self, user_id: str):
         with self.get_conn() as conn:

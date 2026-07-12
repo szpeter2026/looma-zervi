@@ -18,7 +18,7 @@ Page({
     messages: [
       {
         role: 'assistant',
-        content: '你好，探索者！我是你的星际导航员。关于求职、职业规划、简历优化，有什么想问的？',
+        content: '你好，探索者！我是 PlanetX 星际导航员。\n\n六大探索域等你开启：职业域、学习域、生活域、社交域、健康域、创意域。\n\n随便聊聊，或者试试问「推荐一句诗」「帮我匹配职位」「我想探索什么」？',
       },
     ] as ChatMessage[],
     metas: [] as (AskMeta | null)[],

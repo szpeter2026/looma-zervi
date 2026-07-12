@@ -1,20 +1,36 @@
 import { useEffect, useRef, useState } from 'react'
-import { createGameApi } from '@looma/shared-core'
-import type { FleetMatchResponse } from '@looma/shared-core'
+import {
+  createGameApi,
+  deriveMatchUiState,
+  getShareText,
+  type FleetMatchResponse,
+  type MatchConsensusItem,
+} from '@looma/shared-core'
 import { usePlanetXStore, getApiClient } from '../auth/planetxAuthStore'
 
 type Phase = 'scanning' | 'result' | 'error'
 
 /**
- * 首次星际匹配 — 舰队内人格互补配对
+ * 首次星际匹配 — 舰队内人格互补 + 阶段二共识三分流 UI
  */
 export default function MatchScreen() {
-  const { setScreen, completeMission, missionsCompleted, setAchievement } = usePlanetXStore()
+  const {
+    setScreen,
+    completeMission,
+    missionsCompleted,
+    setAchievement,
+    setToast,
+    personalityType,
+    ensureReferralCode,
+    getInviteUrl,
+  } = usePlanetXStore()
   const [phase, setPhase] = useState<Phase>('scanning')
   const [statusText, setStatusText] = useState('正在扫描舰队星轨…')
   const [errorMessage, setErrorMessage] = useState('')
   const [result, setResult] = useState<FleetMatchResponse | null>(null)
+  const [pendingConsensus, setPendingConsensus] = useState<MatchConsensusItem[]>([])
   const [completing, setCompleting] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const started = useRef(false)
 
   useEffect(() => {
@@ -23,11 +39,21 @@ export default function MatchScreen() {
     void runMatch()
   }, [])
 
+  async function loadPendingConsensus() {
+    try {
+      const data = await createGameApi(getApiClient()).listConsensus()
+      setPendingConsensus(data?.pending ?? [])
+    } catch {
+      setPendingConsensus([])
+    }
+  }
+
   async function runMatch() {
     setPhase('scanning')
     setStatusText('正在扫描舰队星轨…')
     setErrorMessage('')
     setResult(null)
+    setPendingConsensus([])
 
     await new Promise((r) => setTimeout(r, 900))
     setStatusText('计算人格互补轨道…')
@@ -39,6 +65,7 @@ export default function MatchScreen() {
       }
       setResult(data)
       setPhase('result')
+      void loadPendingConsensus()
     } catch (err: any) {
       setPhase('error')
       setErrorMessage(
@@ -48,14 +75,22 @@ export default function MatchScreen() {
   }
 
   async function onConfirm() {
-    if (completing) return
+    if (completing || !result) return
+    const ui = deriveMatchUiState(result)
+    if (!ui.canComplete) {
+      setToast('共识尚未验证，请先传播信号或完成双向确认')
+      return
+    }
     setCompleting(true)
     try {
       if (!missionsCompleted.includes('match')) {
         completeMission('match')
         setAchievement({
-          title: '🎯 首次星际匹配！',
-          desc: '你已与另一位星际公民完成匹配 · 匹配星图已解锁',
+          title: ui.view === 'verified' ? '🎯 共识共振达成！' : '🎯 首次星际匹配！',
+          desc:
+            ui.view === 'verified'
+              ? '舰队共识已验证 · 匹配星图已解锁'
+              : '你已与另一位星际公民完成匹配 · 匹配星图已解锁',
         })
       }
       setTimeout(() => setScreen('hub'), 600)
@@ -63,6 +98,43 @@ export default function MatchScreen() {
       setCompleting(false)
     }
   }
+
+  async function onShareSpread() {
+    if (sharing) return
+    setSharing(true)
+    try {
+      await ensureReferralCode()
+      const url = getInviteUrl()
+      const p = personalityType ?? {
+        name: result?.self.personality_type ?? '星际公民',
+        emoji: result?.self.personality_emoji ?? '🌌',
+        tagline: '',
+        desc: '',
+        traits: [],
+      }
+      const text = getShareText('wechat', p, url)
+      await navigator.clipboard?.writeText(text)
+      setToast('📋 传播文案已复制！分享到微信扩大验证池')
+      setScreen('result')
+    } catch {
+      setToast('复制失败，请手动分享邀请链接')
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  async function onAcknowledge(consensusId: string) {
+    try {
+      await createGameApi(getApiClient()).acknowledgeConsensus({ consensus_id: consensusId })
+      setToast('已发送共识确认')
+      void loadPendingConsensus()
+      void runMatch()
+    } catch (err: any) {
+      setToast(err?.body?.message || err?.message || '确认失败，请稍后重试')
+    }
+  }
+
+  const uiState = result ? deriveMatchUiState(result) : null
 
   return (
     <div>
@@ -99,8 +171,10 @@ export default function MatchScreen() {
         </div>
       )}
 
-      {phase === 'result' && result && (
+      {phase === 'result' && result && uiState && (
         <div style={{ animation: 'fadeIn 0.35s ease' }}>
+          <ConsensusBadge uiState={uiState} />
+
           {result.fleet_name && (
             <div
               style={{
@@ -125,6 +199,9 @@ export default function MatchScreen() {
                 {result.match.match_score}
               </div>
               <div style={{ fontSize: 11, color: 'var(--px-color-text-muted)', marginTop: 4 }}>契合度</div>
+              <div style={{ fontSize: 10, color: 'var(--px-color-text-muted)', marginTop: 2 }}>
+                阈值 {uiState.threshold}
+              </div>
             </div>
             <PairCard
               emoji={result.match.personality_emoji}
@@ -141,32 +218,88 @@ export default function MatchScreen() {
               padding: '14px 16px',
               textAlign: 'center',
               fontSize: 13,
-              marginBottom: 20,
+              marginBottom: 16,
               lineHeight: 1.5,
             }}
           >
             {result.match.reason}
           </div>
 
-          <button
-            onClick={onConfirm}
-            disabled={completing}
-            style={{
-              width: '100%',
-              padding: '14px 0',
-              borderRadius: 12,
-              border: 'none',
-              background: 'var(--px-color-accent)',
-              color: '#0a0a1a',
-              fontWeight: 700,
-              fontSize: 14,
-              cursor: completing ? 'default' : 'pointer',
-              opacity: completing ? 0.7 : 1,
-              marginBottom: 10,
-            }}
-          >
-            {completing ? '同步中…' : '确认匹配 · 解锁星图 +40 XP'}
-          </button>
+          {pendingConsensus.length > 0 && (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: '12px',
+                borderRadius: 12,
+                border: '1px solid rgba(0,229,255,0.25)',
+                background: 'rgba(0,229,255,0.05)',
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#00E5FF', marginBottom: 8 }}>
+                待你认可的共识请求
+              </div>
+              {pendingConsensus.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: 'var(--px-color-text-muted)' }}>
+                    {item.candidate_name} · {item.match_score} 分
+                  </div>
+                  <button
+                    onClick={() => void onAcknowledge(item.id)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: 'var(--px-color-accent)',
+                      color: '#0a0a1a',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    认可
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {uiState.canComplete ? (
+            <button
+              onClick={() => void onConfirm()}
+              disabled={completing}
+              style={{
+                width: '100%',
+                padding: '14px 0',
+                borderRadius: 12,
+                border: 'none',
+                background: 'var(--px-color-accent)',
+                color: '#0a0a1a',
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: completing ? 'default' : 'pointer',
+                opacity: completing ? 0.7 : 1,
+                marginBottom: 10,
+              }}
+            >
+              {completing ? '同步中…' : '确认共振 · 解锁星图 +40 XP'}
+            </button>
+          ) : (
+            <SpreadPanel
+              uiState={uiState}
+              sharing={sharing}
+              onShare={() => void onShareSpread()}
+            />
+          )}
+
           <button
             onClick={() => setScreen('hub')}
             style={{
@@ -226,6 +359,89 @@ export default function MatchScreen() {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+function ConsensusBadge({ uiState }: { uiState: ReturnType<typeof deriveMatchUiState> }) {
+  const colors = {
+    verified: { bg: 'rgba(200,255,80,0.12)', border: 'rgba(200,255,80,0.35)', text: 'var(--px-color-accent)' },
+    weak: { bg: 'rgba(249,202,36,0.1)', border: 'rgba(249,202,36,0.3)', text: '#F9CA24' },
+    failed: { bg: 'rgba(255,118,117,0.1)', border: 'rgba(255,118,117,0.3)', text: '#FF7675' },
+  }[uiState.view]
+
+  return (
+    <div
+      style={{
+        textAlign: 'center',
+        marginBottom: 14,
+        padding: '8px 12px',
+        borderRadius: 10,
+        background: colors.bg,
+        border: `1px solid ${colors.border}`,
+        fontSize: 12,
+        fontWeight: 700,
+        color: colors.text,
+        letterSpacing: '0.05em',
+      }}
+    >
+      {uiState.statusLabel}
+    </div>
+  )
+}
+
+function SpreadPanel({
+  uiState,
+  sharing,
+  onShare,
+}: {
+  uiState: ReturnType<typeof deriveMatchUiState>
+  sharing: boolean
+  onShare: () => void
+}) {
+  const hint = uiState.spreadHint
+  const remaining = Math.max(0, hint.spread_target - hint.spread_count)
+
+  return (
+    <div
+      style={{
+        marginBottom: 12,
+        padding: '14px',
+        borderRadius: 12,
+        border: '1px solid rgba(200,255,80,0.2)',
+        background: 'rgba(200,255,80,0.04)',
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--px-color-accent)', marginBottom: 6 }}>
+        📡 扩大验证池
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--px-color-text-muted)', lineHeight: 1.5, margin: '0 0 10px' }}>
+        {hint.message ?? '邀请更多舰员加入舰队，提升共识验证成功率'}
+      </p>
+      {hint.spread_target > 0 && (
+        <div style={{ fontSize: 11, color: 'var(--px-color-text-muted)', marginBottom: 12 }}>
+          传播进度 {hint.spread_count}/{hint.spread_target}
+          {remaining > 0 ? ` · 再邀请 ${remaining} 人` : ''}
+        </div>
+      )}
+      <button
+        onClick={onShare}
+        disabled={sharing}
+        style={{
+          width: '100%',
+          padding: '14px 0',
+          borderRadius: 12,
+          border: 'none',
+          background: 'linear-gradient(90deg, var(--px-color-purple-deep), var(--px-color-violet))',
+          color: 'white',
+          fontWeight: 700,
+          fontSize: 14,
+          cursor: sharing ? 'default' : 'pointer',
+          opacity: sharing ? 0.7 : 1,
+        }}
+      >
+        {sharing ? '生成中…' : '📡 复制传播文案 · 发送星际信号'}
+      </button>
     </div>
   )
 }

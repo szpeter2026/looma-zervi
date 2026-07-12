@@ -110,9 +110,29 @@ def test_sync_personality(authed_client):
 
 
 def test_sync_personality_missing_type(authed_client):
-    """Missing personality_type should return 400."""
+    """Missing personality_type and identity should return 400."""
     resp = authed_client.post("/v1/game/profile-sync", json={
         "personality_detail": "some detail",
+    })
+    assert resp.status_code == 400
+
+
+def test_sync_identity_only(authed_client):
+    """PlanetX onboarding identity can sync without personality."""
+    resp = authed_client.post("/v1/game/profile-sync", json={
+        "identity": "explorer",
+    })
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["identity"] == "explorer"
+
+    profile = authed_client.get("/v1/game/profile").get_json()
+    assert profile["identity"] == "explorer"
+
+
+def test_sync_identity_invalid(authed_client):
+    resp = authed_client.post("/v1/game/profile-sync", json={
+        "identity": "invalid_role",
     })
     assert resp.status_code == 400
 

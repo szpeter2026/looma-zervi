@@ -60,6 +60,10 @@ Page({
     wx.navigateTo({ url: '/pages/auth/index' })
   },
 
+  handleUpgrade() {
+    wx.navigateTo({ url: '/pages/pricing/index' })
+  },
+
   handleAbout() {
     wx.showModal({
       title: '关于 PlanetX',

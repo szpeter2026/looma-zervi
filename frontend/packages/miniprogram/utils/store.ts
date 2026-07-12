@@ -203,6 +203,24 @@ export const store = {
     persistToStorage()
   },
 
+  /** Set identity and sync to backend */
+  async setIdentity(identity: Identity) {
+    state.identity = identity
+    persistToStorage()
+
+    // 同步到后端（best-effort）
+    const token = state.token
+    if (token) {
+      try {
+        // 动态 import 避免循环依赖
+        const { gameApi } = await import('./api')
+        await gameApi.syncProfile({ personality_type: '', identity })
+      } catch {
+        console.warn('[Store] identity sync failed (non-critical)')
+      }
+    }
+  },
+
   /** Set achievement popup */
   setAchievement(a: { title: string; desc: string } | null) {
     state.achievement = a

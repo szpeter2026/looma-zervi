@@ -13,6 +13,7 @@ import {
   createQuotaApi,
   createReferralApi,
   createComplianceApi,
+  createPaymentApi,
   LOOMA_TOKEN_KEY,
   type MiniApiClient,
   type WechatAuthRequest,
@@ -66,6 +67,7 @@ export const authApi = {
   
   // 其他方法直接使用 shared-core 的实现
   profile: () => createAuthApi(apiClient).profile(),
+  refresh: () => createAuthApi(apiClient).refresh(),
   
   // 注意：shared-core 的 createAuthApi 不包含 bind 方法
   // 我们使用 client 直接调用
@@ -76,11 +78,12 @@ export const gameApi = {
   // getProfile -> profile
   getProfile: () => createGameApi(apiClient).profile(),
   
-  // syncProfile -> profileSync
-  syncProfile: (data: { personality_type: string; personality_detail?: string }) => {
+  // syncProfile -> profileSync（支持 identity 持久化）
+  syncProfile: (data: { personality_type?: string; personality_detail?: string; identity?: string }) => {
     const request: ProfileSyncRequest = {
       personality_type: data.personality_type,
       personality_detail: data.personality_detail,
+      identity: data.identity,
     }
     return createGameApi(apiClient).profileSync(request)
   },
@@ -96,6 +99,11 @@ export const gameApi = {
 
   // match — 舰队内 1:1 人格配对
   match: () => createGameApi(apiClient).match(),
+
+  // consensus — 共识列表 + 确认
+  listConsensus: () => createGameApi(apiClient).listConsensus(),
+  acknowledgeConsensus: (consensusId: string) =>
+    createGameApi(apiClient).acknowledgeConsensus({ consensus_id: consensusId }),
 
   // createFleet
   createFleet: (name: string) => {
@@ -145,6 +153,9 @@ export const referralApi = {
 // Compliance API 适配器
 export const complianceApi = createComplianceApi(apiClient)
 
+// Payment API 适配器
+export const paymentApi = createPaymentApi(apiClient)
+
 // ============================================================
 // 类型导出（向后兼容）
 // ============================================================
@@ -163,4 +174,5 @@ export default {
   quotaApi,
   referralApi,
   complianceApi,
+  paymentApi,
 }

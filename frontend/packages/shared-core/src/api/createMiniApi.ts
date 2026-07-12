@@ -26,6 +26,7 @@ import type {
   MissionCompleteRequest,
   MissionCompleteResponse,
   FleetMatchResponse,
+  MatchConsensusListResponse,
   CreateFleetRequest,
   FleetResponse,
   JoinFleetRequest,
@@ -139,6 +140,12 @@ export function createGameApi(client: MiniApiClientInterface) {
 
     /** Fleet 1:1 personality match (PlanetX domain) */
     match: () => client.post<FleetMatchResponse>(API_ROUTES.GAME_MATCH),
+
+    acknowledgeConsensus: (payload: { consensus_id: string }) =>
+      client.post<{ status: string }>(API_ROUTES.GAME_MATCH_ACK, payload),
+
+    listConsensus: () =>
+      client.get<MatchConsensusListResponse>(API_ROUTES.GAME_MATCH_CONSENSUS),
 
     /** Create a new fleet */
     createFleet: (payload: CreateFleetRequest) =>
@@ -437,6 +444,13 @@ export function createPaymentApi(client: MiniApiClientInterface) {
     /** Upgrade tier (stub: no real payment) */
     upgrade: (tier: "supporter" | "pro") =>
       client.post<import("../types/payment").UpgradeResponse>(API_ROUTES.PAYMENT_UPGRADE, { tier }),
+
+    /** Create WeChat Pay order (production mode, JSAPI for miniprogram) */
+    wechatOrder: (payload: import("../types/payment").WechatOrderRequest) =>
+      client.post<import("../types/payment").WechatOrderResponse>(
+        API_ROUTES.PAYMENT_WECHAT_ORDER,
+        payload,
+      ),
   };
 }
 

@@ -51,6 +51,33 @@ const MISSION_XP: Record<MissionId, number> = {
   match: 40,
 }
 
+const VALID_IDENTITIES: Identity[] = ['explorer', 'captain', 'wanderer']
+
+/** 老用户：有人格/任务进度则直达 Hub，避免重复 onboarding */
+function resolvePostAuthScreen(state: {
+  identity?: Identity
+  personalityType?: PersonalityType
+  quizFinished: boolean
+  missionsCompleted: MissionId[]
+}): GameScreen {
+  if (
+    state.identity ||
+    state.personalityType ||
+    state.quizFinished ||
+    state.missionsCompleted.length > 0
+  ) {
+    return 'hub'
+  }
+  return 'onboarding'
+}
+
+function parseIdentity(value: unknown): Identity | undefined {
+  if (typeof value === 'string' && (VALID_IDENTITIES as string[]).includes(value)) {
+    return value as Identity
+  }
+  return undefined
+}
+
 export function getApiClient(): ApiClient {
   return createApiClient({
     baseURL: API_BASE,
@@ -195,21 +222,33 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
   completeMission: (id) => {
     const { missionsCompleted } = get()
     if (missionsCompleted.includes(id)) return
+    const previous = missionsCompleted
     set({ missionsCompleted: [...missionsCompleted, id] })
 
     const { token } = get()
     if (token) {
       getApiClient()
-        .post<{ total_xp?: number; level?: number }>('/v1/game/mission-complete', {
-          mission_id: id,
-          xp_reward: MISSION_XP[id] ?? 10,
-        })
+        .post<{ total_xp?: number; level?: number; error?: string; message?: string }>(
+          '/v1/game/mission-complete',
+          {
+            mission_id: id,
+            xp_reward: MISSION_XP[id] ?? 10,
+          },
+        )
         .then((data) => {
           if (data?.total_xp != null) {
             set({ xp: data.total_xp, level: data.level ?? get().level })
           }
         })
-        .catch(() => {})
+        .catch((err: { body?: { message?: string }; response?: { data?: { message?: string } }; message?: string }) => {
+          set({ missionsCompleted: previous })
+          const msg =
+            err?.body?.message ||
+            err?.response?.data?.message ||
+            err?.message ||
+            '任务同步失败，请稍后重试'
+          get().setToast(`任务未完成：${msg}`)
+        })
     }
     get().syncProfile()
   },
@@ -236,7 +275,12 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
   setIdentity: (identity) => {
     set({ identity })
     get().addXP(10)
-    get().syncProfile()
+    const { token } = get()
+    if (token) {
+      getApiClient()
+        .post('/v1/game/profile-sync', { identity })
+        .catch(() => get().setToast('身份同步失败，请稍后重试'))
+    }
   },
 
   // ======= Auth (Looma JWT) =======
@@ -254,7 +298,8 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
       // 加载完整 profile
       await get().loadProfile()
       get().setToast('跃迁成功！欢迎回来 🪐')
-      get().setScreen(get().identity ? 'hub' : 'onboarding')
+      const s = get()
+      get().setScreen(resolvePostAuthScreen(s))
       return true
     } catch (e) {
       const msg = (e as { response?: { data?: { message?: string } }; message?: string })
@@ -316,7 +361,8 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
     }
     try {
       await get().loadProfile()
-      setTimeout(() => set({ screen: get().identity ? 'hub' : 'onboarding' }), 1500)
+      const s = get()
+      setTimeout(() => set({ screen: resolvePostAuthScreen(s) }), 1500)
     } catch {
       get().logout()
     }
@@ -329,7 +375,7 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
     try {
       const client = getApiClient()
       const data = await client.get<{
-        identity?: Identity
+        identity?: string
         level?: number
         xp?: number
         xp_to_next?: number
@@ -350,7 +396,7 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
           data.personality_detail,
         )
         set({
-          identity: data.identity ?? undefined,
+          identity: parseIdentity(data.identity),
           level: data.level ?? 1,
           xp: data.xp ?? 0,
           xpToNext: data.xp_to_next ?? 100,
@@ -366,22 +412,27 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
       const s = get()
       if (s.fleet && s.teamSize >= 3 && !s.missionsCompleted.includes('team')) {
         get().completeMission('team')
-        get().addXP(80)
         get().setAchievement({ title: '🤝 舰队集结完毕！', desc: '3人成团 · 隐藏星图已解锁' })
       }
     } catch { /* defaults */ }
   },
 
   syncProfile: async () => {
-    const { token, personalityType } = get()
+    const { token, personalityType, identity } = get()
     if (!token) return
+    const payload: Record<string, string> = {}
+    if (identity) payload.identity = identity
+    if (personalityType?.name) {
+      payload.personality_type = personalityType.name
+      payload.personality_detail = JSON.stringify(personalityType)
+    }
+    if (!payload.identity && !payload.personality_type) return
     try {
       const client = getApiClient()
-      await client.post('/v1/game/profile-sync', {
-        personality_type: personalityType?.name ?? '',
-        personality_detail: personalityType ? JSON.stringify(personalityType) : '',
-      })
-    } catch { /* best-effort */ }
+      await client.post('/v1/game/profile-sync', payload)
+    } catch {
+      /* best-effort */
+    }
   },
 
   // ======= Fleet (Looma API) =======
@@ -415,7 +466,6 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
         // 检查是否达成组队任务
         if (data.team_size >= 3 && !get().missionsCompleted.includes('team')) {
           get().completeMission('team')
-          get().addXP(80)
           get().setAchievement({ title: '🤝 舰队集结完毕！', desc: '3人成团 · 隐藏星图已解锁' })
         }
       }
@@ -445,7 +495,6 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
         // 检查任务
         if ((data.team_size ?? 0) >= 3 && !get().missionsCompleted.includes('team')) {
           get().completeMission('team')
-          get().addXP(80)
           get().setAchievement({ title: '🤝 舰队集结完毕！', desc: '3人成团 · 隐藏星图已解锁' })
         }
       }

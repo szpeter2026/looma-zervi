@@ -47,8 +47,15 @@ def search_poems(query: str, n_results: int = 3) -> list[dict]:
         return []
 
     try:
+        from flask import current_app
+        app = current_app._get_current_object()
+
+        def _search_with_context() -> list[dict]:
+            with app.app_context():
+                return _search_chroma(query, n_results)
+
         with ThreadPoolExecutor(max_workers=1) as pool:
-            fut = pool.submit(_search_chroma, query, n_results)
+            fut = pool.submit(_search_with_context)
             return fut.result(timeout=timeout) or []
     except FuturesTimeoutError:
         logger.warning(

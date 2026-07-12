@@ -71,6 +71,9 @@ declare const wx: {
   // Share
   showShareMenu(options: { withShareTicket?: boolean; menus?: string[] }): void
   
+  // Payment
+  requestPayment(options: RequestPaymentOptions): void
+  
   // Selector
   createSelectorQuery(): any
 }
@@ -304,6 +307,18 @@ interface EventChannel {
   on(eventName: string, callback: Function): void;
   once(eventName: string, callback: Function): void;
   off(eventName: string, callback?: Function): void;
+}
+
+// Payment
+interface RequestPaymentOptions {
+  timeStamp: string;
+  nonceStr: string;
+  package: string;
+  signType: string;
+  paySign: string;
+  success?: (res: any) => void;
+  fail?: (err: any) => void;
+  complete?: () => void;
 }
 
 // Global app/page functions

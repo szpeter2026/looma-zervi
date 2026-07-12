@@ -87,6 +87,10 @@ export type {
   MissionCompleteResponse,
   FleetMatchCandidate,
   FleetMatchResponse,
+  ConsensusStatus,
+  MatchSpreadHint,
+  MatchConsensusItem,
+  MatchConsensusListResponse,
   CreateFleetRequest,
   JoinFleetRequest,
   FleetResponse,
@@ -123,6 +127,11 @@ export {
 export { computePersonality, hydratePersonality } from "./utils/quiz";
 
 export { getShareText } from "./utils/share";
+export {
+  deriveMatchUiState,
+  consensusStatusLabel,
+} from "./utils/matchConsensus";
+export type { MatchResultView, MatchUiState } from "./utils/matchConsensus";
 export type { SharePlatform as PlanetXSharePlatform } from "./utils/share";
 
 /** JWT localStorage key — G2 aligned (planetx / saas / portal) */

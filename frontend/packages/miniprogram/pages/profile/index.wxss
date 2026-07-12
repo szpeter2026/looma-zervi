@@ -95,6 +95,15 @@
   color: #B8B8C8;
 }
 
+.menu-badge {
+  font-size: 22rpx;
+  color: #C8FF50;
+  background: rgba(200, 255, 80, 0.1);
+  padding: 4rpx 16rpx;
+  border-radius: 8rpx;
+  margin-right: 8rpx;
+}
+
 /* ============ Logout ============ */
 .logout-btn {
   text-align: center;

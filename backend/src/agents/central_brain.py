@@ -19,7 +19,7 @@ from flask import current_app
 
 logger = logging.getLogger("looma.brain")
 
-INTENTS = ("job_match", "resume_parse", "poetry", "credit", "mbti", "rag", "report", "unknown")
+INTENTS = ("job_match", "resume_parse", "poetry", "credit", "mbti", "rag", "report", "greeting", "unknown")
 
 # Keyword → intent rules (fallback when LLM unavailable)
 INTENT_KEYWORDS = {
@@ -29,7 +29,14 @@ INTENT_KEYWORDS = {
     "credit": ["征信", "信用", "验证"],
     "mbti": ["人格", "MBTI", "测评", "性格"],
     "report": ["报告", "日报", "周报", "月报", "生成报告"],
-    "rag": ["知识库", "文档", "问一下", "查一下", "检索", "资料", "总结", "介绍一下", "是什么", "什么是", "有哪些", "主要内容", "底座", "架构"],
+    "rag": [
+        "知识库", "文档", "问一下", "查一下", "检索", "资料", "总结", "介绍", "介绍一下",
+        "是什么", "什么是", "有哪些", "主要内容", "底座", "架构", "可以做什么", "能做什么",
+        "有什么功能", "探索", "探索什么", "探索什么", "能探索", "星球", "星际探索",
+        "六域", "职业域", "学习域", "生活域", "社交域", "健康域", "创意域",
+        "planetx", "planetx 是什么", "planetx 能做什么", "planetx 有什么",
+    ],
+    "greeting": ["hi", "hello", "hey", "你好", "早上好", "晚上好", "您好", "很高兴", "再见", "谢谢", "感谢", "辛苦了", "在吗", "你是谁", "你能做什么", "帮我", "请问", "好的", "明白了", "ok", "thanks", "morning", "evening", "下午好", "晚安", "嗨"],
 }
 
 POETRY_RECOMMEND_THEMES = ("思乡", "送别", "山水", "边塞", "咏物", "励志", "田园", "怀古")
@@ -94,7 +101,7 @@ def _parse_intent_llm(message: str) -> tuple[str, float, dict[str, Any]] | None:
             "JSON 必须包含：\"intent\"（取值仅限: job_match, resume_parse, poetry, credit, mbti, rag, report, unknown），"
             "\"confidence\"（0 到 1 的浮点数），可选 \"slots\"（对象）。"
             "\n分类规则："
-            "\n- rag: 问知识/文档/概念/系统是什么、总结/介绍/检索"
+            "\n- rag: 问知识/文档/概念/系统是什么、平台介绍、功能说明、总结/介绍/检索、可以做什么、探索什么、六域相关"
             "\n- poetry: 涉及诗词/诗人/古诗/唐诗宋词"
             "\n- job_match: 求职/职位匹配/找工作"
             "\n- resume_parse: 上传或解析简历"
@@ -173,16 +180,32 @@ def dispatch(
             results = search_chroma(query, n_results=3)
             _timing["rag_retrieve"] = int((time.time() - t_retrieve) * 1000)
 
-            context_text = "\n\n".join(r.get("content", "") for r in results) if results else "(no context)"
-
+            if results:
+                # Use retrieved context as the primary source. The LLM is told it may
+                # still fall back on general knowledge when the context is incomplete.
+                context_text = "\n\n".join(r.get("content", "") for r in results)
+                prompt = (
+                    "你是 PlanetX 星际导航员，一位热情、简洁的 AI 助手。"
+                    "请根据以下参考资料回答用户问题，并自然地介绍 PlanetX 的六域探索体系。"
+                    "回答要友好、有吸引力，让用户想要继续探索。"
+                    "如果参考资料不够完整，可以结合通用知识补充，但不要强调「资料没有提到」或「这一解释并非来自参考资料」。"
+                    "用第一人称「我」或「我们」回答，营造陪伴感。\n\n"
+                    f"参考资料：\n{context_text}\n\n"
+                    f"用户问题：{query}\n\n"
+                    f"回答："
+                )
+            else:
+                # Fallback: no documents in the knowledge base, answer from general knowledge
+                # with a natural promotion of PlanetX six domains.
+                prompt = (
+                    "你是 PlanetX 星际导航员，一位热情、简洁的 AI 助手。"
+                    "请用友好、有吸引力的方式回答用户，并自然地介绍 PlanetX 的六域探索体系："
+                    "职业域、学习域、生活域、社交域、健康域、创意域。"
+                    "如果用户的问题与这些域相关，请邀请他们进一步体验对应功能。\n\n"
+                    f"用户问题：{query}\n\n"
+                    f"回答："
+                )
             t_llm = time.time()
-            prompt = (
-                "你是一个知识库助手。根据以下参考资料回答用户问题。"
-                "如果参考资料不足以回答问题，请如实说明。\n\n"
-                f"参考资料：\n{context_text}\n\n"
-                f"用户问题：{query}\n\n"
-                f"回答："
-            )
             answer = _call_llm(prompt) or "知识库检索失败，请稍后再试"
             _timing["rag_llm"] = int((time.time() - t_llm) * 1000)
 
@@ -197,13 +220,22 @@ def dispatch(
         rtext = (resume_text or "").strip() or (context.get("resume_text") or "") or (slots.get("resume_text") or "")
         if not rtext:
             return {"message": "请先提供简历内容", "status": "pending",
-                    "hint": "可通过上传简历或传入 resume_text", "slots": slots}
+                    "hint": "可通过上传简历或传入 resume_text", "slots": slots,
+                    "answer": "请先提供你的简历内容或工作经历描述，我来帮你匹配适合的职位。"}
         try:
             from src.pipeline.job_match_pipeline import run_job_match_pipeline
             results_list, total = run_job_match_pipeline(resume_text=rtext)
-            return {"message": "已根据简历完成职位匹配", "matches": results_list, "total_evaluated": total, "slots": slots}
+            if results_list:
+                lines = ["根据你的简历，推荐以下匹配职位：\n"]
+                for i, m in enumerate(results_list[:5], 1):
+                    lines.append(f"{i}. {m.get('title', m.get('job_title', '-'))} — 匹配度 {m.get('score', '-')}")
+                lines.append(f"\n共评估 {total} 个职位。要了解更多细节或针对性建议，随时问我！")
+                answer = "\n".join(lines)
+            else:
+                answer = "已分析你的简历，暂未找到高匹配职位。试试补充更多技能或工作经历？"
+            return {"message": "已根据简历完成职位匹配", "answer": answer, "matches": results_list, "total_evaluated": total, "slots": slots}
         except Exception as e:
-            return {"message": "职位匹配失败", "error": str(e), "slots": slots}
+            return {"message": "职位匹配失败", "error": str(e), "answer": "职位匹配暂时不可用，请稍后重试。", "slots": slots}
 
     # ── 简历解析 ──
     if intent == "resume_parse":
@@ -211,10 +243,14 @@ def dispatch(
             try:
                 from src.agents.document_agents import run_document_analysis
                 extracted = run_document_analysis("resume", text)
-                return {"message": "已解析简历", "extracted": extracted, "slots": slots}
+                skills = extracted.get("skills", []) if isinstance(extracted, dict) else []
+                skill_str = "、".join(skills[:8]) if skills else "未识别出明确技能"
+                answer = f"已解析你的简历。\n\n识别技能：{skill_str}\n\n需要我帮你匹配职位或分析职业方向吗？"
+                return {"message": "已解析简历", "answer": answer, "extracted": extracted, "slots": slots}
             except Exception as e:
-                return {"message": "简历解析失败", "error": str(e), "slots": slots}
-        return {"message": "请提供简历文本内容", "status": "pending", "slots": slots}
+                return {"message": "简历解析失败", "error": str(e), "answer": "简历解析暂时不可用，请稍后重试。", "slots": slots}
+        return {"message": "请提供简历文本内容", "status": "pending", "slots": slots,
+                "answer": "请提供简历文本内容，我来帮你解析技能并推荐职位。"}
 
     # ── 诗词推荐 ──
     if intent == "poetry":
@@ -248,25 +284,32 @@ def dispatch(
                             extracted = json.loads(resp_text)
                             if isinstance(extracted.get("content"), list):
                                 extracted["content"] = "\n".join(extracted["content"])
-                            return {"message": "已为您推荐诗词", "extracted": extracted, "slots": slots}
+                            answer = f"{extracted.get('title', '')} · {extracted.get('author', '')}（{extracted.get('dynasty', '')}）\n\n{extracted.get('content', '')}\n\n{extracted.get('theme', '')}".strip()
+                            return {"message": "已为您推荐诗词", "answer": answer, "extracted": extracted, "slots": slots}
                         except json.JSONDecodeError:
                             pass
 
                     # LLM failed, return first poem from search
                     best = poems[0]
+                    extracted = {
+                        "title": best.get("title", ""), "author": best.get("author", ""),
+                        "dynasty": best.get("dynasty", ""),
+                        "content": (best.get("content", "") or "")[:100],
+                        "theme": search_query,
+                    }
+                    answer = f"{extracted['title']} · {extracted['author']}（{extracted['dynasty']}）\n\n{extracted['content']}".strip()
                     return {
-                        "extracted": {
-                            "title": best.get("title", ""), "author": best.get("author", ""),
-                            "dynasty": best.get("dynasty", ""),
-                            "content": (best.get("content", "") or "")[:100],
-                            "theme": search_query,
-                        },
+                        "answer": answer,
+                        "extracted": extracted,
                         "slots": slots,
                     }
-                return {"message": "未找到匹配的诗词", "status": "pending", "slots": slots}
+                return {"message": "未找到匹配的诗词", "status": "pending", "slots": slots,
+                        "answer": "这个方向还没找到合适诗句，换个心情或主题试试？"}
             except Exception as e:
-                return {"message": "诗词检索失败", "error": str(e), "slots": slots}
-        return {"message": "诗人/诗词推荐已就绪", "status": "pending", "slots": slots}
+                return {"message": "诗词检索失败", "error": str(e), "slots": slots,
+                        "answer": "诗词库暂时无法访问，请稍后再试。"}
+        return {"message": "诗人/诗词推荐已就绪", "status": "pending", "slots": slots,
+                "answer": "想找什么主题的诗句？心情、季节、场景都行，告诉我就好。"}
 
     # ── MBTI 测评 ──
     if intent == "mbti":
@@ -278,11 +321,21 @@ def dispatch(
                 analysis = analyzer.analyze_text(text)
                 if analysis.get("mbti_type") and analysis["mbti_type"] != "XXXX":
                     career = get_career_match(analysis["mbti_type"])
-                    return {"extracted": {**analysis, "career_match": career}, "slots": slots}
-                return {"extracted": analysis, "slots": slots}
+                    mbti = analysis["mbti_type"]
+                    traits = analysis.get("traits", {})
+                    career_tip = career.get("suggestion", "") if isinstance(career, dict) else ""
+                    answer = (
+                        f"分析完成！你的 MBTI 类型可能是 **{mbti}**。\n\n"
+                        f"值得关注的职业方向：{career_tip}\n\n"
+                        f"心理学笔记已记录，有新的自我觉察随时来找我聊！"
+                    )
+                    return {"answer": answer, "extracted": {**analysis, "career_match": career}, "slots": slots}
+                answer = "看起来信息还不够判断你的性格类型，再和我多聊几句？比如你面对压力时的反应、更喜欢独立还是协作。"
+                return {"answer": answer, "extracted": analysis, "slots": slots}
             except Exception as e:
-                return {"message": "人格测评分析失败", "error": str(e), "slots": slots}
-        return {"message": "请描述您的做事风格（至少20字）", "status": "pending", "slots": slots}
+                return {"message": "人格测评分析失败", "error": str(e), "answer": "性格分析暂时不可用，请稍后重试。", "slots": slots}
+        return {"message": "请描述您的做事风格（至少20字）", "status": "pending", "slots": slots,
+                "answer": "想了解你的性格类型？来和我说说你的做事风格、人际偏好，我会帮你分析。"}
 
     # ── 报告生成 ──
     if intent == "report":
@@ -295,9 +348,10 @@ def dispatch(
             elif "月" in query or "monthly" in query.lower():
                 report_type = "monthly"
             path = reporter.generate_report(report_type)
-            return {"message": f"已生成{report_type}报告", "path": str(path), "slots": slots}
+            type_cn = {"daily": "日报", "weekly": "周报", "monthly": "月报"}.get(report_type, report_type)
+            return {"message": f"已生成{type_cn}报告", "answer": f"{type_cn}已生成，请查看。", "path": str(path), "slots": slots}
         except Exception as e:
-            return {"message": "报告生成失败", "error": str(e), "slots": slots}
+            return {"message": "报告生成失败", "error": str(e), "answer": "报告生成暂时不可用，请稍后重试。", "slots": slots}
 
     # ── Navigator 对话模式 ──
     if context.get("navigator_mode") and intent == "unknown":
@@ -432,5 +486,37 @@ def dispatch(
             logger.error(f"Navigator failed: {e}", exc_info=True)
             return {"answer": "...（信号中断）", "slots": slots}
 
+    # ── Greeting ──
+    if intent == "greeting":
+        welcome = "\n".join([
+            "你好，探索者！我是 PlanetX 星际导航员。",
+            "",
+            "PlanetX 有六大探索域等你开启：",
+            "🌍 职业域 — 职位匹配 · 简历解析 · 职业规划",
+            "📚 学习域 — 技能训练 · 知识问答 · AI 辅导",
+            "🏡 生活域 — 时间管理 · 效率提升",
+            "👥 社交域 — 人格匹配 · 组建舰队",
+            "💚 健康域 — 情绪陪伴 · 压力疏导",
+            "🎨 创意域 — 诗词推荐 · 灵感激发",
+            "",
+            "想从哪个开始探索？",
+        ])
+        return {"answer": welcome, "slots": slots}
+
     # ── Unknown ──
-    return {"message": "暂未识别到明确意图", "answer": "", "received": (query or "")[:100]}
+    # Fallback to general LLM chat so trivial / ambiguous inputs are not met with a dead-end.
+    try:
+        prompt = (
+            "你是 PlanetX 星际导航员，一位热情、简洁的 AI 助手。"
+            "请自然、友好地回应用户的话。"
+            "如果用户的话含义不太明确，请主动介绍 PlanetX 的六域探索体系："
+            "职业域、学习域、生活域、社交域、健康域、创意域，并邀请用户选择一个方向继续探索。"
+            "语气要有陪伴感，让用户感受到这是一个可以长期成长的地方。\n\n"
+            f"用户：{query}\n\n"
+            "回答："
+        )
+        answer = _call_llm(prompt) or "嗨，我是你的星际导航员，PlanetX 有六域探索等你开启：职业、学习、生活、社交、健康、创意，想从哪个开始？"
+    except Exception as e:
+        logger.warning(f"Unknown fallback LLM failed: {e}")
+        answer = "嗨，我是你的星际导航员，PlanetX 有六域探索等你开启：职业、学习、生活、社交、健康、创意，想从哪个开始？"
+    return {"answer": answer, "slots": slots}

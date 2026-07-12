@@ -1,26 +1,29 @@
 /**
- * Match Page — 首次星际匹配
- * 等待动画 → POST /v1/game/match → 展示匹配星图 → mission-complete → 成就
+ * Match Page — 首次星际匹配（阶段二共识三分流）
+ *
+ * 与 Web MatchScreen 共用 deriveMatchUiState 推断规则。
+ * 三种视图：verified（共识共振）、weak（弱共振）、failed（未达标）。
  */
 import { store } from '../../utils/store'
 import { gameApi } from '../../utils/api'
 import { MISSION_XP } from '../../utils/config'
+import {
+  deriveMatchUiState,
+  type FleetMatchResponse,
+  type MatchConsensusItem,
+  type MatchUiState,
+} from '@looma/shared-core'
 
 Page({
   data: {
     phase: 'scanning' as 'scanning' | 'result' | 'error',
     statusText: '正在扫描舰队星轨…',
     errorMessage: '',
-    selfEmoji: '🪐',
-    selfType: '',
-    matchEmoji: '🪐',
-    matchName: '',
-    matchType: '',
-    matchScore: 0,
-    matchReason: '',
-    fleetName: '',
+    result: null as FleetMatchResponse | null,
+    pendingConsensus: [] as MatchConsensusItem[],
     completing: false,
-    completed: false,
+    sharing: false,
+    uiState: null as MatchUiState | null,
   },
 
   onLoad() {
@@ -33,14 +36,25 @@ Page({
     void this.startMatch()
   },
 
+  async loadPendingConsensus() {
+    try {
+      const data: any = await gameApi.listConsensus()
+      this.setData({ pendingConsensus: data?.pending ?? [] })
+    } catch {
+      this.setData({ pendingConsensus: [] })
+    }
+  },
+
   async startMatch() {
     this.setData({
       phase: 'scanning',
       statusText: '正在扫描舰队星轨…',
       errorMessage: '',
+      result: null,
+      pendingConsensus: [],
+      uiState: null,
     })
 
-    // Brief wait for atmosphere, then call API
     await new Promise((r) => setTimeout(r, 900))
     this.setData({ statusText: '计算人格互补轨道…' })
 
@@ -50,17 +64,16 @@ Page({
         throw new Error(data?.message || '匹配失败')
       }
 
+      const uiState = deriveMatchUiState(data as FleetMatchResponse)
+
       this.setData({
         phase: 'result',
-        selfEmoji: data.self?.personality_emoji || '🪐',
-        selfType: data.self?.personality_type || '',
-        matchEmoji: data.match.personality_emoji || '🪐',
-        matchName: data.match.name || '神秘星际公民',
-        matchType: data.match.personality_type || '',
-        matchScore: data.match.match_score || 0,
-        matchReason: data.match.reason || '',
-        fleetName: data.fleet_name || '',
+        result: data as FleetMatchResponse,
+        uiState,
       })
+
+      // 异步加载待认可的共识请求
+      void this.loadPendingConsensus()
     } catch (err: any) {
       const msg =
         err?.body?.message ||
@@ -68,7 +81,6 @@ Page({
         err?.message ||
         err?.error ||
         (typeof err === 'string' ? err : '匹配信号中断，请稍后重试')
-      // MiniApiClient 常用 "HTTP 400" 作 message，优先取业务文案
       const friendly =
         typeof msg === 'string' && msg.startsWith('HTTP ')
           ? err?.details?.message || err?.body?.message || msg
@@ -81,15 +93,20 @@ Page({
     }
   },
 
-  async onConfirmMatch() {
-    if (this.data.completing || this.data.completed) return
+  async onConfirm() {
+    if (this.data.completing || !this.data.result) return
+    const ui = this.data.uiState
+    if (!ui?.canComplete) {
+      wx.showToast({ title: '共识尚未验证，请先传播信号或完成双向确认', icon: 'none' })
+      return
+    }
     this.setData({ completing: true })
 
-    const xpReward = MISSION_XP.match
     const alreadyDone = (store.get('missionsCompleted') || []).includes('match')
 
     try {
       if (!alreadyDone) {
+        const xpReward = MISSION_XP.match
         const data: any = await gameApi.completeMission('match', xpReward)
         store.completeMission('match')
         if (data?.total_xp != null) {
@@ -100,25 +117,23 @@ Page({
           })
         }
         store.setAchievement({
-          title: '🎯 首次星际匹配！',
-          desc: '你已与另一位星际公民完成匹配 · 匹配星图已解锁',
+          title: ui.view === 'verified' ? '共识共振达成！' : '首次星际匹配！',
+          desc:
+            ui.view === 'verified'
+              ? '舰队共识已验证 · 匹配星图已解锁'
+              : '你已与另一位星际公民完成匹配 · 匹配星图已解锁',
         })
       }
-      this.setData({ completed: true })
       wx.showToast({ title: '匹配星图已解锁', icon: 'success' })
-      setTimeout(() => {
-        wx.navigateBack()
-      }, 900)
+      setTimeout(() => wx.navigateBack(), 900)
     } catch (err: any) {
-      // 409 already completed — still treat as success locally
       const status = err?.status || err?.statusCode
       if (status === 409) {
         store.completeMission('match')
         store.setAchievement({
-          title: '🎯 首次星际匹配！',
+          title: '首次星际匹配！',
           desc: '你已与另一位星际公民完成匹配 · 匹配星图已解锁',
         })
-        this.setData({ completed: true })
         wx.navigateBack()
         return
       }
@@ -128,6 +143,46 @@ Page({
       })
     } finally {
       this.setData({ completing: false })
+    }
+  },
+
+  async onShareSpread() {
+    if (this.data.sharing) return
+    this.setData({ sharing: true })
+    try {
+      // 使用微信分享能力
+      const result = this.data.result
+      const selfType = result?.self?.personality_type || '星际公民'
+      const selfEmoji = result?.self?.personality_emoji || '🌌'
+      const matchType = result?.match?.personality_type || ''
+      const score = result?.match?.match_score || 0
+
+      const shareText = `🪐 我在 PlanetX 上被识别为「${selfEmoji} ${selfType}」\n刚与一位「${matchType}」进行了星际匹配（契合度 ${score}）\n快来加入我的舰队，一起探索六域！`
+      wx.setClipboardData({
+        data: shareText,
+        success: () => {
+          wx.showToast({ title: '传播文案已复制！分享到微信扩大验证池', icon: 'none', duration: 2000 })
+        },
+      })
+    } catch {
+      wx.showToast({ title: '复制失败，请手动分享邀请链接', icon: 'none' })
+    } finally {
+      this.setData({ sharing: false })
+    }
+  },
+
+  async onAcknowledge(e: any) {
+    const consensusId = e.currentTarget.dataset.id as string
+    if (!consensusId) return
+    try {
+      await gameApi.acknowledgeConsensus(consensusId)
+      wx.showToast({ title: '已发送共识确认', icon: 'success' })
+      // 刷新共识列表 + 重新匹配
+      await this.loadPendingConsensus()
+      await this.startMatch()
+    } catch (err: any) {
+      const msg = err?.body?.message || err?.message || '确认失败，请稍后重试'
+      wx.showToast({ title: msg, icon: 'none' })
     }
   },
 

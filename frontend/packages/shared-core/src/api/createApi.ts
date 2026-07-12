@@ -26,6 +26,7 @@ import type {
   MissionCompleteRequest,
   MissionCompleteResponse,
   FleetMatchResponse,
+  MatchConsensusListResponse,
   CreateFleetRequest,
   FleetResponse,
   JoinFleetRequest,
@@ -182,6 +183,17 @@ export function createGameApi(client: ApiClient) {
 
     /** Fleet 1:1 personality match (PlanetX domain) */
     match: () => client.post<FleetMatchResponse>(API_ROUTES.GAME_MATCH),
+
+    /** 双向共识确认（阶段二） */
+    acknowledgeConsensus: (payload: { consensus_id: string }) =>
+      client.post<{ status: string; consensus_status?: string }>(
+        API_ROUTES.GAME_MATCH_ACK,
+        payload,
+      ),
+
+    /** 待办 / 已验证共识列表（阶段二） */
+    listConsensus: () =>
+      client.get<MatchConsensusListResponse>(API_ROUTES.GAME_MATCH_CONSENSUS),
 
     /** Create a new fleet */
     createFleet: (payload: CreateFleetRequest) =>

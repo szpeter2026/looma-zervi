@@ -162,6 +162,10 @@ export type {
   UpgradeRequest,
   UpgradeResponse,
   PaymentRegion,
+  PaymentTradeType,
+  WechatOrderRequest,
+  WechatOrderResponse,
+  WechatJsapiParams,
 } from "../types/payment";
 
 export { PAYMENT_SUPPORTER_PRICES, PAYMENT_PRO_PRICES, DEPRECATED_TIER_ALIASES } from "../types/payment";

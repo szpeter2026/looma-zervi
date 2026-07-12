@@ -101,13 +101,21 @@ Page({
     try {
       const data: any = await gameApi.completeMission('team', 80)
       store.completeMission('team')
+      // XP 仅从后端 total_xp 写入，无本地 addXP，避免双计
       if (data?.total_xp != null) {
         store.applyGameProfile({ xp: data.total_xp, level: data.level, missions_completed: store.get('missionsCompleted') })
       }
       store.setAchievement({ title: '🤝 舰队集结完毕！', desc: '3人成团 · 隐藏星图已解锁' })
       this.refreshFromStore()
-    } catch {
-      // mission may already be completed
+    } catch (err: any) {
+      // 409 = 已回写，仅更新本地状态
+      const status = err?.status || err?.statusCode
+      if (status === 409) {
+        store.completeMission('team')
+        this.refreshFromStore()
+        return
+      }
+      console.warn('[Hub] completeFleetMission failed:', err?.message || err)
     }
   },
 

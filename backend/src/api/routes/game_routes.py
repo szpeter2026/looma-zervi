@@ -86,35 +86,53 @@ def _score_personality_pair(self_type: str, other_type: str) -> tuple[int, str]:
 
 # ── Personality & Profile ──
 
+# Valid PlanetX identity choices (onboarding)
+_PLANETX_IDENTITIES = frozenset({"explorer", "captain", "wanderer"})
+
+
 @game_bp.route("/profile-sync", methods=["POST"])
 @require_auth
 def sync_personality():
-    """Sync personality test result to looma backend."""
+    """Sync personality test result and/or PlanetX identity to looma backend."""
     data = request.get_json() or {}
-    personality_type = data.get("personality_type", "")
+    personality_type = (data.get("personality_type") or "").strip()
     personality_detail = data.get("personality_detail", "")
+    identity = (data.get("identity") or "").strip()
 
-    if not personality_type:
-        return jsonify(error="bad_request", message="personality_type required"), 400
+    if identity and identity not in _PLANETX_IDENTITIES:
+        return jsonify(
+            error="bad_request",
+            message="identity must be explorer, captain, or wanderer",
+        ), 400
+
+    if not personality_type and not identity:
+        return jsonify(
+            error="bad_request",
+            message="personality_type or identity required",
+        ), 400
 
     db = _get_db()
-    db.upsert_game_profile(g.user_id, personality_type, personality_detail)
+    if identity:
+        db.update_game_identity(g.user_id, identity)
+    if personality_type:
+        db.upsert_game_profile(g.user_id, personality_type, personality_detail)
 
-    from src.analytics.events import log_product_event, platform_from_request
-    log_product_event(
-        db,
-        "quiz_complete",
-        user_id=g.user_id,
-        platform=platform_from_request(request),
-        source="server",
-        properties={"personality_type": personality_type},
-    )
+        from src.analytics.events import log_product_event, platform_from_request
+        log_product_event(
+            db,
+            "quiz_complete",
+            user_id=g.user_id,
+            platform=platform_from_request(request),
+            source="server",
+            properties={"personality_type": personality_type},
+        )
 
     # Return the full profile after sync (so frontend gets XP/level too)
     profile = db.get_game_profile(g.user_id)
     return jsonify(
         message="profile synced",
-        personality_type=personality_type,
+        personality_type=profile.get("personality_type") or "",
+        identity=profile.get("identity") or "",
         xp=profile["xp"],
         level=profile["level"],
     )
@@ -140,6 +158,7 @@ def get_game_profile():
         return jsonify(
             id=None,
             user_id=g.user_id,
+            identity="",
             personality_type="",
             personality_detail="",
             xp=0,
@@ -180,6 +199,7 @@ def get_game_profile():
     return jsonify(
         id=profile["id"],
         user_id=profile["user_id"],
+        identity=profile.get("identity") or "",
         personality_type=profile["personality_type"],
         personality_detail=profile["personality_detail"],
         xp=xp,

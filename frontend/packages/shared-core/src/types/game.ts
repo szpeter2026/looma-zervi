@@ -88,6 +88,7 @@ export interface Mission {
 export interface GameProfile {
   id: string;
   user_id: string;
+  identity?: string;
   personality_type: string;
   personality_detail: string;
   xp: number;
@@ -98,8 +99,9 @@ export interface GameProfile {
 }
 
 export interface ProfileSyncRequest {
-  personality_type: string;
+  personality_type?: string;
   personality_detail?: string;
+  identity?: string;
 }
 
 export interface MissionCompleteRequest {
@@ -113,6 +115,33 @@ export interface MissionCompleteResponse {
   xp_earned: number;
   total_xp: number;
   level: number;
+}
+
+/** PlanetX 共识裂变 — match 响应扩展（阶段二） */
+export type ConsensusStatus =
+  | "consensus_passed"
+  | "consensus_weak"
+  | "consensus_failed"
+  | "consensus_verified";
+
+export interface MatchSpreadHint {
+  show_share_cta: boolean;
+  message: string | null;
+  spread_count: number;
+  spread_target: number;
+}
+
+export interface MatchConsensusItem {
+  id: string;
+  candidate_name: string;
+  match_score: number;
+  status: ConsensusStatus;
+  is_incoming: boolean;
+}
+
+export interface MatchConsensusListResponse {
+  pending: MatchConsensusItem[];
+  verified: MatchConsensusItem[];
 }
 
 /** PlanetX 舰队内 1:1 匹配结果（POST /v1/game/match） */
@@ -136,6 +165,13 @@ export interface FleetMatchResponse {
   fleet_id: string;
   fleet_name: string;
   candidates_considered: number;
+  /** 阶段二：共识阈值（默认 85） */
+  consensus_threshold?: number;
+  consensus_status?: ConsensusStatus;
+  consensus_passed?: boolean;
+  can_complete_mission?: boolean;
+  pending_consensus_id?: string | null;
+  spread_hint?: MatchSpreadHint;
 }
 
 export interface Fleet {
