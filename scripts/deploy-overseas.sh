@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Overseas VPS deployment script for looma-zervi (release/overseas)
 # Target: Ubuntu 22.04 LTS, Vultr Singapore
-# Domain: genz.ltd (Cloudflare DNS + proxy)
+# Domain: genz.ltd (Cloudflare DNS + proxy, SSL mode: Full)
+#
+# SSL strategy: self-signed cert on origin + Cloudflare Full mode.
+# Upgrade to Cloudflare Origin Certificate later for Full (Strict).
 #
 # Run as root:
-#   curl -fsSL https://.../deploy.sh | bash
-# Or download and execute manually.
+#   bash deploy-overseas.sh
 
 set -euo pipefail
 
@@ -15,6 +17,7 @@ TSPACE_SUBDOMAIN="tspace.genz.ltd"
 REPO_URL="https://gitee.com/szbenyx/looma-zervi.git"
 BRANCH="release/overseas"
 APP_DIR="/opt/looma-zervi"
+SSL_DIR="/etc/nginx/ssl"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -26,8 +29,8 @@ log() {
 # 1. Basic system setup
 # ============================
 log "Updating system packages..."
-apt-get update
-apt-get install -y ca-certificates curl gnupg lsb-release software-properties-common ufw git
+apt-get update -y
+apt-get install -y ca-certificates curl gnupg lsb-release software-properties-common ufw git nginx openssl
 
 log "Configuring timezone..."
 timedatectl set-timezone Asia/Singapore || true
@@ -40,7 +43,7 @@ install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" >/etc/apt/sources.list.d/docker.list
-apt-get update
+apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
 log "Installing docker-compose (standalone)..."
@@ -49,26 +52,18 @@ curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VE
 chmod +x /usr/local/bin/docker-compose
 
 # ============================
-# 3. Certbot + Nginx
+# 3. Self-signed SSL certificate (Cloudflare Full mode)
 # ============================
-log "Installing Certbot and Nginx..."
-apt-get install -y certbot python3-certbot-nginx nginx
-
-# Stop nginx temporarily to free port 80 for certbot standalone
-systemctl stop nginx || true
-
-log "Requesting Let's Encrypt certificate for ${DOMAIN} and subdomains..."
-certbot certonly --standalone --non-interactive --agree-tos \
-    --email "admin@${DOMAIN}" \
-    -d "${DOMAIN}" -d "*.${DOMAIN}" \
-    --cert-name "${DOMAIN}" || {
-        log "ERROR: certbot failed. Make sure DNS A records for ${DOMAIN} and *.${DOMAIN} point to this server."
-        exit 1
-    }
-
-# Auto-renewal hook
-log "Setting up certbot auto-renewal..."
-echo "0 2 * * * root certbot renew --quiet --nginx" >/etc/cron.d/certbot-renew
+log "Generating self-signed SSL certificate..."
+mkdir -p "${SSL_DIR}"
+openssl req -x509 -nodes -days 3650 \
+    -newkey rsa:2048 \
+    -keyout "${SSL_DIR}/privkey.pem" \
+    -out "${SSL_DIR}/fullchain.pem" \
+    -subj "/C=SG/ST=Singapore/L=Singapore/O=Looma/CN=${DOMAIN}" \
+    -addext "subjectAltName=DNS:${DOMAIN},DNS:*.${DOMAIN}" 2>/dev/null
+chmod 600 "${SSL_DIR}/privkey.pem"
+log "SSL cert generated at ${SSL_DIR}/"
 
 # ============================
 # 4. Clone repository
@@ -78,8 +73,8 @@ if [ -d "${APP_DIR}" ]; then
     log "Directory exists, pulling latest..."
     cd "${APP_DIR}"
     git fetch origin
-    git checkout "${BRANCH}"
-    git pull origin "${BRANCH}"
+    git checkout "${BRANCH}" 2>/dev/null || git checkout -b "${BRANCH}" origin/"${BRANCH}"
+    git pull origin "${BRANCH}" || true
 else
     git clone -b "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
     cd "${APP_DIR}"
@@ -89,46 +84,42 @@ fi
 # 5. Configure environment
 # ============================
 log "Configuring environment..."
+cd "${APP_DIR}"
+
 if [ ! -f "backend/.env" ]; then
     cp backend/.env.example backend/.env
-    log "Created backend/.env from example. You MUST edit it with your secrets."
+    log "Created backend/.env from example."
 fi
 
-# Set Redis storage for rate limiting (service name inside docker network)
-if ! grep -q "RATE_LIMIT_STORAGE_URI=redis://redis:6379/1" backend/.env; then
-    sed -i 's|^RATE_LIMIT_STORAGE_URI=.*|RATE_LIMIT_STORAGE_URI=redis://redis:6379/1|' backend/.env
+# Set Redis storage for rate limiting
+sed -i 's|^RATE_LIMIT_STORAGE_URI=.*|RATE_LIMIT_STORAGE_URI=redis://redis:6379/1|' backend/.env
+
+# Set domain-specific configs
+sed -i "s|GOOGLE_REDIRECT_URI=.*|GOOGLE_REDIRECT_URI=https://${API_SUBDOMAIN}/v1/auth/google/callback|" backend/.env
+sed -i "s|CORS_ORIGINS=.*|CORS_ORIGINS=https://${DOMAIN},https://${TSPACE_SUBDOMAIN},https://${API_SUBDOMAIN}|g" backend/.env
+sed -i "s|DEPLOY_REGION=.*|DEPLOY_REGION=SG|" backend/.env
+
+# Add Stripe success/cancel URLs if not present
+if ! grep -q "STRIPE_SUCCESS_URL" backend/.env; then
+    echo "STRIPE_SUCCESS_URL=https://${DOMAIN}/pricing?status=success" >> backend/.env
+    echo "STRIPE_CANCEL_URL=https://${DOMAIN}/pricing?status=cancel" >> backend/.env
 fi
 
-# Set domain defaults if not already configured
-if grep -q "your-domain.com" backend/.env; then
-    sed -i "s|your-domain.com|${DOMAIN}|g" backend/.env
-fi
-if grep -q "GOOGLE_REDIRECT_URI=https://your-domain.com" backend/.env; then
-    sed -i "s|GOOGLE_REDIRECT_URI=https://your-domain.com/auth/google/callback|GOOGLE_REDIRECT_URI=https://${API_SUBDOMAIN}/v1/auth/google/callback|g" backend/.env
-fi
-if grep -q "STRIPE_SUCCESS_URL=https://your-domain.com" backend/.env; then
-    sed -i "s|STRIPE_SUCCESS_URL=https://your-domain.com/pricing?status=success|STRIPE_SUCCESS_URL=https://${DOMAIN}/pricing?status=success|g" backend/.env
-    sed -i "s|STRIPE_CANCEL_URL=https://your-domain.com/pricing?status=cancel|STRIPE_CANCEL_URL=https://${DOMAIN}/pricing?status=cancel|g" backend/.env
-fi
-
-# Set CORS origins
-if grep -q "CORS_ORIGINS=http://localhost" backend/.env; then
-    sed -i "s|CORS_ORIGINS=.*|CORS_ORIGINS=https://${DOMAIN},https://${TSPACE_SUBDOMAIN},https://${API_SUBDOMAIN}|g" backend/.env
-fi
+# Create chroma_models directory (Docker bind mount needs it)
+mkdir -p data/chroma_models
 
 # ============================
-# 6. Build and deploy
+# 6. Build and start Docker services
 # ============================
-log "Building and starting services..."
-cd docker
+log "Building and starting Docker services..."
+cd "${APP_DIR}/docker"
 
-docker compose down || true
-docker compose pull || true
+docker compose down 2>/dev/null || true
 docker compose up -d --build
 
 log "Waiting for backend to start..."
-sleep 10
-for i in {1..12}; do
+sleep 15
+for i in $(seq 1 12); do
     if curl -fsS http://localhost:5200/health >/dev/null 2>&1; then
         log "Backend is healthy."
         break
@@ -138,11 +129,12 @@ for i in {1..12}; do
 done
 
 # ============================
-# 7. Nginx final config + reload
+# 7. Nginx config (host-level, reverse proxy to Docker)
 # ============================
 log "Installing Nginx config..."
 cp "${APP_DIR}/docker/nginx.conf" /etc/nginx/nginx.conf
-nginx -t && systemctl restart nginx
+nginx -t
+systemctl restart nginx
 systemctl enable nginx
 
 # ============================
@@ -158,18 +150,26 @@ ufw --force enable
 # ============================
 # 9. Health check
 # ============================
-log "Running public health checks..."
-IP=$(curl -s -4 ifconfig.me || true)
+log "Running health checks..."
+IP=$(curl -s -4 ifconfig.me || echo "unknown")
 log "Server public IP: ${IP}"
-log "Apex domain: https://${DOMAIN}/health"
-log "API domain: https://${API_SUBDOMAIN}/health"
-log "T-space domain: https://${TSPACE_SUBDOMAIN}"
-
+log ""
 log "========================================"
 log "Deployment complete!"
+log ""
+log "Health check (local):"
+log "  curl http://localhost:5200/health"
+log ""
+log "Public URLs (after Cloudflare DNS propagates):"
+log "  https://${DOMAIN}/health"
+log "  https://${API_SUBDOMAIN}/health"
+log "  https://${TSPACE_SUBDOMAIN}"
+log ""
+log "Cloudflare SSL/TLS mode: set to 'Full' (not Strict)"
+log "  (upgrade to Full Strict later with Cloudflare Origin Certificate)"
+log ""
 log "Next steps:"
-log "1. Edit backend/.env with your real secrets (OpenAI, Google, Stripe)."
-log "2. Restart containers: cd /opt/looma-zervi/docker && docker compose restart"
-log "3. Verify DNS: ${DOMAIN} and *.${DOMAIN} should resolve to ${IP}"
-log "4. Configure Google OAuth + Stripe webhooks using URLs above."
+log "1. Edit ${APP_DIR}/backend/.env with real secrets (OpenAI, Google, Stripe)."
+log "2. Restart: cd ${APP_DIR}/docker && docker compose restart"
+log "3. Configure Google OAuth + Stripe webhooks."
 log "========================================"
