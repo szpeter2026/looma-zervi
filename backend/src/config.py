@@ -64,16 +64,16 @@ class Config:
     SUPPORTER_DAILY_LIMIT = int(os.getenv("SUPPORTER_DAILY_LIMIT", "999999"))
     PRO_DAILY_LIMIT = int(os.getenv("PRO_DAILY_LIMIT", "999999"))
 
-    # LLM Provider (multi-provider fallback: deepseek, ollama, openai)
-    LLM_PROVIDER_ORDER = os.getenv("LLM_PROVIDER_ORDER", "deepseek,ollama,openai")
+    # LLM Provider (overseas default: openai first, deepseek fallback, ollama local)
+    LLM_PROVIDER_ORDER = os.getenv("LLM_PROVIDER_ORDER", "openai,deepseek,ollama")
     OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "")
 
-    # Embedding provider
-    EMBED_PROVIDER_ORDER = os.getenv("EMBED_PROVIDER_ORDER", "ollama,deepseek")
+    # Embedding provider (overseas: openai embeddings first)
+    EMBED_PROVIDER_ORDER = os.getenv("EMBED_PROVIDER_ORDER", "openai,ollama,deepseek")
     EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text:latest")
     EMBED_DIM = int(os.getenv("EMBED_DIM", "768"))
 
@@ -101,6 +101,25 @@ class Config:
     WECHAT_SERIAL_NO = os.getenv("WECHAT_SERIAL_NO", "")
     WECHAT_PRIVATE_KEY_PATH = os.getenv("WECHAT_PRIVATE_KEY_PATH", "")
     WECHAT_NOTIFY_URL = os.getenv("WECHAT_NOTIFY_URL", "")
+
+    # Google OAuth (overseas — Sign in with Google)
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "")
+
+    # Stripe (overseas payment)
+    STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "USD")
+
+    # Rate limiting
+    RATE_LIMIT_GLOBAL = os.getenv("RATE_LIMIT_GLOBAL", "200/hour")
+    RATE_LIMIT_AUTH = os.getenv("RATE_LIMIT_AUTH", "10/minute")
+    RATE_LIMIT_PAYMENT = os.getenv("RATE_LIMIT_PAYMENT", "20/minute")
+    RATE_LIMIT_STORAGE_URI = os.getenv("RATE_LIMIT_STORAGE_URI", "memory://")
+
+    # Deployment region (overseas: US | EU | SG)
+    DEPLOY_REGION = os.getenv("DEPLOY_REGION", "US")
 
     @property
     def is_production(self):
@@ -148,13 +167,13 @@ def _refresh_config():
     Config.FREE_DAILY_LIMIT = int(os.getenv("FREE_DAILY_LIMIT", "30"))
     Config.SUPPORTER_DAILY_LIMIT = int(os.getenv("SUPPORTER_DAILY_LIMIT", "999999"))
     Config.PRO_DAILY_LIMIT = int(os.getenv("PRO_DAILY_LIMIT", "999999"))
-    Config.LLM_PROVIDER_ORDER = os.getenv("LLM_PROVIDER_ORDER", "deepseek,ollama,openai")
+    Config.LLM_PROVIDER_ORDER = os.getenv("LLM_PROVIDER_ORDER", "openai,deepseek,ollama")
     Config.OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
     Config.OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "")
     Config.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     Config.OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "")
     Config.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "")
-    Config.EMBED_PROVIDER_ORDER = os.getenv("EMBED_PROVIDER_ORDER", "ollama,deepseek")
+    Config.EMBED_PROVIDER_ORDER = os.getenv("EMBED_PROVIDER_ORDER", "openai,ollama,deepseek")
     Config.EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text:latest")
     Config.EMBED_DIM = int(os.getenv("EMBED_DIM", "768"))
     Config.API_REQUEST_TIMEOUT = float(os.getenv("API_REQUEST_TIMEOUT", "90.0"))
@@ -172,3 +191,22 @@ def _refresh_config():
     Config.WECHAT_SERIAL_NO = os.getenv("WECHAT_SERIAL_NO", "")
     Config.WECHAT_PRIVATE_KEY_PATH = os.getenv("WECHAT_PRIVATE_KEY_PATH", "")
     Config.WECHAT_NOTIFY_URL = os.getenv("WECHAT_NOTIFY_URL", "")
+
+    # Google OAuth (overseas)
+    Config.GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+    Config.GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    Config.GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "")
+
+    # Stripe (overseas payment)
+    Config.STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+    Config.STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    Config.STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "USD")
+
+    # Rate limiting
+    Config.RATE_LIMIT_GLOBAL = os.getenv("RATE_LIMIT_GLOBAL", "200/hour")
+    Config.RATE_LIMIT_AUTH = os.getenv("RATE_LIMIT_AUTH", "10/minute")
+    Config.RATE_LIMIT_PAYMENT = os.getenv("RATE_LIMIT_PAYMENT", "20/minute")
+    Config.RATE_LIMIT_STORAGE_URI = os.getenv("RATE_LIMIT_STORAGE_URI", "memory://")
+
+    # Deployment region
+    Config.DEPLOY_REGION = os.getenv("DEPLOY_REGION", "US")

@@ -15,6 +15,15 @@ services:
       - "5200:5200"
     environment:
       - FLASK_PORT=5200
+      # Overseas: Google OAuth + Stripe + rate limiting
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - STRIPE_CURRENCY=${STRIPE_CURRENCY:-USD}
+      - RATE_LIMIT_STORAGE_URI=${RATE_LIMIT_STORAGE_URI:-memory://}
+      - DEPLOY_REGION=${DEPLOY_REGION:-US}
     env_file:
       - ../backend/.env
     volumes:
@@ -24,6 +33,8 @@ services:
       - chroma-data:/app/chroma_data
       - poetry-data:/app/poetry_data
       - ../data/chroma_models:/root/.cache/chroma/onnx_models
+    depends_on:
+      - redis
     networks:
       - looma-net
 
@@ -44,10 +55,26 @@ services:
     networks:
       - looma-net
 
+  # ============================================
+  # Redis (overseas: rate limiting + cache)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: looma-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - looma-net
+
 volumes:
   backend-data:
   chroma-data:
   poetry-data:
+  redis-data:
 
 networks:
   looma-net:

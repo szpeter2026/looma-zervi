@@ -6,8 +6,10 @@ Endpoints:
   POST /v1/auth/register     - Web email/password registration
   POST /v1/auth/login        - Web email/password login
   POST /v1/auth/wechat       - WeChat miniprogram login (openid -> JWT)
+  POST /v1/auth/google       - Google OAuth login (ID Token -> JWT) [overseas]
   POST /v1/auth/bind         - Bind wechat openid to existing account
   GET  /v1/auth/profile      - Get current user profile (requires auth)
+  GET  /v1/auth/identities   - List linked identities (requires auth)
   POST /v1/auth/refresh      - Refresh JWT token (requires auth)
   POST /v1/auth/bridge       - [OPTIONAL] Supabase JWT -> looma JWT (MVP: 501)
 """
@@ -17,6 +19,7 @@ from flask import Blueprint, request, jsonify, current_app, g
 from src.api.auth.jwt_handler import sign_token, verify_token, get_current_user_id, sign_token_for_user
 from src.api.auth.decorators import require_auth
 from src.api.auth.wechat_auth import code2session
+from src.api.auth.google_auth import verify_id_token, exchange_auth_code, GoogleUserInfo
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -151,6 +154,73 @@ def wechat_login():
 
 
 # ============================================
+# Google OAuth login (overseas)
+# ============================================
+@auth_bp.route("/google", methods=["POST"])
+def google_login():
+    """Google OAuth login flow.
+
+    Two modes:
+    1. ID Token mode (recommended): client sends Google ID Token
+       Body: { "id_token": "eyJhbG..." }
+    2. Auth code mode (server-side OAuth): client sends authorization code
+       Body: { "code": "4/0AXX...", "redirect_uri": "https://..." }
+
+    Backend verifies → extracts sub (Google user ID) + email + name
+    → finds or creates user via user_identities table → signs looma JWT
+    """
+    data = request.get_json() or {}
+    id_token_str = data.get("id_token", "")
+    code = data.get("code", "")
+
+    if not id_token_str and not code:
+        return jsonify(error="bad_request", message="id_token or code required"), 400
+
+    try:
+        if id_token_str:
+            google_user = verify_id_token(id_token_str)
+        else:
+            google_user = exchange_auth_code(code)
+    except ValueError as e:
+        return jsonify(error="google_error", message=str(e)), 400
+
+    db = _get_db()
+    user, created = db.get_or_create_user_by_identity(
+        provider="google",
+        provider_uid=google_user.sub,
+        email=google_user.email,
+        name=google_user.name,
+        metadata_json=google_user.to_metadata(),
+    )
+
+    if not user:
+        return jsonify(error="server_error", message="Failed to create/find user"), 500
+
+    current_app.logger.info(
+        f"[google_auth] Login {'(new)' if created else '(existing)'}: "
+        f"user={user['id']} google_sub={google_user.sub} email={google_user.email}"
+    )
+
+    token = sign_token(user["id"], extra_claims={
+        "tier": user.get("tier", "free"),
+        "email": user.get("email", ""),
+    })
+    return jsonify(
+        access_token=token,
+        token_type="bearer",
+        expires_in=current_app.config["JWT_EXPIRY_HOURS"] * 3600,
+        user={
+            "id": user["id"],
+            "email": user.get("email"),
+            "name": user.get("name", ""),
+            "tier": user.get("tier", "free"),
+            "role": user.get("role", "user"),
+            "is_new_user": created,
+        }
+    )
+
+
+# ============================================
 # Cross-platform account binding
 # ============================================
 @auth_bp.route("/bind", methods=["POST"])
@@ -203,6 +273,21 @@ def get_profile():
         role=user.get("role", "user"),
         is_early_adopter=bool(user.get("is_early_adopter", 0)),
         created_at=user.get("created_at"),
+    )
+
+
+# ============================================
+# List linked identities (overseas)
+# ============================================
+@auth_bp.route("/identities", methods=["GET"])
+@require_auth
+def list_identities():
+    """List all third-party identities linked to the current user."""
+    db = _get_db()
+    identities = db.get_user_identities(g.user_id)
+    return jsonify(
+        user_id=g.user_id,
+        identities=identities,
     )
 
 

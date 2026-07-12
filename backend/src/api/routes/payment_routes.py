@@ -1,17 +1,19 @@
 """
-Payment routes blueprint — Stub provider for internal testing + WeChat Pay skeleton.
+Payment routes blueprint — Stub + WeChat Pay (CN) + Stripe (overseas).
 
 Endpoints:
-  GET  /v1/payment/plans         - List available pricing plans (region-aware)
-  GET  /v1/payment/status        - Current user's subscription status
-  POST /v1/payment/upgrade       - Upgrade tier (stub: blocked unless PAYMENT_STUB_MODE=true)
-  POST /v1/payment/wechat/order  - Create WeChat Pay order → prepay_id / qr_code
-  POST /v1/payment/wechat/notify - WeChat Pay callback (no auth, signature verified)
+  GET  /v1/payment/plans             - List available pricing plans (region-aware)
+  GET  /v1/payment/status            - Current user's subscription status
+  POST /v1/payment/upgrade           - Upgrade tier (stub: blocked unless PAYMENT_STUB_MODE=true)
+  POST /v1/payment/wechat/order      - Create WeChat Pay order → prepay_id / qr_code [CN]
+  POST /v1/payment/wechat/notify     - WeChat Pay callback (no auth, signature verified) [CN]
+  POST /v1/payment/stripe/checkout   - Create Stripe Checkout Session → redirect URL [overseas]
+  POST /v1/payment/stripe/webhook    - Stripe webhook (no auth, signature verified) [overseas]
 
 Pricing contract: backend/contracts/payment.v1.json
   CN supporter: ¥9.9/mo · US supporter: $1.99/mo
 
-For production, set PAYMENT_STUB_MODE=false and configure WeChat Pay credentials.
+For production, set PAYMENT_STUB_MODE=false and configure payment credentials.
 """
 from flask import Blueprint, jsonify, g, request, current_app
 
@@ -35,6 +37,12 @@ from src.payment.wechat_pay import (
     WECHAT_TIMESTAMP_HEADER,
     WECHAT_NONCE_HEADER,
 )
+from src.payment.stripe_pay import (
+    create_checkout_session as stripe_create_checkout,
+    verify_webhook_signature as stripe_verify_webhook,
+    parse_webhook_event as stripe_parse_webhook,
+    generate_out_trade_no as stripe_generate_order_no,
+)
 
 payment_bp = Blueprint("payment", __name__)
 
@@ -45,6 +53,12 @@ TIER_ORDER = {"free": 0, "supporter": 1, "pro": 2, "enterprise": 3}
 TIER_PRICE_FEN = {
     "supporter": 990,   # ¥9.90
     "pro": 2990,         # ¥29.90
+}
+
+# USD 金额 → cents（Stripe 以 cents 为单位）
+TIER_PRICE_USD_CENTS = {
+    "supporter": 199,    # $1.99
+    "pro": 1999,         # $19.99
 }
 
 
@@ -402,4 +416,197 @@ def wechat_pay_notify():
 
     resp, code = build_notify_response(True)
     return resp, code, {"Content-Type": "application/json"}
+
+
+# ============================================================
+# Stripe routes (overseas)
+# ============================================================
+
+@payment_bp.route("/payment/stripe/checkout", methods=["POST"])
+@require_auth
+def create_stripe_checkout():
+    """Create a Stripe Checkout Session for overseas payment.
+
+    Client redirects user to the returned session_url for Stripe-hosted checkout.
+    Supports card, Apple Pay, Google Pay.
+
+    Request body:
+        { "tier": "supporter" | "pro", "mode": "payment" | "subscription" }
+
+    Response:
+        { "session_id": "cs_test_xxx", "session_url": "https://checkout.stripe.com/...",
+          "out_trade_no": "LOOMA..." }
+    """
+    if _is_stub_mode():
+        return jsonify(
+            error="stub_mode",
+            message="Payment stub mode is enabled. Use POST /v1/payment/upgrade for instant tier change, or set PAYMENT_STUB_MODE=false to enable real payments.",
+        ), 400
+
+    data = request.get_json(silent=True) or {}
+    new_tier = data.get("tier")
+    mode = data.get("mode", "payment")  # payment | subscription
+
+    if new_tier not in UPGRADABLE_TIERS:
+        return jsonify(error="bad_request", message="Invalid tier. Choose: supporter, pro"), 400
+
+    current_tier = g.get("user_tier", "free")
+    if TIER_ORDER.get(new_tier, 0) <= TIER_ORDER.get(current_tier, 0):
+        return jsonify(
+            error="bad_request",
+            message=f"Cannot downgrade from {current_tier} to {new_tier}",
+        ), 400
+
+    if new_tier not in TIER_PRICE_USD_CENTS:
+        return jsonify(error="bad_request", message=f"No USD price configured for tier: {new_tier}"), 400
+
+    stripe_key = current_app.config.get("STRIPE_SECRET_KEY", "")
+    if not stripe_key:
+        return jsonify(
+            error="payment_not_configured",
+            message="Stripe not configured. Set STRIPE_SECRET_KEY env var.",
+        ), 503
+
+    region = resolve_region(
+        request.args.get("region"),
+        request.headers.get("Accept-Language"),
+    )
+    plan = get_plan_for_tier(new_tier, region)
+    amount_cents = TIER_PRICE_USD_CENTS[new_tier]
+    out_trade_no = stripe_generate_order_no()
+
+    # Get user email for Stripe Checkout pre-fill
+    db = current_app._db
+    user = db.get_user_by_id(g.user_id)
+    customer_email = user.get("email", "") if user else ""
+
+    # Build success/cancel URLs from request origin or config
+    origin = request.headers.get("Origin", "") or request.host_url.rstrip("/")
+    success_url = data.get("success_url", f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}")
+    cancel_url = data.get("cancel_url", f"{origin}/payment/cancel")
+
+    try:
+        result = stripe_create_checkout(
+            secret_key=stripe_key,
+            out_trade_no=out_trade_no,
+            tier=new_tier,
+            amount_cents=amount_cents,
+            currency=current_app.config.get("STRIPE_CURRENCY", "USD"),
+            plan_name=f"Looma {plan['name']}",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            customer_email=customer_email,
+            mode=mode,
+        )
+    except ValueError as e:
+        current_app.logger.error(f"[stripe] Checkout creation failed: {e}")
+        return jsonify(error="stripe_error", message=str(e)), 502
+
+    # Write order to DB
+    order = db.create_order(
+        user_id=g.user_id,
+        plan_id=plan["plan_id"],
+        tier=new_tier,
+        amount=plan["price_monthly"],
+        currency="USD",
+        out_trade_no=out_trade_no,
+        metadata_json={
+            "provider": "stripe",
+            "stripe_session_id": result.session_id,
+            "mode": mode,
+            "region": region,
+        },
+    )
+
+    return jsonify(
+        order_id=order["id"],
+        session_id=result.session_id,
+        session_url=result.session_url,
+        out_trade_no=out_trade_no,
+        amount=plan["price_monthly"],
+        currency="USD",
+        tier=new_tier,
+    ), 201
+
+
+@payment_bp.route("/payment/stripe/webhook", methods=["POST"])
+def stripe_webhook():
+    """Stripe webhook endpoint.
+
+    Receives events from Stripe (checkout.session.completed, invoice.paid, etc.)
+    Verifies signature, processes payment, upgrades user tier.
+
+    This endpoint does NOT require auth — it's called by Stripe servers.
+    """
+    payload = request.get_data()
+    sig_header = request.headers.get("Stripe-Signature", "")
+    webhook_secret = current_app.config.get("STRIPE_WEBHOOK_SECRET", "")
+
+    # Verify webhook signature
+    try:
+        stripe_verify_webhook(payload, sig_header, webhook_secret)
+    except ValueError as e:
+        current_app.logger.warning(f"[stripe] Webhook signature verification FAILED: {e}")
+        return jsonify(error="invalid_signature"), 400
+
+    # Parse event
+    result = stripe_parse_webhook(payload)
+    if not result.success:
+        current_app.logger.warning(f"[stripe] Webhook parse error: {result.error}")
+        return jsonify(error="parse_error"), 400
+
+    db = current_app._db
+
+    # Handle different event types
+    if result.event_type == "checkout.session.completed":
+        # One-time payment completed
+        if not result.out_trade_no:
+            current_app.logger.warning("[stripe] Webhook: no out_trade_no in event")
+            return jsonify(status="ok"), 200
+
+        order = db.get_order_by_out_trade_no(result.out_trade_no)
+        if not order:
+            current_app.logger.error(f"[stripe] Order not found: {result.out_trade_no}")
+            return jsonify(status="ok"), 200
+
+        # Idempotency: skip if already paid
+        if order["status"] == "paid":
+            return jsonify(status="ok"), 200
+
+        # Mark paid + upgrade tier + create subscription
+        paid_order = db.mark_order_paid(result.out_trade_no, result.customer_id)
+        if not paid_order:
+            return jsonify(status="ok"), 200
+
+        user_id = paid_order["user_id"]
+        tier = paid_order["tier"]
+        plan_id = paid_order["plan_id"]
+
+        db.update_user_tier(user_id, tier)
+
+        from datetime import datetime, timedelta
+        expires = (datetime.now() + timedelta(days=30)).isoformat()
+        db.upsert_subscription(user_id, tier, plan_id, expires, auto_renew=False)
+
+        current_app.logger.info(
+            f"[stripe] Payment confirmed: user={user_id} tier={tier} "
+            f"order={result.out_trade_no} session={result.customer_id}"
+        )
+
+    elif result.event_type == "invoice.paid":
+        # Subscription recurring payment
+        current_app.logger.info(
+            f"[stripe] Subscription renewed: customer={result.customer_id} "
+            f"sub={result.subscription_id}"
+        )
+        # TODO: extend subscription expiry by 1 month
+
+    elif result.event_type == "customer.subscription.deleted":
+        # Subscription cancelled — downgrade to free
+        current_app.logger.info(
+            f"[stripe] Subscription cancelled: customer={result.customer_id}"
+        )
+        # TODO: find user by stripe customer_id, downgrade to free
+
+    return jsonify(status="ok"), 200
 

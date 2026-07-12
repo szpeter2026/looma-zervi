@@ -49,6 +49,26 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_wechat_openid ON users(wechat_openid);
 
 -- ============================================
+-- Core: user_identities (multi-platform identity linking)
+-- Supports Google, Apple, WeChat, email+password → one user
+-- ============================================
+CREATE TABLE IF NOT EXISTS user_identities (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    provider        TEXT NOT NULL,              -- google | apple | wechat | email
+    provider_uid    TEXT NOT NULL,              -- platform-specific user ID (sub / openid / email)
+    provider_email  TEXT,                       -- email from provider (if available)
+    provider_name   TEXT,                       -- display name from provider
+    metadata_json   TEXT DEFAULT '{}',          -- extra provider data (avatar, locale, etc.)
+    created_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(provider, provider_uid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_identities_user ON user_identities(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_identities_provider ON user_identities(provider, provider_uid);
+
+-- ============================================
 -- Game: game_profiles (Jason owns)
 -- ============================================
 CREATE TABLE IF NOT EXISTS game_profiles (
@@ -738,6 +758,86 @@ class DatabaseManager:
                 "UPDATE users SET wechat_openid = ?, updated_at = datetime('now') WHERE id = ?",
                 (wechat_openid, user_id)
             )
+
+    # ============================================
+    # Multi-identity management (overseas: Google/Apple/email)
+    # ============================================
+    def get_user_by_identity(self, provider: str, provider_uid: str):
+        """Find a user by a third-party identity (google sub, apple sub, wechat openid)."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT u.* FROM users u
+                   JOIN user_identities ui ON u.id = ui.user_id
+                   WHERE ui.provider = ? AND ui.provider_uid = ?""",
+                (provider, provider_uid)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def link_identity(self, user_id: str, provider: str, provider_uid: str,
+                      provider_email: str = "", provider_name: str = "",
+                      metadata_json: str = "{}"):
+        """Link a third-party identity to an existing user.
+        If the identity is already linked to a different user, raises ValueError."""
+        with self.get_conn() as conn:
+            existing = conn.execute(
+                "SELECT user_id FROM user_identities WHERE provider = ? AND provider_uid = ?",
+                (provider, provider_uid)
+            ).fetchone()
+            if existing and existing["user_id"] != user_id:
+                raise ValueError(f"Identity {provider}:{provider_uid} is already linked to another user")
+            if existing:
+                return  # already linked to this user, idempotent
+            conn.execute(
+                """INSERT INTO user_identities (id, user_id, provider, provider_uid,
+                   provider_email, provider_name, metadata_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (str(uuid.uuid4()), user_id, provider, provider_uid,
+                 provider_email, provider_name, metadata_json)
+            )
+
+    def get_user_identities(self, user_id: str):
+        """List all identities linked to a user."""
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                "SELECT provider, provider_uid, provider_email, provider_name FROM user_identities WHERE user_id = ?",
+                (user_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_or_create_user_by_identity(self, provider: str, provider_uid: str,
+                                       email: str = "", name: str = "",
+                                       metadata_json: str = "{}"):
+        """Find or create a user by third-party identity.
+        If the identity exists, return the linked user.
+        If not, create a new user + link the identity, return the new user.
+        If email matches an existing user, link the identity to that user instead."""
+        # 1. Check if identity already linked
+        user = self.get_user_by_identity(provider, provider_uid)
+        if user:
+            return user, False  # existing user, not newly created
+
+        # 2. Check if email matches an existing user (account merge)
+        if email:
+            user = self.get_user_by_email(email)
+            if user:
+                self.link_identity(user["id"], provider, provider_uid, email, name, metadata_json)
+                return user, False
+
+        # 3. Create new user + link identity
+        user_id = str(uuid.uuid4())
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO users (id, email, name) VALUES (?, ?, ?)""",
+                (user_id, email or None, name)
+            )
+            conn.execute(
+                """INSERT INTO user_identities (id, user_id, provider, provider_uid,
+                   provider_email, provider_name, metadata_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (str(uuid.uuid4()), user_id, provider, provider_uid,
+                 email, name, metadata_json)
+            )
+        return self.get_user_by_id(user_id), True  # newly created
 
     def update_user_tier(self, user_id: str, tier: str):
         with self.get_conn() as conn:

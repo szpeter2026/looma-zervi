@@ -16,6 +16,10 @@ def create_app(env="development"):
     # CORS
     CORS(app, origins=app.config["CORS_ORIGINS"], supports_credentials=True)
 
+    # Rate limiting (overseas: protect against abuse)
+    from src.api.middleware.rate_limiter import init_limiter
+    limiter = init_limiter(app)
+
     # --- Register blueprints ---
     from src.api.routes.auth_routes import auth_bp
     from src.api.routes.game_routes import game_bp
@@ -70,8 +74,10 @@ def create_app(env="development"):
                     "POST /v1/auth/register",
                     "POST /v1/auth/login",
                     "POST /v1/auth/wechat",
+                    "POST /v1/auth/google",
                     "POST /v1/auth/bind",
                     "GET  /v1/auth/profile",
+                    "GET  /v1/auth/identities",
                     "POST /v1/auth/refresh",
                     "POST /v1/auth/bridge",
                 ],
@@ -114,6 +120,10 @@ def create_app(env="development"):
                     "GET  /v1/payment/plans",
                     "GET  /v1/payment/status",
                     "POST /v1/payment/upgrade",
+                    "POST /v1/payment/wechat/order",
+                    "POST /v1/payment/wechat/notify",
+                    "POST /v1/payment/stripe/checkout",
+                    "POST /v1/payment/stripe/webhook",
                 ],
                 "credit": [
                     "POST /v1/credit/analyze",
