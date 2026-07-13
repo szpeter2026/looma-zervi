@@ -249,6 +249,14 @@ def create_wechat_order():
     if new_tier not in TIER_PRICE_FEN:
         return jsonify(error="bad_request", message=f"No price configured for tier: {new_tier}"), 400
 
+    # JSAPI 必须有关联的 openid（已从 DB 自动填充，若仍为空则报错）
+    # 此检查须在凭证检查之前，否则用户会收到不准确的 503 错误
+    if trade_type == "JSAPI" and not openid:
+        return jsonify(
+            error="openid_required",
+            message="JSAPI payment requires a WeChat openid. Please ensure the user has logged in via WeChat miniprogram.",
+        ), 400
+
     region = resolve_region(
         request.args.get("region"),
         request.headers.get("Accept-Language"),
@@ -272,13 +280,6 @@ def create_wechat_order():
     amount_fen = TIER_PRICE_FEN[new_tier]
     out_trade_no = generate_out_trade_no()
     description = f"Looma {plan['name']}"
-
-    # JSAPI 必须有关联的 openid（已从 DB 自动填充，若仍为空则报错）
-    if trade_type == "JSAPI" and not openid:
-        return jsonify(
-            error="openid_required",
-            message="JSAPI payment requires a WeChat openid. Please ensure the user has logged in via WeChat miniprogram.",
-        ), 400
 
     if trade_type == "JSAPI" and openid:
         from src.payment.wechat_pay import create_jsapi_order
