@@ -87,6 +87,8 @@ export const API_ROUTES = {
   PAYMENT_PLANS: "/v1/payment/plans",
   PAYMENT_STATUS: "/v1/payment/status",
   PAYMENT_UPGRADE: "/v1/payment/upgrade",
+  PAYMENT_PROVIDERS: "/v1/payment/providers",
+  PAYMENT_CHECKOUT: "/v1/payment/checkout",
   PAYMENT_WECHAT_ORDER: "/v1/payment/wechat/order",
   PAYMENT_WECHAT_NOTIFY: "/v1/payment/wechat/notify",
 

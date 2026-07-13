@@ -111,26 +111,135 @@
     return "$" + plan.price_monthly;
   }
 
-  function waitlistMailto(planName) {
+  var PROVIDER_LABELS = {
+    stripe: "Stripe (Card, Apple Pay, Google Pay)",
+    paypal: "PayPal",
+    airwallex: "Airwallex",
+  };
+
+  var PROVIDER_ORDER = ["stripe", "paypal", "airwallex"];
+
+  function renderProviderSelector(planTier, planName) {
+    if (planTier === "free") return "";
+
+    var options = PROVIDER_ORDER
+      .filter(function (p) {
+        // If API has returned available providers, show only those
+        if (_availableProviders && _availableProviders.length > 0) {
+          return _availableProviders.indexOf(p) !== -1;
+        }
+        return true; // fallback: show all
+      })
+      .map(function (p) {
+        return (
+          '<option value="' +
+          p +
+          '">' +
+          (PROVIDER_LABELS[p] || p) +
+          "</option>"
+        );
+      })
+      .join("");
+
     return (
-      "mailto:" +
-      (cfg.supportEmail || "zervi@genz.ltd") +
-      "?subject=" +
-      encodeURIComponent("PlanetX waitlist — " + planName)
+      '<div class="provider-select" style="margin: 0.5rem 0;">' +
+      '<label for="provider-' +
+      planTier +
+      '" style="font-size:0.85rem;color:var(--text-secondary);">Payment method</label>' +
+      '<select id="provider-' +
+      planTier +
+      '" class="provider-dropdown" style="width:100%;padding:0.4rem;border-radius:6px;border:1px solid var(--border);margin-top:0.25rem;">' +
+      options +
+      "</select>" +
+      "</div>"
     );
+  }
+
+  function handleCheckout(provider, tier) {
+    var apiBase = cfg.apiBase || "https://api.genz.ltd";
+
+    // Show loading state
+    var btn = document.getElementById("btn-" + tier);
+    if (btn) {
+      btn.textContent = "Redirecting...";
+      btn.disabled = true;
+    }
+
+    fetch(apiBase + "/v1/payment/checkout", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // Auth token would be needed in production; for now show API-only flow
+      },
+      body: JSON.stringify({
+        provider: provider,
+        tier: tier,
+        mode: "payment",
+        success_url:
+          window.location.origin +
+          "/pricing?status=success&session_id={CHECKOUT_SESSION_ID}",
+        cancel_url: window.location.origin + "/pricing?status=cancel",
+      }),
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().then(function (err) {
+            throw new Error(err.message || "Checkout failed");
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data.checkout_url) {
+          window.location.href = data.checkout_url;
+        } else {
+          throw new Error("No checkout URL returned");
+        }
+      })
+      .catch(function (err) {
+        if (btn) {
+          btn.textContent = "Try again";
+          btn.disabled = false;
+        }
+        alert(
+          "Payment not available: " +
+            (err.message || "Please try again later") +
+            "\n\nContact " +
+            (cfg.supportEmail || "zervi@genz.ltd")
+        );
+      });
   }
 
   function renderPricingCard(plan, popular) {
     var card = document.createElement("article");
     card.className = "card" + (popular ? " popular" : "");
-    var cta =
-      plan.tier === "free"
-        ? '<a class="btn btn-secondary" href="' +
-          waitlistMailto("Free") +
-          '">Get started free</a>'
-        : '<a class="btn btn-primary" href="' +
-          waitlistMailto(plan.name) +
-          '">Join waitlist</a>';
+
+    var providerSelector = renderProviderSelector(plan.tier, plan.name);
+
+    var cta;
+    if (plan.tier === "free") {
+      cta =
+        '<a class="btn btn-secondary" href="' +
+        "mailto:" +
+        (cfg.supportEmail || "zervi@genz.ltd") +
+        "?subject=" +
+        encodeURIComponent("PlanetX — Free") +
+        '">Get started free</a>';
+    } else {
+      cta =
+        '<div style="display:flex;gap:0.5rem;margin-top:0.5rem;">' +
+        '<button id="btn-' +
+        plan.tier +
+        '" class="btn btn-primary" style="flex:1;" onclick="' +
+        "var sel=document.getElementById('provider-" +
+        plan.tier +
+        "');" +
+        "window.__genzCheckout(sel.value,'" +
+        plan.tier +
+        "')" +
+        '">Subscribe</button>' +
+        "</div>";
+    }
 
     card.innerHTML =
       (popular ? '<div class="badge">Most popular</div>' : "") +
@@ -140,17 +249,23 @@
       '<div class="price">' +
       formatPrice(plan) +
       '<span> / month</span></div>' +
-      "<p>Billed monthly in USD. Digital SaaS subscription.</p>" +
+      "<p>Billed monthly in USD. Cancel anytime.</p>" +
       "<ul>" +
-      plan.features.map(function (f) {
-        return "<li>" + f + "</li>";
-      }).join("") +
+      plan.features
+        .map(function (f) {
+          return "<li>" + f + "</li>";
+        })
+        .join("") +
       "</ul>" +
-      '<div style="margin-top:1rem;">' +
-      cta +
-      "</div>";
+      providerSelector +
+      cta;
     return card;
   }
+
+  // Expose checkout handler globally for inline onclick
+  window.__genzCheckout = handleCheckout;
+
+  var _availableProviders = [];
 
   function loadPricing() {
     var grid = qs("#pricing-grid");
@@ -163,29 +278,55 @@
         grid.appendChild(renderPricingCard(plan, plan.tier === "pro"));
       });
       if (status) {
+        var provMsg = "";
+        if (_availableProviders.length > 0) {
+          provMsg =
+            " | Providers: " +
+            _availableProviders
+              .map(function (p) {
+                return PROVIDER_LABELS[p] || p;
+              })
+              .join(", ");
+        }
         status.textContent =
           source === "api"
-            ? "Live pricing loaded from Looma API (region=US)."
+            ? "Live pricing loaded from Looma API (region=US)." + provMsg
             : "Pricing shown from contract fallback (API unavailable).";
         status.className = "pricing-status " + (source === "api" ? "ok" : "");
       }
     }
 
     var apiBase = cfg.apiBase || "https://api.genz.ltd";
-    fetch(apiBase + "/v1/payment/plans?region=US")
+
+    // Load available providers first, then pricing
+    fetch(apiBase + "/v1/payment/providers?region=US")
       .then(function (res) {
-        if (!res.ok) throw new Error("plans unavailable");
-        return res.json();
+        if (res.ok) return res.json();
+        throw new Error("providers unavailable");
       })
       .then(function (data) {
-        var plans = (data.plans || []).filter(function (p) {
-          return p.tier !== "enterprise";
-        });
-        if (!plans.length) throw new Error("empty plans");
-        paint(plans, "api");
+        _availableProviders = data.providers || [];
       })
       .catch(function () {
-        paint(FALLBACK_PLANS, "fallback");
+        _availableProviders = []; // fallback: show all
+      })
+      .finally(function () {
+        // Load pricing plans (always, regardless of providers result)
+        fetch(apiBase + "/v1/payment/plans?region=US")
+          .then(function (res) {
+            if (!res.ok) throw new Error("plans unavailable");
+            return res.json();
+          })
+          .then(function (data) {
+            var plans = (data.plans || []).filter(function (p) {
+              return p.tier !== "enterprise";
+            });
+            if (!plans.length) throw new Error("empty plans");
+            paint(plans, "api");
+          })
+          .catch(function () {
+            paint(FALLBACK_PLANS, "fallback");
+          });
       });
   }
 

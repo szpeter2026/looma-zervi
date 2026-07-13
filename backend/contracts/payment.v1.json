@@ -17,6 +17,7 @@
     "US": {
       "currency": "USD",
       "payment_provider": "stripe",
+      "payment_providers": ["stripe", "paypal", "airwallex"],
       "default": false,
       "label": "United States"
     }

@@ -99,10 +99,22 @@ sed -i "s|GOOGLE_REDIRECT_URI=.*|GOOGLE_REDIRECT_URI=https://${API_SUBDOMAIN}/v1
 sed -i "s|CORS_ORIGINS=.*|CORS_ORIGINS=https://${DOMAIN},https://www.${DOMAIN},https://${TSPACE_SUBDOMAIN},https://${API_SUBDOMAIN}|g" backend/.env
 sed -i "s|DEPLOY_REGION=.*|DEPLOY_REGION=SG|" backend/.env
 
-# Add Stripe success/cancel URLs if not present
+# Add payment success/cancel URLs if not present
 if ! grep -q "STRIPE_SUCCESS_URL" backend/.env; then
-    echo "STRIPE_SUCCESS_URL=https://${DOMAIN}/pricing?status=success" >> backend/.env
-    echo "STRIPE_CANCEL_URL=https://${DOMAIN}/pricing?status=cancel" >> backend/.env
+    {
+        echo ""
+        echo "# Payment redirect URLs (auto-set by deploy script)"
+        echo "STRIPE_SUCCESS_URL=https://${DOMAIN}/pricing?status=success"
+        echo "STRIPE_CANCEL_URL=https://${DOMAIN}/pricing?status=cancel"
+    } >> backend/.env
+fi
+
+# Add PayPal / Airwallex webhook URL hints if not present
+if ! grep -q "PAYPAL_WEBHOOK_URL" backend/.env; then
+    {
+        echo "PAYPAL_WEBHOOK_URL=https://${API_SUBDOMAIN}/v1/payment/webhook/paypal"
+        echo "AIRWALLEX_WEBHOOK_URL=https://${API_SUBDOMAIN}/v1/payment/webhook/airwallex"
+    } >> backend/.env
 fi
 
 # Create chroma_models directory (Docker bind mount needs it)
@@ -129,7 +141,7 @@ for i in $(seq 1 12); do
 done
 
 # ============================
-# 7. Deploy genz-web static site (genz.ltd marketing / Stripe review)
+# 7. Deploy genz-web static site (genz.ltd marketing + payment provider selection)
 # ============================
 log "Deploying genz-web to /var/www/genz-web..."
 GENZ_WEB_SRC="${APP_DIR}/frontend/packages/genz-web"
@@ -185,5 +197,5 @@ log ""
 log "Next steps:"
 log "1. Edit ${APP_DIR}/backend/.env with real secrets (OpenAI, Google, Stripe)."
 log "2. Restart: cd ${APP_DIR}/docker && docker compose restart"
-log "3. Configure Google OAuth + Stripe webhooks."
+log "3. Configure Google OAuth + payment provider webhooks (Stripe/PayPal/Airwallex)."
 log "========================================"

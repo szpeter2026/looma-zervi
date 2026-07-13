@@ -1,14 +1,17 @@
 """
-Payment routes blueprint — Stub + WeChat Pay (CN) + Stripe (overseas).
+Payment routes blueprint — Stub + WeChat Pay (CN) + Multi-provider overseas.
 
 Endpoints:
   GET  /v1/payment/plans             - List available pricing plans (region-aware)
   GET  /v1/payment/status            - Current user's subscription status
+  GET  /v1/payment/providers         - List configured payment providers
   POST /v1/payment/upgrade           - Upgrade tier (stub: blocked unless PAYMENT_STUB_MODE=true)
   POST /v1/payment/wechat/order      - Create WeChat Pay order → prepay_id / qr_code [CN]
   POST /v1/payment/wechat/notify     - WeChat Pay callback (no auth, signature verified) [CN]
-  POST /v1/payment/stripe/checkout   - Create Stripe Checkout Session → redirect URL [overseas]
-  POST /v1/payment/stripe/webhook    - Stripe webhook (no auth, signature verified) [overseas]
+  POST /v1/payment/checkout          - Unified checkout → provider redirect URL [overseas]
+  POST /v1/payment/webhook/<provider>- Unified webhook receiver (no auth, signature verified) [overseas]
+  POST /v1/payment/stripe/checkout   - [DEPRECATED] Alias for unified checkout (backward compat)
+  POST /v1/payment/stripe/webhook    - [DEPRECATED] Alias for unified webhook (backward compat)
 
 Pricing contract: backend/contracts/payment.v1.json
   CN supporter: ¥9.9/mo · US supporter: $1.99/mo
@@ -37,12 +40,16 @@ from src.payment.wechat_pay import (
     WECHAT_TIMESTAMP_HEADER,
     WECHAT_NONCE_HEADER,
 )
+# Legacy Stripe imports (backward compat)
 from src.payment.stripe_pay import (
     create_checkout_session as stripe_create_checkout,
     verify_webhook_signature as stripe_verify_webhook,
     parse_webhook_event as stripe_parse_webhook,
     generate_out_trade_no as stripe_generate_order_no,
 )
+# Multi-provider system
+from src.payment.providers import get_provider, list_configured_providers
+from src.payment.providers.base import CheckoutResult, WebhookResult
 
 payment_bp = Blueprint("payment", __name__)
 
@@ -417,7 +424,270 @@ def wechat_pay_notify():
 
 
 # ============================================================
-# Stripe routes (overseas)
+# Multi-provider unified routes (overseas)
+# ============================================================
+
+def _process_payment_completed(db, out_trade_no: str, transaction_id: str,
+                                provider_name: str) -> dict | None:
+    """Shared webhook handler: mark order paid + upgrade tier + create subscription.
+
+    Used by Stripe, PayPal, Airwallex, and future providers.
+    Returns the paid order dict or None (idempotent skip).
+    """
+    order = db.get_order_by_out_trade_no(out_trade_no)
+    if not order:
+        current_app.logger.error(
+            f"[{provider_name}] Order not found: {out_trade_no}"
+        )
+        return None
+
+    if order["status"] == "paid":
+        return None  # idempotent
+
+    paid_order = db.mark_order_paid(out_trade_no, transaction_id)
+    if not paid_order:
+        return None
+
+    user_id = paid_order["user_id"]
+    tier = paid_order["tier"]
+    plan_id = paid_order["plan_id"]
+
+    db.update_user_tier(user_id, tier)
+
+    from datetime import datetime, timedelta
+    expires = (datetime.now() + timedelta(days=30)).isoformat()
+    db.upsert_subscription(user_id, tier, plan_id, expires, auto_renew=False)
+
+    current_app.logger.info(
+        f"[{provider_name}] Payment confirmed: user={user_id} tier={tier} "
+        f"order={out_trade_no} txn={transaction_id}"
+    )
+    return paid_order
+
+
+@payment_bp.route("/payment/providers", methods=["GET"])
+def list_providers():
+    """List configured payment providers for the current region.
+
+    Returns a list of providers that have valid credentials, allowing
+    the frontend to show only available payment options.
+    """
+    region = resolve_region(
+        request.args.get("region"),
+        request.headers.get("Accept-Language"),
+    )
+    providers = list_configured_providers(current_app.config)
+
+    return jsonify(
+        region=region,
+        providers=providers,
+        stub_mode=_is_stub_mode(),
+    )
+
+
+@payment_bp.route("/payment/checkout", methods=["POST"])
+@require_auth
+def create_checkout():
+    """Unified checkout endpoint for all overseas payment providers.
+
+    Client specifies the desired provider and tier. Backend validates,
+    creates the provider-specific checkout session, and returns a redirect URL.
+
+    Request body:
+        {
+            "provider": "stripe" | "paypal" | "airwallex",
+            "tier": "supporter" | "pro",
+            "mode": "payment" | "subscription",    // default: "payment"
+            "success_url": "https://...",            // optional override
+            "cancel_url": "https://...",             // optional override
+        }
+
+    Response 201:
+        {
+            "order_id": "...",
+            "out_trade_no": "LOOMA...",
+            "provider": "stripe",
+            "checkout_url": "https://...",
+            "amount": 1.99,
+            "currency": "USD",
+            "tier": "supporter"
+        }
+    """
+    if _is_stub_mode():
+        return jsonify(
+            error="stub_mode",
+            message="Payment stub mode is enabled. Use POST /v1/payment/upgrade for instant tier change, or set PAYMENT_STUB_MODE=false to enable real payments.",
+        ), 400
+
+    data = request.get_json(silent=True) or {}
+    provider_name = data.get("provider", "stripe").lower()
+    new_tier = data.get("tier")
+    mode = data.get("mode", "payment")
+
+    if new_tier not in UPGRADABLE_TIERS:
+        return jsonify(error="bad_request", message="Invalid tier. Choose: supporter, pro"), 400
+
+    current_tier = g.get("user_tier", "free")
+    if TIER_ORDER.get(new_tier, 0) <= TIER_ORDER.get(current_tier, 0):
+        return jsonify(
+            error="bad_request",
+            message=f"Cannot downgrade from {current_tier} to {new_tier}",
+        ), 400
+
+    if new_tier not in TIER_PRICE_USD_CENTS:
+        return jsonify(error="bad_request", message=f"No USD price configured for tier: {new_tier}"), 400
+
+    # Resolve provider
+    try:
+        provider = get_provider(provider_name)
+    except ValueError:
+        return jsonify(
+            error="unknown_provider",
+            message=f"Unknown payment provider: {provider_name!r}. "
+                    f"Available: {', '.join(list_configured_providers(current_app.config))}",
+        ), 400
+
+    if not provider.is_configured(current_app.config):
+        return jsonify(
+            error="payment_not_configured",
+            message=f"{provider_name.title()} not configured. Set the required environment variables.",
+        ), 503
+
+    region = resolve_region(
+        request.args.get("region"),
+        request.headers.get("Accept-Language"),
+    )
+    plan = get_plan_for_tier(new_tier, region)
+    amount_usd = TIER_PRICE_USD_CENTS[new_tier] / 100
+    out_trade_no = stripe_generate_order_no()
+
+    # Get user email for checkout pre-fill
+    db = current_app._db
+    user = db.get_user_by_id(g.user_id)
+    customer_email = user.get("email", "") if user else ""
+
+    # Build success/cancel URLs
+    origin = request.headers.get("Origin", "") or request.host_url.rstrip("/")
+    success_url = data.get("success_url", f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}")
+    cancel_url = data.get("cancel_url", f"{origin}/payment/cancel")
+
+    currency = current_app.config.get("STRIPE_CURRENCY", "USD")
+
+    try:
+        result: CheckoutResult = provider.create_checkout(
+            config=current_app.config,
+            out_trade_no=out_trade_no,
+            tier=new_tier,
+            amount=amount_usd,
+            currency=currency,
+            plan_name=f"Looma {plan['name']}",
+            customer_email=customer_email,
+            success_url=success_url,
+            cancel_url=cancel_url,
+            mode=mode,
+        )
+    except ValueError as e:
+        current_app.logger.error(f"[{provider_name}] Checkout creation failed: {e}")
+        return jsonify(error=f"{provider_name}_error", message=str(e)), 502
+
+    # Write order to DB
+    order_metadata = {
+        "provider": provider_name,
+        "mode": mode,
+        "region": region,
+    }
+    if result.raw:
+        order_metadata.update({f"{provider_name}_{k}": str(v) for k, v in result.raw.items()})
+
+    order = db.create_order(
+        user_id=g.user_id,
+        plan_id=plan["plan_id"],
+        tier=new_tier,
+        amount=plan["price_monthly"],
+        currency=currency,
+        out_trade_no=out_trade_no,
+        metadata_json=order_metadata,
+    )
+
+    return jsonify(
+        order_id=order["id"],
+        out_trade_no=out_trade_no,
+        provider=provider_name,
+        checkout_url=result.checkout_url,
+        amount=plan["price_monthly"],
+        currency=currency,
+        tier=new_tier,
+    ), 201
+
+
+@payment_bp.route("/payment/webhook/<provider_name>", methods=["POST"])
+def unified_webhook(provider_name: str):
+    """Unified webhook endpoint for all overseas payment providers.
+
+    Stripe:     POST /v1/payment/webhook/stripe
+    PayPal:     POST /v1/payment/webhook/paypal
+    Airwallex:  POST /v1/payment/webhook/airwallex
+
+    Verifies provider-specific signature, parses event, and processes payment.
+    Does NOT require auth — these endpoints are called by payment provider servers.
+    """
+    provider_name = provider_name.lower()
+
+    try:
+        provider = get_provider(provider_name)
+    except ValueError:
+        current_app.logger.warning(f"[webhook] Unknown provider: {provider_name!r}")
+        return jsonify(error="unknown_provider", message=f"Unknown provider: {provider_name!r}"), 404
+
+    if not provider.is_configured(current_app.config):
+        return jsonify(error="not_configured", message=f"{provider_name} not configured"), 503
+
+    payload = request.get_data()
+    headers = dict(request.headers)
+
+    # Verify webhook signature
+    try:
+        provider.verify_webhook(current_app.config, payload, headers)
+    except ValueError as e:
+        current_app.logger.warning(f"[{provider_name}] Webhook signature FAILED: {e}")
+        return jsonify(error="invalid_signature", message=str(e)), 400
+
+    # Parse event
+    result: WebhookResult = provider.parse_webhook(payload)
+    if not result.success:
+        current_app.logger.warning(f"[{provider_name}] Webhook parse error: {result.error}")
+        return jsonify(error="parse_error", message=result.error), 400
+
+    db = current_app._db
+
+    # Handle checkout.completed (one-time payment)
+    if result.event_type == "checkout.completed":
+        if not result.out_trade_no:
+            current_app.logger.warning(f"[{provider_name}] Webhook: no out_trade_no in event")
+            return jsonify(status="ok"), 200
+
+        _process_payment_completed(db, result.out_trade_no, result.transaction_id, provider_name)
+
+    # Handle subscription.renewed
+    elif result.event_type == "subscription.renewed":
+        current_app.logger.info(
+            f"[{provider_name}] Subscription renewed: customer={result.customer_id} "
+            f"sub={result.subscription_id}"
+        )
+        # TODO: extend subscription expiry by 1 month, update transaction
+
+    # Handle subscription.cancelled
+    elif result.event_type == "subscription.cancelled":
+        current_app.logger.info(
+            f"[{provider_name}] Subscription cancelled: customer={result.customer_id}"
+        )
+        # TODO: find user by customer_id, downgrade to free
+
+    return jsonify(status="ok"), 200
+
+
+# ============================================================
+# Stripe routes (overseas) — backward-compatible aliases
 # ============================================================
 
 @payment_bp.route("/payment/stripe/checkout", methods=["POST"])

@@ -516,7 +516,7 @@ export function createPaymentApi(client: ApiClient) {
     /** Get current user subscription status */
     status: () => client.get<import("../types/payment").PaymentStatus>(API_ROUTES.PAYMENT_STATUS),
 
-    /** Upgrade tier (stub mode only; blocked in production → use wechatOrder instead) */
+    /** Upgrade tier (stub mode only; blocked in production → use checkout instead) */
     upgrade: (tier: "supporter" | "pro") =>
       client.post<import("../types/payment").UpgradeResponse>(API_ROUTES.PAYMENT_UPGRADE, { tier }),
 
@@ -524,6 +524,21 @@ export function createPaymentApi(client: ApiClient) {
     wechatOrder: (payload: import("../types/payment").WechatOrderRequest) =>
       client.post<import("../types/payment").WechatOrderResponse>(
         API_ROUTES.PAYMENT_WECHAT_ORDER,
+        payload,
+      ),
+
+    /** List configured overseas payment providers */
+    providers: (region?: import("../types/payment").PaymentRegion) => {
+      const query = region ? `?region=${region}` : "";
+      return client.get<import("../types/payment").ProvidersResponse>(
+        `${API_ROUTES.PAYMENT_PROVIDERS}${query}`,
+      );
+    },
+
+    /** Create unified checkout session (Stripe / PayPal / Airwallex) */
+    checkout: (payload: import("../types/payment").CheckoutRequest) =>
+      client.post<import("../types/payment").CheckoutResponse>(
+        API_ROUTES.PAYMENT_CHECKOUT,
         payload,
       ),
   };

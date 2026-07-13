@@ -112,6 +112,18 @@ class Config:
     STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
     STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "USD")
 
+    # PayPal (overseas payment)
+    PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "")
+    PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "")
+    PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox | live
+    PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID", "")
+
+    # Airwallex (overseas payment)
+    AIRWALLEX_API_KEY = os.getenv("AIRWALLEX_API_KEY", "")
+    AIRWALLEX_CLIENT_KEY = os.getenv("AIRWALLEX_CLIENT_KEY", "")
+    AIRWALLEX_MODE = os.getenv("AIRWALLEX_MODE", "demo")  # demo | production
+    AIRWALLEX_WEBHOOK_SECRET = os.getenv("AIRWALLEX_WEBHOOK_SECRET", "")
+
     # Rate limiting
     RATE_LIMIT_GLOBAL = os.getenv("RATE_LIMIT_GLOBAL", "200/hour")
     RATE_LIMIT_AUTH = os.getenv("RATE_LIMIT_AUTH", "10/minute")
@@ -201,6 +213,18 @@ def _refresh_config():
     Config.STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
     Config.STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
     Config.STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "USD")
+
+    # PayPal (overseas payment)
+    Config.PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "")
+    Config.PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "")
+    Config.PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")
+    Config.PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID", "")
+
+    # Airwallex (overseas payment)
+    Config.AIRWALLEX_API_KEY = os.getenv("AIRWALLEX_API_KEY", "")
+    Config.AIRWALLEX_CLIENT_KEY = os.getenv("AIRWALLEX_CLIENT_KEY", "")
+    Config.AIRWALLEX_MODE = os.getenv("AIRWALLEX_MODE", "demo")
+    Config.AIRWALLEX_WEBHOOK_SECRET = os.getenv("AIRWALLEX_WEBHOOK_SECRET", "")
 
     # Rate limiting
     Config.RATE_LIMIT_GLOBAL = os.getenv("RATE_LIMIT_GLOBAL", "200/hour")
