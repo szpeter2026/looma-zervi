@@ -8,6 +8,7 @@ export const API_ROUTES = {
   AUTH_REGISTER: "/v1/auth/register",
   AUTH_LOGIN: "/v1/auth/login",
   AUTH_WECHAT: "/v1/auth/wechat",
+  AUTH_GOOGLE: "/v1/auth/google",
   AUTH_BIND: "/v1/auth/bind",
   AUTH_PROFILE: "/v1/auth/profile",
   AUTH_REFRESH: "/v1/auth/refresh",

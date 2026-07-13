@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Looma Trust Layer Contract v1",
+  "version": "1.0.0",
+  "description": "信任层：将社会化短暂交集长期记忆体化，供智能体验证后写入 identity claim。非链接数、非竞品模仿。真源：looma-zervi/backend/contracts/trust.v1.json",
+
+  "principles": {
+    "not_link_count": "图可达性 ≠ 信任度；边多不可证明更可信",
+    "not_competitor_mimic": "不复制脉脉度数/Refer 内推计数/Sixley 扩图 KPI",
+    "core_thesis": "社会化交集产生短暂记忆 → 长期记忆体化 → 智能体算法验证 → 信任凭证",
+    "credit_subject": "individual user_id；凭证归属参与交集的个人，非企业主体",
+    "identity_cross_ref": "backend/contracts/identity.v1.json",
+    "game_cross_ref": "backend/contracts/game.v1.json",
+    "social_geometry_note": "BFS/六度仅提供关系上下文（reachability），见 social_geometry 节"
+  },
+
+  "intersection_enum": [
+    "personality_completion",
+    "fleet_co_presence",
+    "match_scan",
+    "consensus_exchange",
+    "dialogue_session",
+    "share_signal",
+    "referral_binding",
+    "partner_candidate_contact",
+    "import_share"
+  ],
+
+  "intersection": {
+    "description": "社会化短暂交集：一次共在、一轮对话、一次匹配扫描、一次确认——原初上是短暂的，须被捕获为可审计记忆体。",
+    "types": {
+      "personality_completion": {
+        "trigger": "POST /v1/game/profile-sync 完成人格",
+        "ephemeral": "测评当下的自我叙述与结果页停留",
+        "memorializes_to": "personality_claim_evidence"
+      },
+      "fleet_co_presence": {
+        "trigger": "加入/共属舰队时段",
+        "ephemeral": "同舰共闯关的共在感",
+        "memorializes_to": "co_presence_evidence"
+      },
+      "match_scan": {
+        "trigger": "POST /v1/game/match",
+        "ephemeral": "一次扫描动画与契合度呈现",
+        "memorializes_to": "match_intent_evidence"
+      },
+      "consensus_exchange": {
+        "trigger": "双向 match acknowledge / verified",
+        "ephemeral": "双方确认的瞬间",
+        "memorializes_to": "consensus_verified_credential",
+        "binds_claim": "match_mission"
+      },
+      "dialogue_session": {
+        "trigger": "POST /v1/ask、合伙人-候选人会话等",
+        "ephemeral": "多轮对话上下文",
+        "memorializes_to": "dialogue_trace_evidence",
+        "retention_policy": "见 retention 节"
+      },
+      "share_signal": {
+        "trigger": "分享码、wx.share、profile_share",
+        "ephemeral": "传播动作与触达",
+        "memorializes_to": "spread_evidence"
+      },
+      "referral_binding": {
+        "trigger": "invite_code 被使用",
+        "ephemeral": "推荐关系确立瞬间",
+        "memorializes_to": "referral_edge_evidence"
+      },
+      "partner_candidate_contact": {
+        "trigger": "合伙人查看/导入/匹配候选人",
+        "ephemeral": "撮合接触",
+        "memorializes_to": "partner_interaction_evidence"
+      },
+      "import_share": {
+        "trigger": "import-share 成功",
+        "ephemeral": "人际信用链导入",
+        "memorializes_to": "credit_chain_evidence"
+      }
+    }
+  },
+
+  "evidence_channels": {
+    "text": {
+      "description": "文字：人格文案、job-post、公开档案、分享文案、对话文本",
+      "analysis": ["一致性", "承诺抽取", "与行为是否矛盾"]
+    },
+    "dialogue": {
+      "description": "对话：Ask、确认话术、合伙人沟通",
+      "analysis": ["互惠性", "回避模式", "共识是否真实达成"]
+    },
+    "behavior": {
+      "description": "行为：mission、consensus 状态机、spread、tier 使用",
+      "analysis": ["时序模式", "可复核事件链", "刷量/矛盾检测"]
+    }
+  },
+
+  "memory_record": {
+    "description": "长期记忆体：一次交集的不可变（append-only）记录，是信任验证的输入真源。",
+    "required_fields": {
+      "memory_id": { "type": "string", "format": "uuid" },
+      "intersection_type": { "enum_ref": "intersection_enum" },
+      "participants": { "type": "array", "items": "user_id" },
+      "occurred_at": { "type": "string", "format": "date-time" },
+      "evidence_refs": { "type": "array", "description": "指向 text/dialogue/behavior 片段" },
+      "visibility": { "enum_ref": "identity.v1.json#visibility_enum" }
+    },
+    "optional_fields": {
+      "session_id": "string",
+      "fleet_id": "string",
+      "consensus_id": "string",
+      "content_hash": "string",
+      "platform": "planetx_mp | planetx_web | partner_desktop | harmony"
+    },
+    "storage_note": "DB 表 trust_memories（规划）；v0 可复用 product_events + 扩展 payload"
+  },
+
+  "attestation_enum": ["unverified", "weak", "verified", "disputed", "revoked"],
+
+  "attestation": {
+    "description": "信任凭证：智能体（或 v0 规则引擎）对某 identity claim 的验证结论。",
+    "fields": {
+      "claim_key": "引用 identity.v1.json claims",
+      "status": { "enum_ref": "attestation_enum" },
+      "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+      "validator": { "type": "string", "enum": ["rule_v0", "trust_agent_v1", "human_review"] },
+      "evidence_memory_ids": { "type": "array", "items": "memory_id" },
+      "reason": { "type": "string", "required": false },
+      "attested_at": { "type": "string", "format": "date-time" },
+      "expires_at": { "type": "string", "format": "date-time", "required": false }
+    },
+    "v0_rules": [
+      {
+        "claim": "match_mission",
+        "requires": ["consensus_exchange with status verified"],
+        "output": "verified"
+      },
+      {
+        "claim": "personality_type",
+        "requires": ["personality_completion memory exists"],
+        "output": "weak"
+      }
+    ]
+  },
+
+  "trust_agent": {
+    "description": "长期跟踪分析文字/对话/行为，对 claim 给出算法验证；非推荐排序、非扩图。",
+    "inputs": ["memory_record stream per user_id", "identity claims", "visibility policy"],
+    "outputs": ["attestation updates", "dispute flags", "audit log"],
+    "v0": "规则引擎 + 一致性检查",
+    "v1": "可训练模型；标注来自已验证 memory + 人工抽检",
+    "must_not": ["用度数映射 trust_score", "链接数 KPI", "模仿竞品会员/实名即信任"]
+  },
+
+  "social_geometry": {
+    "description": "关系几何（弱层）：仅回答结构可达性，不输出用户可见信任分。",
+    "apis": ["GET /v1/social/connection", "GET /v1/social/reachable"],
+    "rename_trust_score_to": "reachability_context_only",
+    "deprecated": "compute_trust_score(degrees) 作为用户信任分"
+  },
+
+  "retention": {
+    "dialogue": { "default_days": 365, "visibility": "private", "note": "合规 consent 约束" },
+    "behavior_events": { "default": "append-only indefinite", "note": "可审计" },
+    "text_snapshots": { "default": "hash + excerpt", "full_text": "visibility gated" }
+  },
+
+  "endpoints": {
+    "planned": [
+      { "method": "POST", "path": "/v1/trust/memories", "purpose": "交集记忆体写入（服务端或受信客户端）" },
+      { "method": "GET", "path": "/v1/trust/memories", "purpose": "本人记忆体列表（按 visibility）" },
+      { "method": "GET", "path": "/v1/trust/claims", "purpose": "claim + attestation 聚合视图" },
+      { "method": "POST", "path": "/v1/trust/attest", "purpose": "触发验证（agent/rule）；内测可 admin" },
+      { "method": "GET", "path": "/v1/trust/credentials/:memory_id", "purpose": "单条记忆体对应的凭证摘要（公开壳）" }
+    ],
+    "v0_interim": "consensus verified → 写 product_event + 规则更新 match claim"
+  },
+
+  "cross_client_invariants": [
+    "同一交集在小程序/Web 只产生一条 memory_record",
+    "记忆体一旦写入不可篡改，仅可追加 attestation 或 revoked",
+    "合伙人信用展示读 attestation，不读社交度数",
+    "Genzer 终端信号（未来）作为外部 evidence_provider，不替代 Looma 记忆体真源"
+  ]
+}

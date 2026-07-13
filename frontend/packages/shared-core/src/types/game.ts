@@ -152,6 +152,8 @@ export interface FleetMatchCandidate {
   personality_emoji: string;
   match_score: number;
   reason: string;
+  /** complementary | random | candidate */
+  match_mode?: string;
 }
 
 export interface FleetMatchResponse {

@@ -3,7 +3,7 @@
 > **版本：** 1.1 · **日期：** 2026-07-12  
 > **分支：** 大陆主开发 `main` · 海外 `release/overseas`  
 > **用途：** 组队逐项落地；从**客户体验（CX）**而非技术栈拆组  
-> **关联：** [DUAL_TRACK_ACCEPTANCE_CHECKLIST.md](./DUAL_TRACK_ACCEPTANCE_CHECKLIST.md) · [OVERSEAS_DEPLOY.md](./OVERSEAS_DEPLOY.md) · [API_PARTNER_ALIGNMENT.md](./API_PARTNER_ALIGNMENT.md) · [HARMONY_FRONTEND_ALIGNMENT.md](./HARMONY_FRONTEND_ALIGNMENT.md)
+> **关联：** [DUAL_TRACK_ACCEPTANCE_CHECKLIST.md](./DUAL_TRACK_ACCEPTANCE_CHECKLIST.md) · [OVERSEAS_DEPLOY.md](./OVERSEAS_DEPLOY.md) · [API_PARTNER_ALIGNMENT.md](./API_PARTNER_ALIGNMENT.md) · [HARMONY_FRONTEND_ALIGNMENT.md](./HARMONY_FRONTEND_ALIGNMENT.md) · [ZERVI_GENZER_IMPLEMENTATION.md](./ZERVI_GENZER_IMPLEMENTATION.md)
 
 ---
 
@@ -190,6 +190,7 @@ Web + PWA 的正确定位
 | 发布 | 以个人名义发布机会 | `POST /v1/job-posts`（归属 `user_id`） | P0 | API + [合伙人对照表](./API_PARTNER_ALIGNMENT.md) |
 | 撮合 | 看匹配质量，而非「筛简历」 | `GET /v1/job-posts/:id/matches` | P0 | 合伙人 Dashboard |
 | 信用 | 配额与 tier 挂钩，激励负责任发布 | `tier_limits` + supporter/pro 档位 | P0 | G0 契约 |
+| 种子计划 | **前 30 位种子合伙人：pro 档永久免费**（个人账号，非企业主体） | 运营规则 + tier 人工/Stub 开通 | P1 | G4 文案 |
 | 池化 | 从分享码导入候选人（人际信用链） | `import-share` / 候选人池 API | P1 | 合伙人 API |
 | 海外 | 英文合伙人工作台（可选） | `tspace.genz.ltd` | P1 | saas 包 |
 
@@ -246,11 +247,11 @@ Web + PWA 的正确定位
 
 | 迭代 | 目标 | 交付物 | 预计 |
 |------|------|--------|------|
-| **M0** | 可安装 | manifest + 图标 + HTTPS 同域 | 3d |
-| **M1** | 离线壳 | SW 缓存静态资源；启动 < 3s（弱网） | 3d |
-| **M2** | 登录闭环 | Google OAuth 在 PWA standalone 模式可用 | 5d |
-| **M3** | 支付闭环 | Stripe Checkout 回跳 PWA | 5d |
-| **M4** | 推送（可选） | Web Push 海外通知 | P2 |
+| **M0** | 可安装 | manifest + 图标 + HTTPS 同域 | 3d | ✅ 代码已落 `planetx/public/`（待线上 HTTPS 验） |
+| **M1** | 离线壳 | SW 缓存静态资源；启动 < 3s（弱网） | 3d | ✅ `sw.js` 静态壳缓存（API 不缓存） |
+| **M2** | 登录闭环 | Google OAuth 在 PWA standalone 模式可用 | 5d | 🟡 前端 GIS + `/v1/auth/google` 已接；待 Client ID / E2E |
+| **M3** | 支付闭环 | Stripe Checkout 回跳 PWA | 5d | ⬜ |
+| **M4** | 推送（可选） | Web Push 海外通知 | P2 | ⬜ |
 
 **不纳入首期 PWA：** G2 小程序、G4 合伙人工作台、G5 Harmony、G1 静态营销站。
 
@@ -287,4 +288,5 @@ Web + PWA 的正确定位
 | 日期 | 版本 | 变更 |
 |------|------|------|
 | 2026-07-12 | 1.1 | G4 由「企业招聘 B 端」改为「合伙人 / 个人信用」；新增 §0 产品信念 |
+| 2026-07-13 | 1.2 | G4 种子计划：前 30 **位合伙人** pro 永久免费（废止「前 30 家企业」表述）；链 ZERVI_GENZER 实施总纲 |
 | 2026-07-12 | 1.0 | 首版：PWA 定义、五组 CX 划分、各组 backlog 与 PWA 路线图 |

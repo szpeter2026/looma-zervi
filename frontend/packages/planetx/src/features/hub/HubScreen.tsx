@@ -25,6 +25,10 @@ export default function HubScreen() {
 
   const isMissionUnlocked = (m: typeof missions[number]) => {
     if (!m.requires) return true
+    // Web+PWA 演示：舰队 ≥2 人即可开 match（与后端 API 一致）；team 任务 XP 仍要 3 人
+    if (m.id === 'match') {
+      return missionsCompleted.includes('team') || teamSize >= 2
+    }
     return missionsCompleted.includes(m.requires)
   }
 
@@ -118,7 +122,13 @@ export default function HubScreen() {
                     color: done ? 'var(--px-color-accent)' : 'var(--px-color-text-muted)',
                   }}
                 >
-                  {done ? '已完成' : locked ? `🔒 需先完成${m.requires === 'personality' ? '人格测试' : '组队'}` : '待完成'}
+                  {done
+                    ? '已完成'
+                    : locked
+                      ? m.id === 'match'
+                        ? '🔒 需舰队≥2人'
+                        : `🔒 需先完成${m.requires === 'personality' ? '人格测试' : '组队'}`
+                      : '待完成'}
                 </span>
               </button>
             )

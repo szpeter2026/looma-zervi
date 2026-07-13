@@ -38,6 +38,7 @@ def create_app(env="development"):
     from src.api.routes.compliance_routes import compliance_bp
     from src.api.routes.analytics_routes import analytics_bp
     from src.api.routes.social_routes import social_bp  # 六度分隔社交图谱
+    from src.api.routes.trust_routes import trust_bp
 
     app.register_blueprint(auth_bp, url_prefix="/v1/auth")
     app.register_blueprint(game_bp, url_prefix="/v1/game")
@@ -56,6 +57,7 @@ def create_app(env="development"):
     app.register_blueprint(narrative_bp, url_prefix="/v1/narrative")
     app.register_blueprint(analytics_bp, url_prefix="/v1")
     app.register_blueprint(social_bp, url_prefix="/v1/social")  # 六度分隔社交图谱
+    app.register_blueprint(trust_bp, url_prefix="/v1/trust")
 
     # --- Health check ---
     @app.route("/health", methods=["GET"])
@@ -86,6 +88,8 @@ def create_app(env="development"):
                     "POST /v1/game/profile-sync",
                     "POST /v1/game/mission-complete",
                     "POST /v1/game/match",
+                    "GET  /v1/game/match/consensus",
+                    "POST /v1/game/match/acknowledge",
                     "POST /v1/game/fleet/create",
                     "POST /v1/game/fleet/join",
                     "GET  /v1/game/fleet/mine",
@@ -94,6 +98,12 @@ def create_app(env="development"):
                     "POST /v1/game/answer",
                     "GET  /v1/game/result",
                     "GET  /v1/game/history",
+                ],
+                "trust": [
+                    "GET  /v1/trust/memories",
+                    "GET  /v1/trust/memories/<id>",
+                    "GET  /v1/trust/claims",
+                    "GET  /v1/trust/claims/<claim_key>",
                 ],
                 "ask": ["POST /v1/ask", "POST /v1/feedback/rate", "GET  /v1/feedback/last-query"],
                 "quota": ["GET /v1/quota"],

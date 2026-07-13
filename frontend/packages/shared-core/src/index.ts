@@ -53,6 +53,8 @@ export type {
   RegisterRequest,
   WechatAuthRequest,
   WechatAuthResponse,
+  GoogleAuthRequest,
+  GoogleAuthResponse,
   QuotaRecord,
   QuotaResponse,
   TokenPayload,

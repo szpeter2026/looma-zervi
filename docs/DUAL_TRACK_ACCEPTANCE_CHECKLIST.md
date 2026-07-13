@@ -107,6 +107,8 @@
 | OS-P1-2 | Stripe Webhook | 测试事件 → tier 升级 + `orders` 表 | [ ] |
 | OS-P1-3 | CTA 升级 | Checkout 上线后「Join waitlist」→ Subscribe | [ ] |
 | OS-P1-4 | PlanetX Web 海外登录 | 海外部署 + Google 登录全流程 | [ ] |
+| OS-P1-4b | PlanetX PWA M0 可安装 | `manifest.webmanifest` + icons + SW；Chrome「安装应用」/ iOS 添加到主屏幕 | [ ] |
+| OS-P1-4c | PlanetX Web match 演示闭环 | 双账号舰队≥2 → Match → mission-complete → 成就（`?join=` 邀请） | [ ] |
 | OS-P1-5 | `tspace.genz.ltd` | saas build + nginx + 英文 Pricing | [ ] |
 | OS-P1-6 | Cloudflare Full Strict | Origin Certificate 替换自签 SSL | [ ] |
 | OS-P1-7 | 隐藏 stub_mode | 生产 `plans` 响应不暴露内测标志 | [ ] |
@@ -139,12 +141,19 @@
 
 ---
 
-## 5. 当前快照（2026-07-12）
+## 5. 当前快照（2026-07-13）
 
 | 线 | P0 粗估 | 主要缺口 |
 |----|---------|----------|
-| **海外** | ~75% | VPS nginx reload（OS-P0-6）、Google OAuth E2E（OS-P0-9）、Stripe 审核（OS-P0-10） |
-| **大陆** | ~60% | 微信实单 / 合法域名（CN-P0-6~7）、备案域切换（CN-P1-1）、portal 未接（CN-P1-4） |
+| **海外** | ~78% | Google OAuth E2E（需 Client ID + 线上配置）；Stripe 审核；**PlanetX PWA M0 已落代码待线上验** |
+| **大陆** | ~60% | 微信实单 / 合法域名；备案域；portal |
+
+**本迭代已补（`release/overseas`）：**
+
+- PlanetX `manifest` + icons + `sw.js` + 注册（PWA M0/M1 壳）
+- Auth：`VITE_GOOGLE_CLIENT_ID` 时显示 Google GIS 按钮；`POST /v1/auth/google` 契约进 shared-core
+- Match Web：舰队≥2 可开任务；`?join=` 自动入队；错误文案；信任 `can_complete_mission`
+- `/v1/game/match/consensus|acknowledge` v0 占位（空列表 / noop），消前端 404
 
 > 快照随迭代更新本节即可；勾选状态以各团队 Gitee PR / issue 为准。
 

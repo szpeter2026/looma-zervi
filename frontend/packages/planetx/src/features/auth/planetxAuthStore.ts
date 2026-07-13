@@ -145,8 +145,11 @@ interface PlanetXState {
   // Auth (Looma JWT)
   login: (email: string, password: string) => Promise<boolean>
   register: (email: string, password: string) => Promise<boolean>
+  loginWithGoogle: (idToken: string) => Promise<boolean>
   logout: () => void
   checkSession: () => Promise<void>
+  /** 消费 URL ?join=CODE 自动加入舰队 */
+  consumeJoinInviteFromUrl: () => Promise<void>
 
   // Profile (Looma API)
   loadProfile: () => Promise<void>
@@ -300,6 +303,7 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
       get().setToast('跃迁成功！欢迎回来 🪐')
       const s = get()
       get().setScreen(resolvePostAuthScreen(s))
+      await get().consumeJoinInviteFromUrl()
       return true
     } catch (e) {
       const msg = (e as { response?: { data?: { message?: string } }; message?: string })
@@ -325,6 +329,32 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
     } catch (e) {
       const msg = (e as { response?: { data?: { message?: string } }; message?: string })
       get().setToast('注册失败: ' + (msg.response?.data?.message ?? msg.message ?? '未知错误'))
+      return false
+    }
+  },
+
+  loginWithGoogle: async (idToken) => {
+    try {
+      const authApi = getAuthApi()
+      const resp = await authApi.google({ id_token: idToken })
+      set({
+        token: resp.access_token,
+        user: { ...resp.user, identity: undefined, personality_type: undefined } as any,
+        isAuthenticated: true,
+      })
+      getApiClient().setToken(resp.access_token)
+      await get().loadProfile()
+      get().setToast('Google sign-in successful 🪐')
+      const s = get()
+      get().setScreen(resolvePostAuthScreen(s))
+      await get().consumeJoinInviteFromUrl()
+      return true
+    } catch (e) {
+      const msg = (e as { body?: { message?: string }; response?: { data?: { message?: string } }; message?: string })
+      get().setToast(
+        'Google login failed: ' +
+          (msg.body?.message ?? msg.response?.data?.message ?? msg.message ?? 'unknown error'),
+      )
       return false
     }
   },
@@ -363,8 +393,25 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
       await get().loadProfile()
       const s = get()
       setTimeout(() => set({ screen: resolvePostAuthScreen(s) }), 1500)
+      await get().consumeJoinInviteFromUrl()
     } catch {
       get().logout()
+    }
+  },
+
+  consumeJoinInviteFromUrl: async () => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const code = (params.get('join') || '').trim()
+      if (!code) return
+      if (!get().token) return
+      await get().joinFleet(code)
+      // 清掉 query，避免重复加入
+      const url = new URL(window.location.href)
+      url.searchParams.delete('join')
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash)
+    } catch {
+      /* joinFleet 已 toast */
     }
   },
 

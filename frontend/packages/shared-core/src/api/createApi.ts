@@ -11,6 +11,8 @@ import type {
   RegisterRequest,
   WechatAuthRequest,
   WechatAuthResponse,
+  GoogleAuthRequest,
+  GoogleAuthResponse,
   UserProfile,
   QuotaResponse,
 } from "../types/auth";
@@ -72,6 +74,10 @@ export function createAuthApi(client: ApiClient) {
     /** WeChat miniprogram login (wx.login code -> looma JWT) */
     wechat: (payload: WechatAuthRequest) =>
       client.post<WechatAuthResponse>(API_ROUTES.AUTH_WECHAT, payload),
+
+    /** Google OAuth login (overseas ID token -> looma JWT) */
+    google: (payload: GoogleAuthRequest) =>
+      client.post<GoogleAuthResponse>(API_ROUTES.AUTH_GOOGLE, payload),
 
     /** Bind WeChat account to existing email user */
     bind: (code: string) =>
