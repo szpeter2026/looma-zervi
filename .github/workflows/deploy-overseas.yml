@@ -36,7 +36,7 @@ env:
   OVERSEAS_API_HOST: api.genz.ltd
   SSH_HOST: ${{ secrets.SSH_HOST_SG != '' && secrets.SSH_HOST_SG || secrets.SSH_HOST_OVERSEAS }}
   SSH_USER: ${{ secrets.SSH_USER_SG != '' && secrets.SSH_USER_SG || secrets.SSH_USER_OVERSEAS }}
-  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_SG != '' && secrets.SSH_PRIVATE_KEY_SG || secrets.SSH_PRIVATE_KEY_OVERSEAS }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_SG != '' && secrets.SSH_PRIVATE_KEY_SG || secrets.SSH_PRIVATE_KEY_OVERSEAS != '' && secrets.SSH_PRIVATE_KEY_OVERSEAS || secrets.OVERSEAS_SSH_PRIVATE_KEY }}
   ENV_JWT_SECRET: ${{ secrets.ENV_JWT_SECRET_SG != '' && secrets.ENV_JWT_SECRET_SG || secrets.ENV_JWT_SECRET }}
 
 jobs:
@@ -86,7 +86,9 @@ jobs:
       - name: Validate SSH secrets
         run: |
           if [ -z "${{ env.SSH_PRIVATE_KEY }}" ]; then
-            echo "::error::Missing SSH private key. Add secret SSH_PRIVATE_KEY_SG or SSH_PRIVATE_KEY_OVERSEAS."
+            echo "::error::Missing SSH private key secret."
+            echo "Add one of: SSH_PRIVATE_KEY_SG, SSH_PRIVATE_KEY_OVERSEAS, OVERSEAS_SSH_PRIVATE_KEY"
+            echo "Value = full private key for github-actions-overseas (BEGIN/END lines included)."
             exit 1
           fi
           if [ -z "${{ env.SSH_HOST }}" ] || [ -z "${{ env.SSH_USER }}" ]; then
