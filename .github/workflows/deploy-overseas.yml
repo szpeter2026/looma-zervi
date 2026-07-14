@@ -1,18 +1,14 @@
 # ============================================================
-# Deploy Overseas — push release/overseas 后自动部署到 Vultr 新加坡
+# Deploy Overseas — tag overseas-* 或 push release/overseas → Vultr 新加坡
 #
-# 目标机默认: 139.180.184.25 (root, /opt/looma-zervi)
-# 域名: genz.ltd + Cloudflare (Nginx 使用 docker/nginx.conf)
+# 目标机: 139.180.184.25 · genz.ltd + tspace.genz.ltd + api.genz.ltd
 #
-# GitHub Secrets（必填，任选一种配置方式）:
+# 触发: git tag overseas-v1.4 && git push origin overseas-v1.4（海外惯例）
+#       或 push release/overseas 分支
 #
-# 方式 A — Repository secrets（推荐命名）:
-#   SSH_HOST_OVERSEAS=139.180.184.25
-#   SSH_USER_OVERSEAS=root
-#   SSH_PRIVATE_KEY_OVERSEAS=<github-actions-overseas 私钥全文>
-#   ENV_JWT_SECRET_SG=<海外 JWT，≥32 字符>
-#
-# 方式 B — Environment「overseas」内配置同名 secret（需在 deploy job 加 environment: overseas）
+# Secrets 任选一组（overseas-v1.3 成功部署用的是 VULTR_*）:
+#   VULTR_SSH_HOST / VULTR_SSH_USER / VULTR_SSH_PRIVATE_KEY / VULTR_JWT_SECRET
+#   或 SSH_HOST_OVERSEAS / SSH_USER_OVERSEAS / SSH_PRIVATE_KEY_OVERSEAS / ENV_JWT_SECRET_SG
 #
 # GitHub Secrets（建议）:
 #   ENV_DEEPSEEK_API_KEY
@@ -28,6 +24,8 @@ name: Deploy Overseas
 on:
   push:
     branches: [release/overseas]
+    tags:
+      - 'overseas-*'
   workflow_dispatch:
 
 concurrency:
@@ -35,7 +33,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DEPLOY_PATH: ${{ vars.DEPLOY_PATH_SG != '' && vars.DEPLOY_PATH_SG || '/opt/looma-zervi' }}
+  DEPLOY_PATH: ${{ vars.DEPLOY_PATH_SG != '' && vars.DEPLOY_PATH_SG || secrets.VULTR_DEPLOY_PATH || '/opt/looma-zervi' }}
   OVERSEAS_DOMAIN: genz.ltd
   OVERSEAS_API_HOST: api.genz.ltd
 
@@ -143,9 +141,9 @@ jobs:
     needs: [backend-test, genz-web-build, saas-build]
     if: success()
     env:
-      SSH_HOST: ${{ secrets.SSH_HOST_OVERSEAS || secrets.SSH_HOST_SG }}
-      SSH_USER: ${{ secrets.SSH_USER_OVERSEAS || secrets.SSH_USER_SG }}
-      ENV_JWT_SECRET: ${{ secrets.ENV_JWT_SECRET_SG || secrets.ENV_JWT_SECRET }}
+      SSH_HOST: ${{ secrets.VULTR_SSH_HOST || secrets.SSH_HOST_OVERSEAS || secrets.SSH_HOST_SG }}
+      SSH_USER: ${{ secrets.VULTR_SSH_USER || secrets.SSH_USER_OVERSEAS || secrets.SSH_USER_SG }}
+      ENV_JWT_SECRET: ${{ secrets.VULTR_JWT_SECRET || secrets.ENV_JWT_SECRET_SG || secrets.ENV_JWT_SECRET }}
 
     steps:
       - uses: actions/checkout@v4
@@ -164,26 +162,26 @@ jobs:
 
       - name: Validate SSH secrets
         env:
+          KEY_VULTR: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
           KEY_OVERSEAS: ${{ secrets.SSH_PRIVATE_KEY_OVERSEAS }}
           KEY_SG: ${{ secrets.SSH_PRIVATE_KEY_SG }}
           KEY_ALT: ${{ secrets.OVERSEAS_SSH_PRIVATE_KEY }}
         run: |
-          if [ -z "$KEY_OVERSEAS" ] && [ -z "$KEY_SG" ] && [ -z "$KEY_ALT" ]; then
+          if [ -z "$KEY_VULTR" ] && [ -z "$KEY_OVERSEAS" ] && [ -z "$KEY_SG" ] && [ -z "$KEY_ALT" ]; then
             echo "::error::Missing SSH private key secret."
-            echo "Add repository secret SSH_PRIVATE_KEY_OVERSEAS (recommended)."
-            echo "Value = full private key for github-actions-overseas (BEGIN/END lines included)."
+            echo "Add VULTR_SSH_PRIVATE_KEY (overseas-v1.3 style) or SSH_PRIVATE_KEY_OVERSEAS."
             exit 1
           fi
           if [ -z "${{ env.SSH_HOST }}" ] || [ -z "${{ env.SSH_USER }}" ]; then
             echo "::error::Missing SSH host/user."
-            echo "Add SSH_HOST_OVERSEAS=139.180.184.25 and SSH_USER_OVERSEAS=root"
+            echo "Add VULTR_SSH_HOST=139.180.184.25 and VULTR_SSH_USER=root"
             exit 1
           fi
 
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.1
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_OVERSEAS || secrets.SSH_PRIVATE_KEY_SG || secrets.OVERSEAS_SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.VULTR_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY_OVERSEAS || secrets.SSH_PRIVATE_KEY_SG || secrets.OVERSEAS_SSH_PRIVATE_KEY }}
 
       - name: Add host key
         run: |
@@ -216,7 +214,7 @@ jobs:
               'FLASK_ENV=production' \
               'FLASK_PORT=5200' \
               "JWT_SECRET=${{ env.ENV_JWT_SECRET }}" \
-              "DEEPSEEK_API_KEY=${{ secrets.ENV_DEEPSEEK_API_KEY }}" \
+              "DEEPSEEK_API_KEY=${{ secrets.VULTR_DEEPSEEK_API_KEY || secrets.ENV_DEEPSEEK_API_KEY }}" \
               'DEEPSEEK_BASE_URL=https://api.deepseek.com/v1' \
               "OPENAI_API_KEY=${{ secrets.ENV_OPENAI_API_KEY }}" \
               'OPENAI_BASE_URL=https://api.openai.com/v1' \
@@ -265,7 +263,7 @@ jobs:
           set_kv CORS_ORIGINS "https://\${DOMAIN},https://www.\${DOMAIN},https://\${TSPACE_HOST},https://\${API_HOST}"
           set_kv GOOGLE_REDIRECT_URI "https://\${API_HOST}/v1/auth/google/callback"
           set_kv JWT_SECRET "${{ env.ENV_JWT_SECRET }}"
-          set_kv DEEPSEEK_API_KEY "${{ secrets.ENV_DEEPSEEK_API_KEY }}"
+          set_kv DEEPSEEK_API_KEY "${{ secrets.VULTR_DEEPSEEK_API_KEY || secrets.ENV_DEEPSEEK_API_KEY }}"
           set_kv OPENAI_API_KEY "${{ secrets.ENV_OPENAI_API_KEY }}"
           set_kv GOOGLE_CLIENT_ID "${{ secrets.ENV_GOOGLE_CLIENT_ID }}"
           set_kv GOOGLE_CLIENT_SECRET "${{ secrets.ENV_GOOGLE_CLIENT_SECRET }}"
