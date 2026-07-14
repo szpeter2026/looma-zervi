@@ -1,13 +1,11 @@
 /**
  * Dashboard - SaaS main dashboard with health status, quota, and quick actions.
  * Owner: szbenyx
- *
- * Pure CSS + Tailwind (no tdesign-react).
- * Uses authStore for user/quota, ApiClient for health check.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSaasAuthStore } from "../auth/authStore";
-import { BRAND_SAAS } from "@looma/shared-core";
+import { useBrand } from "../../brand/useBrand";
 
 interface HealthStatus {
   status: "healthy" | "degraded";
@@ -18,7 +16,6 @@ interface HealthStatus {
   vector_store_size?: number;
 }
 
-/** 兼容后端 `{ status: "ok" }` 与 Dashboard 期望的 `{ status: "healthy" }` */
 function normalizeHealth(data: Record<string, unknown>): HealthStatus {
   const raw = data.status;
   const healthy = raw === "healthy" || raw === "ok";
@@ -35,9 +32,26 @@ function normalizeHealth(data: Record<string, unknown>): HealthStatus {
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
+function tierLabel(tier: string, t: (key: string) => string) {
+  if (tier === "free") return t("tier.free");
+  if (tier === "supporter") return t("tier.supporter");
+  return t("tier.pro");
+}
+
 export default function Dashboard() {
+  const { t } = useTranslation();
+  const brand = useBrand();
   const { user, quota, isAuthenticated, fetchQuota } = useSaasAuthStore();
   const [health, setHealth] = useState<HealthStatus | null>(null);
+
+  const featureCards = useMemo(
+    () => [
+      { icon: "🧠", title: t("dashboard.featureAiTitle"), desc: t("dashboard.featureAiDesc") },
+      { icon: "📄", title: t("dashboard.featureResumeTitle"), desc: t("dashboard.featureResumeDesc") },
+      { icon: "📊", title: t("dashboard.featureReportTitle"), desc: t("dashboard.featureReportDesc") },
+    ],
+    [t],
+  );
 
   useEffect(() => {
     if (isAuthenticated) void fetchQuota();
@@ -63,25 +77,27 @@ export default function Dashboard() {
     }
   };
 
-  // ===== 未登录：自由浏览模式 =====
+  const healthLabel = health?.status === "healthy"
+    ? t("dashboard.systemHealthy")
+    : t("dashboard.systemDegraded");
+
   if (!isAuthenticated) {
     return (
       <div className="max-w-3xl mx-auto text-center" style={{ paddingTop: "4rem" }}>
         <h1 className="text-3xl font-bold mb-2" style={{ color: "var(--color-text-primary)" }}>
-          {BRAND_SAAS.name}
+          {brand.name}
         </h1>
         <p className="text-lg mb-8" style={{ color: "var(--color-text-secondary)" }}>
-          {BRAND_SAAS.slogan}
+          {brand.slogan}
         </p>
 
-        {/* CTA */}
         <div className="flex justify-center gap-4 mb-10">
           <a
             href="/register"
             className="px-6 py-3 rounded-lg text-white text-sm font-medium no-underline transition-opacity hover:opacity-90"
             style={{ backgroundColor: "var(--color-primary)" }}
           >
-            免费注册
+            {t("dashboard.freeRegister")}
           </a>
           <a
             href="/login"
@@ -91,17 +107,12 @@ export default function Dashboard() {
               color: "var(--color-primary)",
             }}
           >
-            已有账号？登录
+            {t("dashboard.hasAccountLogin")}
           </a>
         </div>
 
-        {/* 能力卡片 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-          {[
-            { icon: "🧠", title: "AI 知识问答", desc: "接入 DeepSeek，秒级响应" },
-            { icon: "📄", title: "简历智能解析", desc: "上传即结构化，匹配岗位" },
-            { icon: "📊", title: "数据报告", desc: "日/周/月智能报告生成" },
-          ].map((item) => (
+          {featureCards.map((item) => (
             <div
               key={item.title}
               className="rounded-lg p-5 text-left"
@@ -121,7 +132,6 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* 系统状态（无需登录也能看到） */}
         {health && (
           <div className="flex items-center justify-center gap-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
             <span
@@ -131,34 +141,29 @@ export default function Dashboard() {
                   health.status === "healthy" ? "var(--color-success)" : "var(--color-warning)",
               }}
             />
-            <span>系统 {health.status === "healthy" ? "运行正常" : "服务降级"}</span>
+            <span>{t("dashboard.systemLabel")} {healthLabel}</span>
             <span>·</span>
             <span>v{health.version}</span>
           </div>
         )}
 
-        {/* 底部提示 */}
         <p className="text-xs mt-6" style={{ color: "var(--color-text-muted)" }}>
-          从 PlanetX 过来的？你的账号已自动同步 ✨
+          {t("dashboard.welcomeHint")}
         </p>
       </div>
     );
   }
 
-  // ===== 已登录：完整看板 =====
-
   return (
     <div className="max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold mb-1" style={{ color: "var(--color-text-primary)" }}>
-        {BRAND_SAAS.name}
+        {brand.name}
       </h1>
       <p className="text-sm mb-6" style={{ color: "var(--color-text-secondary)" }}>
-        欢迎回来，{user?.name || user?.email}
+        {t("dashboard.welcomeBack", { name: user?.name || user?.email || "" })}
       </p>
 
-      {/* 状态卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {/* 系统状态 */}
         <div
           className="rounded-lg p-5"
           style={{
@@ -167,7 +172,7 @@ export default function Dashboard() {
           }}
         >
           <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
-            系统状态
+            {t("dashboard.systemStatus")}
           </h3>
           <div className="flex items-center gap-2 mb-3">
             <span
@@ -184,19 +189,18 @@ export default function Dashboard() {
                   health?.status === "healthy" ? "var(--color-success)" : "var(--color-warning)",
               }}
             >
-              {health?.status === "healthy" ? "运行正常" : "服务降级"}
+              {healthLabel}
             </span>
           </div>
           <div className="text-xs space-y-1" style={{ color: "var(--color-text-muted)" }}>
             {health?.llm_provider && <p>LLM: {health.llm_provider}</p>}
-            {health?.embedding_model && <p>嵌入: {health.embedding_model}</p>}
+            {health?.embedding_model && <p>{t("dashboard.embedding")}: {health.embedding_model}</p>}
             {health?.vector_store_size != null && (
-              <p>向量库: {health.vector_store_size.toLocaleString()} 条</p>
+              <p>{t("dashboard.vectorStore", { count: health.vector_store_size })}</p>
             )}
           </div>
         </div>
 
-        {/* 今日配额 */}
         <div
           className="rounded-lg p-5"
           style={{
@@ -205,7 +209,7 @@ export default function Dashboard() {
           }}
         >
           <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
-            今日配额
+            {t("dashboard.todayQuota")}
           </h3>
           {quota && askRecord ? (
             <>
@@ -217,7 +221,7 @@ export default function Dashboard() {
                   {askRecord.daily_limit - askRecord.used}
                 </span>
                 <span style={{ color: "var(--color-text-muted)" }}>
-                  / {askRecord.daily_limit} 次
+                  / {askRecord.daily_limit} {t("dashboard.timesUnit")}
                 </span>
               </div>
               <div
@@ -235,25 +239,24 @@ export default function Dashboard() {
               </div>
               <div className="flex items-center justify-between mt-2">
                 <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                  {quota.tier === "free" ? "免费版" : quota.tier === "supporter" ? "支持版" : "专业版"}
+                  {tierLabel(quota.tier, t)}
                 </p>
                 <a
                   href="/pricing"
                   className="text-xs no-underline hover:underline"
                   style={{ color: "var(--color-primary)" }}
                 >
-                  升级 →
+                  {t("dashboard.upgrade")}
                 </a>
               </div>
             </>
           ) : (
             <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-              加载中...
+              {t("common.loading")}
             </p>
           )}
         </div>
 
-        {/* 快捷操作 */}
         <div
           className="rounded-lg p-5"
           style={{
@@ -262,7 +265,7 @@ export default function Dashboard() {
           }}
         >
           <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
-            快捷操作
+            {t("dashboard.quickActions")}
           </h3>
           <div className="space-y-2">
             <a
@@ -273,7 +276,7 @@ export default function Dashboard() {
                 color: "var(--color-primary)",
               }}
             >
-              开始提问
+              {t("dashboard.startQuery")}
             </a>
             <a
               href="/resume"
@@ -283,7 +286,7 @@ export default function Dashboard() {
                 color: "var(--color-primary)",
               }}
             >
-              解析简历
+              {t("dashboard.parseResume")}
             </a>
             <a
               href="/jobs"
@@ -293,13 +296,12 @@ export default function Dashboard() {
                 color: "var(--color-primary)",
               }}
             >
-              职位匹配
+              {t("dashboard.jobMatch")}
             </a>
           </div>
         </div>
       </div>
 
-      {/* 快速问答 */}
       <div
         className="rounded-lg p-5 mb-6"
         style={{
@@ -308,12 +310,12 @@ export default function Dashboard() {
         }}
       >
         <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
-          快速问答
+          {t("dashboard.quickQuery")}
         </h3>
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="输入问题，按 Enter 跳转到问答页..."
+            placeholder={t("dashboard.quickQueryPlaceholder")}
             className="flex-1 px-4 py-2.5 text-sm rounded-lg border outline-none transition-colors"
             style={{
               borderColor: "#e0e0e0",
@@ -331,16 +333,18 @@ export default function Dashboard() {
             className="px-5 py-2.5 text-sm rounded-lg text-white cursor-pointer border-none transition-colors"
             style={{ backgroundColor: "var(--color-primary)" }}
           >
-            提问
+            {t("dashboard.ask")}
           </button>
         </div>
       </div>
 
-      {/* 版本信息 */}
       {health && health.uptime_seconds > 0 && (
         <p className="text-xs text-center" style={{ color: "var(--color-text-muted)" }}>
-          v{health.version} · 已运行 {Math.floor(health.uptime_seconds / 3600)}h
-          {Math.floor((health.uptime_seconds % 3600) / 60)}m
+          {t("dashboard.uptime", {
+            version: health.version,
+            hours: Math.floor(health.uptime_seconds / 3600),
+            minutes: Math.floor((health.uptime_seconds % 3600) / 60),
+          })}
         </p>
       )}
     </div>

@@ -13,6 +13,7 @@
  */
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect } from "react";
+import "./i18n";
 import { SaasAuthGuard } from "./features/auth/SaasAuthGuard";
 import { useSaasAuthStore } from "./features/auth/authStore";
 import { AppLayout } from "./brand/components/AppLayout";
@@ -31,6 +32,7 @@ import Candidates from "./features/candidates/Candidates";
 import CandidateDetail from "./features/candidates/CandidateDetail";
 import ConsentSettings from "./features/settings/ConsentSettings";
 import { useSaasAnalytics } from "./analytics/useSaasAnalytics";
+import { IS_OVERSEAS } from "./config/region";
 
 /** 轻量 ErrorBoundary 包装器，用于隔离单个功能的崩溃 */
 function FeatureGuard({ children }: { children: React.ReactNode }) {
@@ -41,9 +43,9 @@ export default function App() {
   const tryAutoLogin = useSaasAuthStore((s) => s.tryAutoLogin);
   useSaasAnalytics();
 
-  // 挂载时尝试从 PlanetX 共享 token 自动登录（C→B 互通）
+  // 大陆：PlanetX 共享 token 自动登录（C→B）；海外 MVP 跳过
   useEffect(() => {
-    tryAutoLogin();
+    if (!IS_OVERSEAS) tryAutoLogin();
   }, [tryAutoLogin]);
 
   return (
@@ -58,7 +60,9 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<FeatureGuard><Dashboard /></FeatureGuard>} />
             <Route path="/pricing" element={<FeatureGuard><Pricing /></FeatureGuard>} />
-            <Route path="/candidate/share/:code" element={<FeatureGuard><CandidateShare /></FeatureGuard>} />
+            {!IS_OVERSEAS && (
+              <Route path="/candidate/share/:code" element={<FeatureGuard><CandidateShare /></FeatureGuard>} />
+            )}
           </Route>
 
           {/* Protected routes (需要登录的功能页) */}
@@ -69,8 +73,12 @@ export default function App() {
               <Route path="/jobs" element={<FeatureGuard><Jobs /></FeatureGuard>} />
               <Route path="/resume" element={<FeatureGuard><Resume /></FeatureGuard>} />
               <Route path="/reports" element={<FeatureGuard><Reports /></FeatureGuard>} />
-              <Route path="/candidates" element={<FeatureGuard><Candidates /></FeatureGuard>} />
-              <Route path="/candidates/:id" element={<FeatureGuard><CandidateDetail /></FeatureGuard>} />
+              {!IS_OVERSEAS && (
+                <>
+                  <Route path="/candidates" element={<FeatureGuard><Candidates /></FeatureGuard>} />
+                  <Route path="/candidates/:id" element={<FeatureGuard><CandidateDetail /></FeatureGuard>} />
+                </>
+              )}
               <Route path="/settings/consent" element={<FeatureGuard><ConsentSettings /></FeatureGuard>} />
             </Route>
           </Route>

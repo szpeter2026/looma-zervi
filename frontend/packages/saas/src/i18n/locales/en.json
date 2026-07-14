@@ -1,0 +1,91 @@
+{
+  "brand": {
+    "name": "PlanetX",
+    "slogan": "AI Career Growth Partner"
+  },
+  "auth": {
+    "emailPasswordRequired": "Please enter your email and password",
+    "loginFailed": "Login failed. Check your email and password.",
+    "emailPlaceholder": "Email address",
+    "passwordPlaceholder": "Password",
+    "loggingIn": "Signing in...",
+    "login": "Sign in",
+    "noAccount": "Don't have an account?",
+    "registerNow": "Sign up",
+    "passwordMismatch": "Passwords do not match",
+    "passwordMinLength": "Password must be at least 6 characters",
+    "registerFailed": "Registration failed. Please try again later.",
+    "createAccount": "Create account",
+    "nameOptional": "Name (optional)",
+    "passwordMinPlaceholder": "Password (min. 6 characters)",
+    "confirmPassword": "Confirm password",
+    "registering": "Signing up...",
+    "register": "Sign up",
+    "hasAccount": "Already have an account?",
+    "validating": "Verifying session...",
+    "logout": "Sign out",
+    "logoutShort": "Sign out"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "query": "Career Q&A",
+    "poetry": "Poetry Library",
+    "candidates": "Candidate Profiles",
+    "profile": "My Career Profile",
+    "jobs": "Find Jobs",
+    "resume": "Resume Optimizer",
+    "reports": "Growth Reports",
+    "consent": "Privacy & Consent"
+  },
+  "dashboard": {
+    "freeRegister": "Sign up free",
+    "hasAccountLogin": "Already have an account? Sign in",
+    "featureAiTitle": "AI Knowledge Q&A",
+    "featureAiDesc": "Powered by DeepSeek with fast responses",
+    "featureResumeTitle": "Smart Resume Parsing",
+    "featureResumeDesc": "Upload and structure resumes for job matching",
+    "featureReportTitle": "Data Reports",
+    "featureReportDesc": "Daily, weekly, and monthly insights",
+    "systemLabel": "System",
+    "systemHealthy": "Operational",
+    "systemDegraded": "Degraded",
+    "welcomeHint": "Signed up on genz.ltd? Your account is ready ✨",
+    "welcomeBack": "Welcome back, {{name}}",
+    "systemStatus": "System status",
+    "embedding": "Embedding",
+    "vectorStore": "Vector store: {{count}} entries",
+    "todayQuota": "Today's quota",
+    "timesUnit": "uses",
+    "upgrade": "Upgrade →",
+    "quickActions": "Quick actions",
+    "startQuery": "Start a question",
+    "parseResume": "Parse resume",
+    "jobMatch": "Match jobs",
+    "quickQuery": "Quick Q&A",
+    "quickQueryPlaceholder": "Type a question and press Enter...",
+    "ask": "Ask",
+    "uptime": "v{{version}} · Uptime {{hours}}h {{minutes}}m",
+    "viewPlans": "View plans →"
+  },
+  "tier": {
+    "free": "Free",
+    "supporter": "Supporter",
+    "pro": "Pro"
+  },
+  "common": {
+    "loading": "Loading...",
+    "searchPlaceholder": "Search..."
+  },
+  "error": {
+    "title": "Something went wrong",
+    "subtitle": "Sorry, {{brand}} ran into an unexpected error. Please refresh the page.",
+    "devInfo": "Developer info",
+    "retry": "Try again",
+    "reload": "Refresh page"
+  },
+  "lang": {
+    "switchAria": "Language",
+    "en": "EN",
+    "zh": "中文"
+  }
+}

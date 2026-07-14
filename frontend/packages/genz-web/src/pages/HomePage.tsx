@@ -18,7 +18,10 @@ export function HomePage() {
             <h1>{t("home.title")}</h1>
             <p className="lead">{t("home.lead")}</p>
             <div className="btn-row">
-              <Link className="btn btn-primary" to="/pricing">
+              <a className="btn btn-primary" href={SITE_CONFIG.appRegisterUrl}>
+                {t("home.ctaRegister")}
+              </a>
+              <Link className="btn btn-secondary" to="/pricing">
                 {t("home.ctaPricing")}
               </Link>
               <a className="btn btn-secondary" href={`mailto:${SITE_CONFIG.supportEmail}`}>

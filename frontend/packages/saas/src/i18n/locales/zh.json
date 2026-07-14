@@ -1,0 +1,91 @@
+{
+  "brand": {
+    "name": "T空间",
+    "slogan": "让 AI 成为你的招聘合伙人"
+  },
+  "auth": {
+    "emailPasswordRequired": "请输入邮箱和密码",
+    "loginFailed": "登录失败，请检查邮箱和密码",
+    "emailPlaceholder": "邮箱地址",
+    "passwordPlaceholder": "密码",
+    "loggingIn": "登录中...",
+    "login": "登录",
+    "noAccount": "还没有账号？",
+    "registerNow": "立即注册",
+    "passwordMismatch": "两次密码不一致",
+    "passwordMinLength": "密码至少6位",
+    "registerFailed": "注册失败，请稍后再试",
+    "createAccount": "创建账号",
+    "nameOptional": "姓名（选填）",
+    "passwordMinPlaceholder": "密码（至少6位）",
+    "confirmPassword": "确认密码",
+    "registering": "注册中...",
+    "register": "注册",
+    "hasAccount": "已有账号？",
+    "validating": "验证登录状态...",
+    "logout": "退出登录",
+    "logoutShort": "退出"
+  },
+  "nav": {
+    "dashboard": "仪表盘",
+    "query": "智能问答",
+    "poetry": "诗词文库",
+    "candidates": "求职者画像",
+    "profile": "我的职业画像",
+    "jobs": "职位匹配",
+    "resume": "简历解析",
+    "reports": "报告中心",
+    "consent": "隐私授权"
+  },
+  "dashboard": {
+    "freeRegister": "免费注册",
+    "hasAccountLogin": "已有账号？登录",
+    "featureAiTitle": "AI 知识问答",
+    "featureAiDesc": "接入 DeepSeek，秒级响应",
+    "featureResumeTitle": "简历智能解析",
+    "featureResumeDesc": "上传即结构化，匹配岗位",
+    "featureReportTitle": "数据报告",
+    "featureReportDesc": "日/周/月智能报告生成",
+    "systemLabel": "系统",
+    "systemHealthy": "运行正常",
+    "systemDegraded": "服务降级",
+    "welcomeHint": "从 PlanetX 过来的？你的账号已自动同步 ✨",
+    "welcomeBack": "欢迎回来，{{name}}",
+    "systemStatus": "系统状态",
+    "embedding": "嵌入",
+    "vectorStore": "向量库: {{count}} 条",
+    "todayQuota": "今日配额",
+    "timesUnit": "次",
+    "upgrade": "升级 →",
+    "quickActions": "快捷操作",
+    "startQuery": "开始提问",
+    "parseResume": "解析简历",
+    "jobMatch": "职位匹配",
+    "quickQuery": "快速问答",
+    "quickQueryPlaceholder": "输入问题，按 Enter 跳转到问答页...",
+    "ask": "提问",
+    "uptime": "v{{version}} · 已运行 {{hours}}h{{minutes}}m",
+    "viewPlans": "查看套餐 →"
+  },
+  "tier": {
+    "free": "免费版",
+    "supporter": "支持版",
+    "pro": "专业版"
+  },
+  "common": {
+    "loading": "加载中...",
+    "searchPlaceholder": "搜索..."
+  },
+  "error": {
+    "title": "页面出了点问题",
+    "subtitle": "抱歉，{{brand}}遇到了意外错误。请尝试刷新页面。",
+    "devInfo": "开发者信息",
+    "retry": "再试一次",
+    "reload": "刷新页面"
+  },
+  "lang": {
+    "switchAria": "语言切换",
+    "en": "EN",
+    "zh": "中文"
+  }
+}

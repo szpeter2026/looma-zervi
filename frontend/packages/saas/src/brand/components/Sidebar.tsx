@@ -1,35 +1,46 @@
 /**
  * Sidebar - SaaS navigation shell.
  * Owner: szbenyx
- *
- * Pure CSS + HTML (no tdesign-react / tdesign-icons-react).
- * Uses @looma/shared-core for brand config and auth store.
- * Quota format aligned with backend: { tier, records }.
  */
+import { useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { BRAND_SAAS } from "@looma/shared-core";
+import { useTranslation } from "react-i18next";
 import { useSaasAuthStore } from "../../features/auth/authStore";
+import { useBrand } from "../useBrand";
+import { IS_OVERSEAS } from "../../config/region";
 
 interface NavItem {
   path: string;
-  label: string;
+  labelKey: string;
   icon: string;
+  overseasHidden?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { path: "/", label: "仪表盘", icon: "◉" },
-  { path: "/query", label: "智能问答", icon: "◈" },
-  { path: "/poetry", label: "诗词文库", icon: "◇" },
-  { path: "/candidates", label: "求职者画像", icon: "◎" },
-  { path: "/jobs", label: "职位匹配", icon: "◈" },
-  { path: "/resume", label: "简历解析", icon: "◈" },
-  { path: "/reports", label: "报告中心", icon: "◆" },
-  { path: "/settings/consent", label: "隐私授权", icon: "🛡" },
-];
+function tierLabel(tier: string, t: (key: string) => string) {
+  if (tier === "free") return t("tier.free");
+  if (tier === "supporter") return t("tier.supporter");
+  return t("tier.pro");
+}
 
 export default function Sidebar() {
+  const { t } = useTranslation();
+  const brand = useBrand();
   const { user, quota, logout } = useSaasAuthStore();
   const navigate = useNavigate();
+
+  const navItems: NavItem[] = useMemo(
+    () => [
+      { path: "/", labelKey: "nav.dashboard", icon: "◉" },
+      { path: "/query", labelKey: "nav.query", icon: "◈" },
+      { path: "/poetry", labelKey: "nav.poetry", icon: "◇" },
+      { path: "/candidates", labelKey: IS_OVERSEAS ? "nav.profile" : "nav.candidates", icon: "◎", overseasHidden: true },
+      { path: "/jobs", labelKey: "nav.jobs", icon: "◈" },
+      { path: "/resume", labelKey: "nav.resume", icon: "◈" },
+      { path: "/reports", labelKey: "nav.reports", icon: "◆" },
+      { path: "/settings/consent", labelKey: "nav.consent", icon: "🛡" },
+    ].filter((item) => !(IS_OVERSEAS && item.overseasHidden)),
+    [t],
+  );
 
   const handleLogout = () => {
     logout();
@@ -49,15 +60,13 @@ export default function Sidebar() {
         color: "var(--color-text-sidebar)",
       }}
     >
-      {/* 品牌 */}
       <div className="px-5 py-5 border-b border-white/10">
         <h1 className="text-lg font-bold tracking-wide text-white">
-          {BRAND_SAAS.name}
+          {brand.name}
         </h1>
-        <p className="text-xs text-white/40 mt-1">{BRAND_SAAS.slogan}</p>
+        <p className="text-xs text-white/40 mt-1">{brand.slogan}</p>
       </div>
 
-      {/* 导航 */}
       <nav className="flex-1 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => (
           <NavLink
@@ -73,16 +82,15 @@ export default function Sidebar() {
             }
           >
             <span className="text-base">{item.icon}</span>
-            {item.label}
+            {t(item.labelKey)}
           </NavLink>
         ))}
       </nav>
 
-      {/* 配额 */}
       {user && quota && (
         <div className="px-5 py-3 border-t border-white/10">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-white/40">今日配额</span>
+            <span className="text-xs text-white/40">{t("dashboard.todayQuota")}</span>
             <span className="text-xs text-white/70">
               {askRecord
                 ? `${askRecord.daily_limit - askRecord.used}/${askRecord.daily_limit}`
@@ -100,19 +108,18 @@ export default function Sidebar() {
           </div>
           <div className="mt-1.5 flex items-center justify-between">
             <span className="text-xs text-white/30">
-              {quota.tier === "free" ? "免费版" : quota.tier === "supporter" ? "支持版" : "专业版"}
+              {tierLabel(quota.tier, t)}
             </span>
             <NavLink
               to="/pricing"
               className="text-xs text-white/40 hover:text-white transition-colors no-underline"
             >
-              查看套餐 →
+              {t("dashboard.viewPlans")}
             </NavLink>
           </div>
         </div>
       )}
 
-      {/* 用户信息 + 退出 */}
       {user && (
         <div className="px-5 py-3 border-t border-white/10 flex items-center justify-between">
           <div className="min-w-0 flex-1">
@@ -122,7 +129,7 @@ export default function Sidebar() {
           <button
             onClick={handleLogout}
             className="ml-3 text-white/50 hover:text-white transition-colors bg-transparent border-none cursor-pointer text-lg leading-none p-1"
-            title="退出登录"
+            title={t("auth.logout")}
           >
             ⏻
           </button>
