@@ -327,11 +327,32 @@ jobs:
           $SSH_CMD ${{ env.DEPLOY_TARGET }} "bash -s" << 'NGINX'
           set -euo pipefail
           DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
+          DOMAIN="${{ env.OVERSEAS_DOMAIN }}"
+          SSL_DIR="/etc/nginx/ssl"
           SRC="${DEPLOY_PATH}/docker/nginx.conf"
           if [ ! -f "${SRC}" ]; then
             echo "Missing ${SRC}" >&2
             exit 1
           fi
+
+          # Origin TLS for Cloudflare Full mode (see scripts/deploy-overseas.sh)
+          mkdir -p "${SSL_DIR}"
+          if [ ! -f "${SSL_DIR}/fullchain.pem" ] || [ ! -f "${SSL_DIR}/privkey.pem" ]; then
+            echo "=== Generating self-signed origin SSL (${SSL_DIR}) ==="
+            if ! command -v openssl >/dev/null 2>&1; then
+              apt-get update -y && apt-get install -y openssl
+            fi
+            openssl req -x509 -nodes -days 3650 \
+              -newkey rsa:2048 \
+              -keyout "${SSL_DIR}/privkey.pem" \
+              -out "${SSL_DIR}/fullchain.pem" \
+              -subj "/C=SG/ST=Singapore/L=Singapore/O=Looma/CN=${DOMAIN}" \
+              -addext "subjectAltName=DNS:${DOMAIN},DNS:*.${DOMAIN}"
+            chmod 600 "${SSL_DIR}/privkey.pem"
+          else
+            echo "=== Origin SSL already present (${SSL_DIR}) ==="
+          fi
+
           cp "${SRC}" /etc/nginx/nginx.conf
           nginx -t
           systemctl reload nginx || systemctl restart nginx
