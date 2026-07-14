@@ -13,6 +13,7 @@
  */
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import "./i18n";
 import { SaasAuthGuard } from "./features/auth/SaasAuthGuard";
 import { useSaasAuthStore } from "./features/auth/authStore";
@@ -42,6 +43,14 @@ function FeatureGuard({ children }: { children: React.ReactNode }) {
 export default function App() {
   const tryAutoLogin = useSaasAuthStore((s) => s.tryAutoLogin);
   useSaasAnalytics();
+  const { t, i18n } = useTranslation();
+
+  // 动态 document.title 跟随品牌名 + i18n 切换
+  useEffect(() => {
+    document.title = t("brand.slogan")
+      ? `${t("brand.name")} — ${t("brand.slogan")}`
+      : t("brand.name");
+  }, [t, i18n.language]);
 
   // 大陆：PlanetX 共享 token 自动登录（C→B）；海外 MVP 跳过
   useEffect(() => {
