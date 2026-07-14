@@ -4,11 +4,15 @@
 # 目标机默认: 139.180.184.25 (root, /opt/looma-zervi)
 # 域名: genz.ltd + Cloudflare (Nginx 使用 docker/nginx.conf)
 #
-# GitHub Secrets（必填，任选一组命名）:
-#   SSH_HOST_SG 或 SSH_HOST_OVERSEAS         - 139.180.184.25
-#   SSH_USER_SG 或 SSH_USER_OVERSEAS         - root
-#   SSH_PRIVATE_KEY_SG 或 SSH_PRIVATE_KEY_OVERSEAS - github-actions-overseas 私钥全文
-#   ENV_JWT_SECRET_SG 或 ENV_JWT_SECRET      - 海外 JWT（≥32 字符，与大陆独立）
+# GitHub Secrets（必填，任选一种配置方式）:
+#
+# 方式 A — Repository secrets（推荐命名）:
+#   SSH_HOST_OVERSEAS=139.180.184.25
+#   SSH_USER_OVERSEAS=root
+#   SSH_PRIVATE_KEY_OVERSEAS=<github-actions-overseas 私钥全文>
+#   ENV_JWT_SECRET_SG=<海外 JWT，≥32 字符>
+#
+# 方式 B — Environment「overseas」内配置同名 secret（需在 deploy job 加 environment: overseas）
 #
 # GitHub Secrets（建议）:
 #   ENV_DEEPSEEK_API_KEY
@@ -34,10 +38,6 @@ env:
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH_SG != '' && vars.DEPLOY_PATH_SG || '/opt/looma-zervi' }}
   OVERSEAS_DOMAIN: genz.ltd
   OVERSEAS_API_HOST: api.genz.ltd
-  SSH_HOST: ${{ secrets.SSH_HOST_SG != '' && secrets.SSH_HOST_SG || secrets.SSH_HOST_OVERSEAS }}
-  SSH_USER: ${{ secrets.SSH_USER_SG != '' && secrets.SSH_USER_SG || secrets.SSH_USER_OVERSEAS }}
-  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_SG != '' && secrets.SSH_PRIVATE_KEY_SG || secrets.SSH_PRIVATE_KEY_OVERSEAS != '' && secrets.SSH_PRIVATE_KEY_OVERSEAS || secrets.OVERSEAS_SSH_PRIVATE_KEY }}
-  ENV_JWT_SECRET: ${{ secrets.ENV_JWT_SECRET_SG != '' && secrets.ENV_JWT_SECRET_SG || secrets.ENV_JWT_SECRET }}
 
 jobs:
   backend-test:
@@ -79,27 +79,36 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend-test]
     if: success()
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST_OVERSEAS || secrets.SSH_HOST_SG }}
+      SSH_USER: ${{ secrets.SSH_USER_OVERSEAS || secrets.SSH_USER_SG }}
+      ENV_JWT_SECRET: ${{ secrets.ENV_JWT_SECRET_SG || secrets.ENV_JWT_SECRET }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Validate SSH secrets
+        env:
+          KEY_OVERSEAS: ${{ secrets.SSH_PRIVATE_KEY_OVERSEAS }}
+          KEY_SG: ${{ secrets.SSH_PRIVATE_KEY_SG }}
+          KEY_ALT: ${{ secrets.OVERSEAS_SSH_PRIVATE_KEY }}
         run: |
-          if [ -z "${{ env.SSH_PRIVATE_KEY }}" ]; then
+          if [ -z "$KEY_OVERSEAS" ] && [ -z "$KEY_SG" ] && [ -z "$KEY_ALT" ]; then
             echo "::error::Missing SSH private key secret."
-            echo "Add one of: SSH_PRIVATE_KEY_SG, SSH_PRIVATE_KEY_OVERSEAS, OVERSEAS_SSH_PRIVATE_KEY"
+            echo "Add repository secret SSH_PRIVATE_KEY_OVERSEAS (recommended)."
             echo "Value = full private key for github-actions-overseas (BEGIN/END lines included)."
             exit 1
           fi
           if [ -z "${{ env.SSH_HOST }}" ] || [ -z "${{ env.SSH_USER }}" ]; then
-            echo "::error::Missing SSH host/user. Add SSH_HOST_SG+SSH_USER_SG or SSH_HOST_OVERSEAS+SSH_USER_OVERSEAS."
+            echo "::error::Missing SSH host/user."
+            echo "Add SSH_HOST_OVERSEAS=139.180.184.25 and SSH_USER_OVERSEAS=root"
             exit 1
           fi
 
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.1
         with:
-          ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_OVERSEAS || secrets.SSH_PRIVATE_KEY_SG || secrets.OVERSEAS_SSH_PRIVATE_KEY }}
 
       - name: Add host key
         run: |
