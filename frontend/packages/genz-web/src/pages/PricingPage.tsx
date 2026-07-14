@@ -91,6 +91,11 @@ export function PricingPage() {
         }),
       });
       if (!res.ok) {
+        // 401 = unauthenticated → redirect to SaaS register
+        if (res.status === 401) {
+          window.location.href = SITE_CONFIG.appRegisterUrl;
+          return;
+        }
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || "Checkout failed");
       }
@@ -160,7 +165,7 @@ export function PricingPage() {
                 {plan.tier === "free" ? (
                   <a
                     className="btn btn-secondary"
-                    href={`mailto:${SITE_CONFIG.supportEmail}?subject=${encodeURIComponent("PlanetX — Free")}`}
+                    href={SITE_CONFIG.appRegisterUrl}
                   >
                     {t("pricing.getStartedFree")}
                   </a>
