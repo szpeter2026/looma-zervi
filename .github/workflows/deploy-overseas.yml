@@ -354,9 +354,47 @@ jobs:
           fi
 
           cp "${SRC}" /etc/nginx/nginx.conf
+          # Stock Ubuntu site can conflict on :80 when we use a full replacement nginx.conf
+          rm -f /etc/nginx/sites-enabled/default
+
+          if ! command -v nginx >/dev/null 2>&1; then
+            apt-get update -y && apt-get install -y nginx
+          fi
+          mkdir -p /var/log/nginx /run/nginx /var/cache/nginx
           nginx -t
-          systemctl reload nginx || systemctl restart nginx
-          echo "=== Nginx reloaded (overseas) ==="
+
+          free_port_if_not_nginx() {
+            local port="$1"
+            if ! command -v lsof >/dev/null 2>&1; then
+              apt-get update -y && apt-get install -y lsof
+            fi
+            for pid in $(lsof -t -i TCP:"${port}" -sTCP:LISTEN 2>/dev/null || true); do
+              cmd=$(ps -p "${pid}" -o comm= 2>/dev/null || true)
+              if [ "${cmd}" != "nginx" ]; then
+                echo "=== Freeing port ${port} from ${cmd} (pid ${pid}) ==="
+                kill "${pid}" 2>/dev/null || true
+              fi
+            done
+          }
+          free_port_if_not_nginx 80
+          free_port_if_not_nginx 443
+          sleep 1
+
+          systemctl enable nginx
+          systemctl reset-failed nginx 2>/dev/null || true
+          if systemctl is-active --quiet nginx; then
+            systemctl reload nginx
+          else
+            systemctl start nginx
+          fi
+          if ! systemctl is-active --quiet nginx; then
+            echo "=== nginx failed to start — diagnostics ==="
+            systemctl status nginx --no-pager -l || true
+            journalctl -u nginx.service -n 60 --no-pager || true
+            ss -tlnp 2>/dev/null | grep -E ':80|:443' || netstat -tlnp 2>/dev/null | grep -E ':80|:443' || true
+            exit 1
+          fi
+          echo "=== Nginx running (overseas) ==="
           NGINX
 
       - name: Build & restart Docker stack
