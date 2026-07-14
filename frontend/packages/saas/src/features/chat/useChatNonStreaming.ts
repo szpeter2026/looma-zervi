@@ -51,6 +51,7 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quotaExhausted, setQuotaExhausted] = useState(false);
   const retryCountRef = useRef(0);
   
   const apiClient = useMemo(() => createSaasApiClient(), []);
@@ -60,6 +61,7 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
   const send = useCallback(
     async (query: string) => {
       setError(null);
+      setQuotaExhausted(false);
       setIsLoading(true);
       retryCountRef.current = 0;
 
@@ -123,6 +125,17 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
             return;
           }
 
+          // Handle quota exhausted (429)
+          if (
+            err.status === 429 &&
+            errData.error === "quota_exceeded"
+          ) {
+            setError(errData.message || "当日配额已用尽");
+            setQuotaExhausted(true);
+            setIsLoading(false);
+            return;
+          }
+
           // Retry logic
           if (retryCountRef.current < MAX_RETRIES) {
             const delay = RETRY_DELAYS[retryCountRef.current] ?? 5000;
@@ -146,14 +159,22 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
   const clear = useCallback(() => {
     setMessages([]);
     setError(null);
+    setQuotaExhausted(false);
     setIsLoading(false);
+  }, []);
+
+  const resetQuotaError = useCallback(() => {
+    setError(null);
+    setQuotaExhausted(false);
   }, []);
 
   return { 
     messages, 
     isStreaming: isLoading, // Keep same interface as useChat
     error, 
+    quotaExhausted,
     sendStream: send, // Keep same interface as useChat
-    clear 
+    clear,
+    resetQuotaError,
   };
 }

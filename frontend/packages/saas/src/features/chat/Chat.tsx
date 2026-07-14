@@ -9,6 +9,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
 import { useChatNonStreaming, type DocSource } from "./useChatNonStreaming";
+import QuotaExhaustedModal from "../../brand/components/QuotaExhaustedModal";
 
 type ChatMode = "chat" | "deepseek" | "fast";
 
@@ -25,7 +26,7 @@ export default function Chat() {
     () => ensureConsent("ask_rag"),
     [ensureConsent],
   );
-  const { messages, isStreaming, error, sendStream, clear } = useChatNonStreaming({
+  const { messages, isStreaming, error, quotaExhausted, sendStream, clear, resetQuotaError } = useChatNonStreaming({
     mode,
     ensureAskConsent,
   });
@@ -48,6 +49,7 @@ export default function Chat() {
   return (
     <>
     {consentPrompt}
+    <QuotaExhaustedModal isOpen={quotaExhausted} onClose={resetQuotaError} />
     <div className="max-w-4xl mx-auto flex flex-col" style={{ height: "calc(100vh - 120px)" }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4 shrink-0">

@@ -72,6 +72,13 @@
     "supporter": "Supporter",
     "pro": "Pro"
   },
+  "quota": {
+    "exhaustedTitle": "Daily Quota Exhausted",
+    "exhaustedMessage": "You've used up all your questions for today.",
+    "exhaustedHint": "Upgrade to Pro for unlimited access, or come back tomorrow for more free questions.",
+    "dismiss": "Got it",
+    "upgradeToPro": "Upgrade to Pro"
+  },
   "common": {
     "loading": "Loading...",
     "searchPlaceholder": "Search..."

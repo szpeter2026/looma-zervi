@@ -72,6 +72,13 @@
     "supporter": "支持版",
     "pro": "专业版"
   },
+  "quota": {
+    "exhaustedTitle": "今日配额已用尽",
+    "exhaustedMessage": "您的免费提问次数已用完。",
+    "exhaustedHint": "升级到 Pro 即可享受无限次提问，或明天再来继续免费使用。",
+    "dismiss": "我知道了",
+    "upgradeToPro": "升级 Pro"
+  },
   "common": {
     "loading": "加载中...",
     "searchPlaceholder": "搜索..."

@@ -96,7 +96,7 @@ sed -i 's|^RATE_LIMIT_STORAGE_URI=.*|RATE_LIMIT_STORAGE_URI=redis://redis:6379/1
 
 # Set domain-specific configs
 sed -i "s|GOOGLE_REDIRECT_URI=.*|GOOGLE_REDIRECT_URI=https://${API_SUBDOMAIN}/v1/auth/google/callback|" backend/.env
-sed -i "s|CORS_ORIGINS=.*|CORS_ORIGINS=https://${DOMAIN},https://www.${DOMAIN},https://${TSPACE_SUBDOMAIN},https://${API_SUBDOMAIN}|g" backend/.env
+sed -i "s|CORS_ORIGINS=.*|CORS_ORIGINS=https://${DOMAIN},https://www.${DOMAIN},https://${TSPACE_SUBDOMAIN},https://${API_SUBDOMAIN},https://app.${DOMAIN}|g" backend/.env
 sed -i "s|DEPLOY_REGION=.*|DEPLOY_REGION=SG|" backend/.env
 
 # Add payment success/cancel URLs if not present

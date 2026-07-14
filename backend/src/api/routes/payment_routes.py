@@ -65,7 +65,7 @@ TIER_PRICE_FEN = {
 # USD 金额 → cents（Stripe 以 cents 为单位）
 TIER_PRICE_USD_CENTS = {
     "supporter": 199,    # $1.99
-    "pro": 1999,         # $19.99
+    "pro": 599,          # $5.99
 }
 
 
