@@ -1,10 +1,12 @@
 # ============================================================
-# Deploy Overseas — tag overseas-* 或 push release/overseas → Vultr 新加坡
+# Deploy Overseas — tag overseas-* → Vultr 新加坡（仅 tag 触发，避免与分支 push 双跑）
 #
 # 目标机: 139.180.184.25 · genz.ltd + tspace.genz.ltd + api.genz.ltd
 #
-# 触发: git tag overseas-v1.4 && git push origin overseas-v1.4（海外惯例）
-#       或 push release/overseas 分支
+# 触发: git tag overseas-v1.4.3 && git push github overseas-v1.4.3
+#       或 Actions 页 workflow_dispatch 手动部署
+# 注意: 不要同时 push release/overseas 分支 + overseas-* tag，会触发两次。
+#       分支合并后只推 tag 即可；分支 push 不再触发本 workflow。
 #
 # Secrets 任选一组（overseas-v1.3 成功部署用的是 VULTR_*）:
 #   VULTR_SSH_HOST / VULTR_SSH_USER / VULTR_SSH_PRIVATE_KEY / VULTR_JWT_SECRET
@@ -23,14 +25,13 @@ name: Deploy Overseas
 
 on:
   push:
-    branches: [release/overseas]
     tags:
       - 'overseas-*'
   workflow_dispatch:
 
 concurrency:
   group: deploy-overseas
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH_SG != '' && vars.DEPLOY_PATH_SG || secrets.VULTR_DEPLOY_PATH || '/opt/looma-zervi' }}
