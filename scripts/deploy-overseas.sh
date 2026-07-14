@@ -143,15 +143,20 @@ done
 # ============================
 # 7. Deploy genz-web static site (genz.ltd marketing + payment provider selection)
 # ============================
+log "Building genz-web (React + i18n)..."
+cd "${APP_DIR}/frontend"
+if command -v pnpm >/dev/null 2>&1; then
+    pnpm install --frozen-lockfile
+    pnpm build:genz-web
+else
+    log "pnpm not found; ensure dist/ is pre-built on the server"
+fi
+
 log "Deploying genz-web to /var/www/genz-web..."
-GENZ_WEB_SRC="${APP_DIR}/frontend/packages/genz-web"
+GENZ_WEB_DIST="${APP_DIR}/frontend/packages/genz-web/dist"
 GENZ_WEB_DEST="/var/www/genz-web"
 mkdir -p "${GENZ_WEB_DEST}"
-rsync -a --delete \
-    --exclude README.md \
-    --exclude package.json \
-    --exclude vercel.json \
-    "${GENZ_WEB_SRC}/" "${GENZ_WEB_DEST}/"
+rsync -a --delete "${GENZ_WEB_DIST}/" "${GENZ_WEB_DEST}/"
 log "genz-web deployed ($(find "${GENZ_WEB_DEST}" -type f | wc -l) files)."
 
 # ============================

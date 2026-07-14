@@ -74,10 +74,40 @@ jobs:
           DEPLOY_REGION: SG
         run: python -m pytest tests/ -v --tb=short
 
+  genz-web-build:
+    name: "Build genz-web"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build genz-web
+        run: pnpm build:genz-web
+
+      - name: Upload genz-web dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: genz-web-dist
+          path: frontend/packages/genz-web/dist
+          retention-days: 1
+
   deploy:
     name: "Deploy to Vultr SG"
     runs-on: ubuntu-latest
-    needs: [backend-test]
+    needs: [backend-test, genz-web-build]
     if: success()
     env:
       SSH_HOST: ${{ secrets.SSH_HOST_OVERSEAS || secrets.SSH_HOST_SG }}
@@ -86,6 +116,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download genz-web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: genz-web-dist
+          path: artifacts/genz-web
 
       - name: Validate SSH secrets
         env:
@@ -237,19 +273,10 @@ jobs:
 
       - name: Deploy genz-web static site
         run: |
-          $SSH_CMD ${{ env.DEPLOY_TARGET }} "bash -s" << 'GENZ'
-          set -euo pipefail
-          DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
-          SRC="${DEPLOY_PATH}/frontend/packages/genz-web"
-          DEST="/var/www/genz-web"
-          mkdir -p "${DEST}"
-          rsync -a --delete \
-            --exclude README.md \
-            --exclude package.json \
-            --exclude vercel.json \
-            "${SRC}/" "${DEST}/"
-          echo "genz-web deployed ($(find "${DEST}" -type f | wc -l) files)"
-          GENZ
+          rsync -avz -e "$SSH_CMD" --delete \
+            artifacts/genz-web/ \
+            ${{ env.DEPLOY_TARGET }}:/var/www/genz-web/
+          $SSH_CMD ${{ env.DEPLOY_TARGET }} "find /var/www/genz-web -type f | wc -l"
 
       - name: Deploy nginx config
         run: |

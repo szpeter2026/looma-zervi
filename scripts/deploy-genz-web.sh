@@ -1,27 +1,22 @@
 #!/usr/bin/env bash
-# Redeploy genz-web static files only (no Docker rebuild).
-# Run on overseas VPS as root after git pull on release/overseas.
+# Build and deploy genz-web (Vite React SPA) to /var/www/genz-web
 #
-#   cd /opt/looma-zervi && git pull origin release/overseas
+#   cd /opt/looma-zervi/frontend && pnpm install && pnpm build:genz-web
 #   bash scripts/deploy-genz-web.sh
 
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/looma-zervi}"
-GENZ_WEB_SRC="${APP_DIR}/frontend/packages/genz-web"
+GENZ_WEB_DIST="${APP_DIR}/frontend/packages/genz-web/dist"
 GENZ_WEB_DEST="/var/www/genz-web"
 
-if [ ! -d "${GENZ_WEB_SRC}" ]; then
-    echo "Missing ${GENZ_WEB_SRC}" >&2
+if [ ! -d "${GENZ_WEB_DIST}" ]; then
+    echo "Missing ${GENZ_WEB_DIST}. Run: cd ${APP_DIR}/frontend && pnpm install && pnpm build:genz-web" >&2
     exit 1
 fi
 
 mkdir -p "${GENZ_WEB_DEST}"
-rsync -a --delete \
-    --exclude README.md \
-    --exclude package.json \
-    --exclude vercel.json \
-    "${GENZ_WEB_SRC}/" "${GENZ_WEB_DEST}/"
+rsync -a --delete "${GENZ_WEB_DIST}/" "${GENZ_WEB_DEST}/"
 
 nginx -t && systemctl reload nginx
 
