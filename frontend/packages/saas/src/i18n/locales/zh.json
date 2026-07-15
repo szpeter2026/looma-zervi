@@ -37,7 +37,8 @@
     "jobsOverseas": "职业机会",
     "resume": "简历解析",
     "reports": "报告中心",
-    "consent": "隐私授权"
+    "consent": "隐私授权",
+    "admin": "管理看板"
   },
   "dashboard": {
     "freeRegister": "免费注册",
@@ -72,14 +73,36 @@
   "tier": {
     "free": "免费版",
     "supporter": "支持版",
-    "pro": "专业版"
+    "pro": "专业版",
+    "requires": "需要 {{tier}}",
+    "viewUpgrade": "查看套餐并升级 →",
+    "lockBadge": "支持者+",
+    "lockHint": "升级后解锁此功能",
+    "unlimited": "不限次数"
+  },
+  "candidates": {
+    "title": "求职者画像",
+    "loading": "加载候选人…",
+    "loadingDetail": "加载中…",
+    "loadFailed": "无法加载候选人",
+    "backToList": "← 返回候选人列表",
+    "tierRequired": "求职者画像与候选人导入为支持者及以上功能。升级后可创建企业空间、导入 PlanetX 分享码，并管理候选人池。",
+    "needsEnterprise": "请先创建企业空间，才能导入 PlanetX 分享的候选人。",
+    "createEnterprise": "创建企业（一键）",
+    "importHint": "粘贴 PlanetX 分享码导入候选人",
+    "shareCodePlaceholder": "粘贴分享码，如 A1B2C3D4",
+    "import": "导入",
+    "importing": "导入中…",
+    "empty": "暂无候选人。让求职者在 PlanetX 完成测试后，点击「分享给 HR」复制链接或分享码。",
+    "unknownType": "未知",
+    "upgradeForMore": "升级 Pro，解锁更多匹配能力 →"
   },
   "quota": {
     "exhaustedTitle": "今日配额已用尽",
-    "exhaustedMessage": "您的免费提问次数已用完。",
-    "exhaustedHint": "升级到 Pro 即可享受无限次提问，或明天再来继续免费使用。",
+    "exhaustedMessage": "您的免费配额已用完。",
+    "exhaustedHint": "升级到支持者或 Pro 即可享受更高配额，或明天再来继续免费使用。",
     "dismiss": "我知道了",
-    "upgradeToPro": "升级 Pro"
+    "upgradeToPro": "去升级"
   },
   "jobs": {
     "title": "职位匹配",

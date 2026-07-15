@@ -135,4 +135,10 @@ export const API_ROUTES = {
   COMPLIANCE_CONSENT_REVOKE: "/v1/compliance/consent/revoke",
   COMPLIANCE_CONSENT_STATUS: "/v1/compliance/consent/status",
   COMPLIANCE_CONSENT_REQUIRED: "/v1/compliance/consent/required",
+
+  // Admin dashboard
+  ADMIN_STATS: "/v1/admin/stats",
+  ADMIN_FUNNEL: "/v1/admin/funnel",
+  ADMIN_NARRATIVE: "/v1/admin/narrative",
+  ADMIN_HEALTH: "/v1/admin/health",
 } as const;

@@ -37,6 +37,7 @@ export {
   createCreditApi,
   createAnalyticsApi,
   createComplianceApi,
+  createAdminApi,
 } from "./api/createApi";
 
 // Types
@@ -290,6 +291,13 @@ export {
   isValidUrl,
 } from "./utils/validation";
 
+export {
+  hasMinTier,
+  isPaidTier,
+  isAdmin,
+} from "./utils/entitlements";
+export type { TierLike } from "./utils/entitlements";
+
 export type {
   AnalyticsPlatform,
   ClosedLoopEventName,
@@ -332,3 +340,12 @@ export {
   hasConsent,
   isConsentRequiredError,
 } from "./compliance/ensureConsent";
+
+export type {
+  AdminStatsResponse,
+  AdminRecentUser,
+  AdminDauPoint,
+  AdminFunnelResponse,
+  AdminNarrativeResponse,
+  AdminHealthResponse,
+} from "./types/admin";

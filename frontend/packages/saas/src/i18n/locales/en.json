@@ -37,7 +37,8 @@
     "jobsOverseas": "Opportunities",
     "resume": "Resume Optimizer",
     "reports": "Growth Reports",
-    "consent": "Privacy & Consent"
+    "consent": "Privacy & Consent",
+    "admin": "Admin Panel"
   },
   "dashboard": {
     "freeRegister": "Sign up free",
@@ -72,14 +73,36 @@
   "tier": {
     "free": "Free",
     "supporter": "Supporter",
-    "pro": "Pro"
+    "pro": "Pro",
+    "requires": "Requires {{tier}}",
+    "viewUpgrade": "View plans & upgrade →",
+    "lockBadge": "Supporter+",
+    "lockHint": "Upgrade to unlock this feature",
+    "unlimited": "Unlimited"
+  },
+  "candidates": {
+    "title": "Candidate Profiles",
+    "loading": "Loading candidates…",
+    "loadingDetail": "Loading…",
+    "loadFailed": "Could not load candidate",
+    "backToList": "← Back to list",
+    "tierRequired": "Candidate profiles and imports are available on Supporter and above. Upgrade to create a workspace, import PlanetX share codes, and manage your talent pool.",
+    "needsEnterprise": "Create a workspace first to import candidates shared from PlanetX.",
+    "createEnterprise": "Create workspace",
+    "importHint": "Paste a PlanetX share code to import a candidate",
+    "shareCodePlaceholder": "Paste share code, e.g. A1B2C3D4",
+    "import": "Import",
+    "importing": "Importing…",
+    "empty": "No candidates yet. Ask applicants to finish the PlanetX quiz, then share a code with you.",
+    "unknownType": "Unknown",
+    "upgradeForMore": "Upgrade to Pro for deeper matching →"
   },
   "quota": {
     "exhaustedTitle": "Daily Quota Exhausted",
-    "exhaustedMessage": "You've used up all your questions for today.",
-    "exhaustedHint": "Upgrade to Pro for unlimited access, or come back tomorrow for more free questions.",
+    "exhaustedMessage": "You've used up today's free quota.",
+    "exhaustedHint": "Upgrade to Supporter or Pro for higher limits, or come back tomorrow.",
     "dismiss": "Got it",
-    "upgradeToPro": "Upgrade to Pro"
+    "upgradeToPro": "Upgrade"
   },
   "jobs": {
     "title": "Career Opportunities",

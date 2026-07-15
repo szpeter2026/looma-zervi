@@ -578,6 +578,32 @@ export function createAnalyticsApi(client: ApiClient) {
 }
 
 // ============================================================
+// Admin API (Management dashboard)
+// ============================================================
+export function createAdminApi(client: ApiClient) {
+  return {
+    /** Full admin dashboard stats (users, activity, system) */
+    stats: () =>
+      client.get<import("../types/admin").AdminStatsResponse>(API_ROUTES.ADMIN_STATS),
+
+    /** Funnel conversion stats */
+    funnel: (days = 30) =>
+      client.get<import("../types/admin").AdminFunnelResponse>(
+        API_ROUTES.ADMIN_FUNNEL,
+        { days },
+      ),
+
+    /** Narrative / Phase 0 metrics */
+    narrative: () =>
+      client.get<import("../types/admin").AdminNarrativeResponse>(API_ROUTES.ADMIN_NARRATIVE),
+
+    /** Enhanced system health */
+    health: () =>
+      client.get<import("../types/admin").AdminHealthResponse>(API_ROUTES.ADMIN_HEALTH),
+  };
+}
+
+// ============================================================
 // Compliance API (PIPL consent gate)
 // ============================================================
 export function createComplianceApi(client: ApiClient) {

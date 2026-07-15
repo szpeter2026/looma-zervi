@@ -2436,6 +2436,125 @@ class DatabaseManager:
         }
 
     # ============================================
+    # Admin dashboard statistics
+    # ============================================
+
+    def get_admin_stats(self) -> dict:
+        """Aggregate admin dashboard metrics: users, activity, system overview."""
+        with self.get_conn() as conn:
+            # ── User counts ──
+            total_users = conn.execute(
+                "SELECT COUNT(*) as cnt FROM users"
+            ).fetchone()["cnt"]
+
+            users_by_tier = {
+                r["tier"]: r["cnt"]
+                for r in conn.execute(
+                    "SELECT tier, COUNT(*) as cnt FROM users GROUP BY tier"
+                ).fetchall()
+            }
+
+            users_by_role = {
+                r["role"]: r["cnt"]
+                for r in conn.execute(
+                    "SELECT role, COUNT(*) as cnt FROM users GROUP BY role"
+                ).fetchall()
+            }
+
+            early_adopters = conn.execute(
+                "SELECT COUNT(*) as cnt FROM users WHERE is_early_adopter = 1"
+            ).fetchone()["cnt"]
+
+            new_users_today = conn.execute(
+                "SELECT COUNT(*) as cnt FROM users WHERE created_at >= date('now')"
+            ).fetchone()["cnt"]
+
+            new_users_week = conn.execute(
+                "SELECT COUNT(*) as cnt FROM users WHERE created_at >= date('now', '-7 days')"
+            ).fetchone()["cnt"]
+
+            # ── Activity counts ──
+            total_queries = conn.execute(
+                "SELECT COUNT(*) as cnt FROM product_events WHERE event_name = 'quiz_complete'"
+            ).fetchone()["cnt"]
+
+            total_resumes = conn.execute(
+                "SELECT COUNT(*) as cnt FROM resumes"
+            ).fetchone()["cnt"]
+
+            total_jobs = conn.execute(
+                "SELECT COUNT(*) as cnt FROM jobs"
+            ).fetchone()["cnt"]
+
+            total_matches = conn.execute(
+                "SELECT COUNT(*) as cnt FROM job_matches"
+            ).fetchone()["cnt"]
+
+            total_poems = conn.execute(
+                "SELECT COUNT(*) as cnt FROM poems"
+            ).fetchone()["cnt"]
+
+            # ── Daily active users (7-day window) ──
+            dau_rows = conn.execute(
+                """SELECT date(created_at) as day, COUNT(DISTINCT user_id) as cnt
+                   FROM product_events
+                   WHERE created_at >= date('now', '-7 days')
+                   GROUP BY day
+                   ORDER BY day DESC"""
+            ).fetchall()
+            dau_trend = [{"day": r["day"], "count": r["cnt"]} for r in dau_rows]
+
+            # ── Recent registrations ──
+            recent_users = conn.execute(
+                """SELECT id, email, name, tier, role, created_at
+                   FROM users
+                   ORDER BY created_at DESC LIMIT 10"""
+            ).fetchall()
+            recent = [
+                {
+                    "id": r["id"],
+                    "email": r["email"],
+                    "name": r["name"],
+                    "tier": r["tier"],
+                    "role": r["role"],
+                    "created_at": r["created_at"],
+                }
+                for r in recent_users
+            ]
+
+            # ── DB size ──
+            try:
+                page_count = conn.execute("PRAGMA page_count").fetchone()[0]
+                page_size = conn.execute("PRAGMA page_size").fetchone()[0]
+                db_size_bytes = page_count * page_size
+            except Exception:
+                db_size_bytes = 0
+
+        return {
+            "users": {
+                "total": total_users,
+                "by_tier": users_by_tier,
+                "by_role": users_by_role,
+                "early_adopters": early_adopters,
+                "new_today": new_users_today,
+                "new_this_week": new_users_week,
+                "recent": recent,
+            },
+            "activity": {
+                "total_queries": total_queries,
+                "total_resumes": total_resumes,
+                "total_jobs": total_jobs,
+                "total_matches": total_matches,
+                "total_poems": total_poems,
+                "dau_trend": dau_trend,
+            },
+            "system": {
+                "db_size_bytes": db_size_bytes,
+                "db_size_mb": round(db_size_bytes / (1024 * 1024), 2),
+            },
+        }
+
+    # ============================================
     # Quiz sessions (HarmonyOS 答题游戏)
     # ============================================
     def create_quiz_session(self, user_id: str, questions_json: str) -> dict:

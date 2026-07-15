@@ -6,15 +6,17 @@
  * Uses authStore for token, direct fetch for file upload.
  */
 import { useState, useRef, useMemo } from "react";
-import { createResumeApi, type ParsedResume } from "@looma/shared-core";
+import { ApiError, createResumeApi, type ParsedResume } from "@looma/shared-core";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
+import QuotaExhaustedModal from "../../brand/components/QuotaExhaustedModal";
 
 export default function Resume() {
   const [resume, setResume] = useState<ParsedResume | null>(null);
   const [parsing, setParsing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [quotaExhausted, setQuotaExhausted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const api = useMemo(() => createSaasApiClient(), []);
@@ -43,15 +45,21 @@ export default function Resume() {
       } else {
         setMsg("简历解析完成，但未能提取结构化信息");
       }
-    } catch (err: any) {
-      // ApiError from upload() includes status and body
-      if (err?.status === 422) {
-        setMsg(err?.body?.message || "文档解析失败，请检查文件格式或文件是否损坏");
-      } else if (err?.status === 400) {
-        setMsg(err?.body?.message || "不支持的文件格式，请上传 PDF 或 Word 文件");
-      } else if (err?.status === 429) {
+    } catch (err: unknown) {
+      const apiErr = err instanceof ApiError ? err : null;
+      if (apiErr?.status === 422) {
+        setMsg(apiErr.body?.message || "文档解析失败，请检查文件格式或文件是否损坏");
+      } else if (apiErr?.status === 400) {
+        setMsg(apiErr.body?.message || "不支持的文件格式，请上传 PDF 或 Word 文件");
+      } else if (
+        apiErr?.status === 429 &&
+        apiErr.body?.error === "quota_exceeded"
+      ) {
+        setQuotaExhausted(true);
+        setMsg(null);
+      } else if (apiErr?.status === 429) {
         setMsg("今日简历解析配额已用尽，请明天再试或升级套餐");
-      } else if (err?.message === "request_timeout") {
+      } else if (err instanceof Error && err.message === "request_timeout") {
         setMsg("请求超时，请检查网络或稍后重试");
       } else {
         setMsg("解析失败，请检查文件格式");
@@ -76,6 +84,10 @@ export default function Resume() {
   return (
     <>
     {consentPrompt}
+    <QuotaExhaustedModal
+      isOpen={quotaExhausted}
+      onClose={() => setQuotaExhausted(false)}
+    />
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6" style={{ color: "var(--color-text-primary)" }}>
         简历解析

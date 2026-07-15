@@ -16,6 +16,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import "./i18n";
 import { SaasAuthGuard } from "./features/auth/SaasAuthGuard";
+import { SaasAdminGuard } from "./features/auth/SaasAdminGuard";
 import { useSaasAuthStore } from "./features/auth/authStore";
 import { AppLayout } from "./brand/components/AppLayout";
 import ErrorBoundary from "./brand/components/ErrorBoundary";
@@ -33,6 +34,7 @@ import CandidateShare from "./features/candidates/CandidateShare";
 import Candidates from "./features/candidates/Candidates";
 import CandidateDetail from "./features/candidates/CandidateDetail";
 import ConsentSettings from "./features/settings/ConsentSettings";
+import AdminDashboard from "./features/admin/AdminDashboard";
 import { useSaasAnalytics } from "./analytics/useSaasAnalytics";
 import { IS_OVERSEAS } from "./config/region";
 
@@ -91,6 +93,9 @@ export default function App() {
                 </>
               )}
               <Route path="/settings/consent" element={<FeatureGuard><ConsentSettings /></FeatureGuard>} />
+              <Route element={<SaasAdminGuard />}>
+                <Route path="/admin" element={<FeatureGuard><AdminDashboard /></FeatureGuard>} />
+              </Route>
             </Route>
           </Route>
 

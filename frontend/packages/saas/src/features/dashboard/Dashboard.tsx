@@ -4,6 +4,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { isPaidTier } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
 import { useBrand } from "../../brand/useBrand";
 
@@ -66,6 +67,7 @@ export default function Dashboard() {
   }, []);
 
   const askRecord = quota?.records?.find((r) => r.resource === "ask");
+  const paid = isPaidTier(user?.tier ?? quota?.tier);
   const usagePercent = askRecord && askRecord.daily_limit > 0
     ? Math.round((askRecord.used / askRecord.daily_limit) * 100)
     : 0;
@@ -213,30 +215,43 @@ export default function Dashboard() {
           </h3>
           {quota && askRecord ? (
             <>
-              <div className="flex items-baseline gap-1 mb-3">
-                <span
-                  className="text-3xl font-bold"
-                  style={{ color: "var(--color-primary)" }}
-                >
-                  {askRecord.daily_limit - askRecord.used}
-                </span>
-                <span style={{ color: "var(--color-text-muted)" }}>
-                  / {askRecord.daily_limit} {t("dashboard.timesUnit")}
-                </span>
-              </div>
-              <div
-                className="h-2 rounded-full overflow-hidden"
-                style={{ backgroundColor: "var(--color-bg-surface)" }}
-              >
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${Math.min(usagePercent, 100)}%`,
-                    backgroundColor:
-                      usagePercent > 80 ? "var(--color-warning)" : "var(--color-primary)",
-                  }}
-                />
-              </div>
+              {paid ? (
+                <div className="mb-3">
+                  <span
+                    className="text-2xl font-bold"
+                    style={{ color: "var(--color-primary)" }}
+                  >
+                    {t("tier.unlimited")}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-1 mb-3">
+                    <span
+                      className="text-3xl font-bold"
+                      style={{ color: "var(--color-primary)" }}
+                    >
+                      {askRecord.daily_limit - askRecord.used}
+                    </span>
+                    <span style={{ color: "var(--color-text-muted)" }}>
+                      / {askRecord.daily_limit} {t("dashboard.timesUnit")}
+                    </span>
+                  </div>
+                  <div
+                    className="h-2 rounded-full overflow-hidden"
+                    style={{ backgroundColor: "var(--color-bg-surface)" }}
+                  >
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(usagePercent, 100)}%`,
+                        backgroundColor:
+                          usagePercent > 80 ? "var(--color-warning)" : "var(--color-primary)",
+                      }}
+                    />
+                  </div>
+                </>
+              )}
               <div className="flex items-center justify-between mt-2">
                 <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
                   {tierLabel(quota.tier, t)}
@@ -246,7 +261,7 @@ export default function Dashboard() {
                   className="text-xs no-underline hover:underline"
                   style={{ color: "var(--color-primary)" }}
                 >
-                  {t("dashboard.upgrade")}
+                  {paid ? t("dashboard.viewPlans") : t("dashboard.upgrade")}
                 </a>
               </div>
             </>

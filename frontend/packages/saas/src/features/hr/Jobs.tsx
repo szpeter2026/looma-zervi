@@ -13,10 +13,27 @@
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { createJobsApi, createCreditApi, type Job, type JobMatchItem, type CreditAnalysis, type CreditExtended } from "@looma/shared-core";
+import {
+  ApiError,
+  createJobsApi,
+  createCreditApi,
+  type Job,
+  type JobMatchItem,
+  type CreditAnalysis,
+  type CreditExtended,
+} from "@looma/shared-core";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
 import { IS_OVERSEAS } from "../../config/region";
+import QuotaExhaustedModal from "../../brand/components/QuotaExhaustedModal";
+
+function isQuotaExceeded(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.status === 429 &&
+    err.body?.error === "quota_exceeded"
+  );
+}
 
 // ── Types ──
 
@@ -50,6 +67,7 @@ export default function Jobs() {
   const [resumeText, setResumeText] = useState("");
   const [matching, setMatching] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [quotaExhausted, setQuotaExhausted] = useState(false);
 
   // Credit check state (Tripod leg 3)
   const [creditResults, setCreditResults] = useState<Record<string, CreditAnalysis | null>>({});
@@ -100,8 +118,13 @@ export default function Jobs() {
       } else {
         setMsg(t("jobs.uploadPartial"));
       }
-    } catch {
-      setMsg(t("jobs.uploadFailed"));
+    } catch (err) {
+      if (isQuotaExceeded(err)) {
+        setQuotaExhausted(true);
+        setMsg(null);
+      } else {
+        setMsg(t("jobs.uploadFailed"));
+      }
     } finally {
       setUploading(false);
     }
@@ -134,8 +157,13 @@ export default function Jobs() {
       } else {
         setMsg(t("jobs.parseTextEmpty"));
       }
-    } catch {
-      setMsg(t("jobs.parseTextFailed"));
+    } catch (err) {
+      if (isQuotaExceeded(err)) {
+        setQuotaExhausted(true);
+        setMsg(null);
+      } else {
+        setMsg(t("jobs.parseTextFailed"));
+      }
     } finally {
       setParsing(false);
     }
@@ -157,8 +185,13 @@ export default function Jobs() {
       if (jobId) payload.job_id = jobId;
       const res = await jobsApi.match(payload) as any;
       setMatches(res.matches);
-    } catch {
-      setMsg(t("jobs.matchFailed"));
+    } catch (err) {
+      if (isQuotaExceeded(err)) {
+        setQuotaExhausted(true);
+        setMsg(null);
+      } else {
+        setMsg(t("jobs.matchFailed"));
+      }
     } finally {
       setMatching(false);
     }
@@ -230,6 +263,10 @@ export default function Jobs() {
   return (
     <>
     {consentPrompt}
+    <QuotaExhaustedModal
+      isOpen={quotaExhausted}
+      onClose={() => setQuotaExhausted(false)}
+    />
     <div className="max-w-5xl mx-auto">
       <h1
         className="text-2xl font-bold mb-6"
