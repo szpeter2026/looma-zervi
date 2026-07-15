@@ -13,7 +13,8 @@
 #   或 SSH_HOST_OVERSEAS / SSH_USER_OVERSEAS / SSH_PRIVATE_KEY_OVERSEAS / ENV_JWT_SECRET_SG
 #
 # GitHub Secrets（建议）:
-#   ENV_DEEPSEEK_API_KEY
+#   ENV_DEEPSEEK_API_KEY / VULTR_DEEPSEEK_API_KEY
+#   ENV_QCC_AUTH_TOKEN / VULTR_QCC_AUTH_TOKEN  (企查查 MCP Authorization，含 Bearer 前缀)
 #   ENV_OPENAI_API_KEY
 #   ENV_GOOGLE_CLIENT_ID / ENV_GOOGLE_CLIENT_SECRET
 #   ENV_STRIPE_SECRET_KEY / ENV_STRIPE_WEBHOOK_SECRET
@@ -182,6 +183,9 @@ jobs:
               "JWT_SECRET=${{ env.ENV_JWT_SECRET }}" \
               "DEEPSEEK_API_KEY=${{ secrets.VULTR_DEEPSEEK_API_KEY || secrets.ENV_DEEPSEEK_API_KEY }}" \
               'DEEPSEEK_BASE_URL=https://api.deepseek.com/v1' \
+              'DEEPSEEK_MODEL=deepseek-chat' \
+              "QCC_AUTH_TOKEN=${{ secrets.VULTR_QCC_AUTH_TOKEN || secrets.ENV_QCC_AUTH_TOKEN }}" \
+              'QCC_ENABLED=true' \
               "OPENAI_API_KEY=${{ secrets.ENV_OPENAI_API_KEY }}" \
               'OPENAI_BASE_URL=https://api.openai.com/v1' \
               'OPENAI_MODEL=gpt-4o-mini' \
@@ -230,6 +234,10 @@ jobs:
           set_kv GOOGLE_REDIRECT_URI "https://\${API_HOST}/v1/auth/google/callback"
           set_kv JWT_SECRET "${{ env.ENV_JWT_SECRET }}"
           set_kv DEEPSEEK_API_KEY "${{ secrets.VULTR_DEEPSEEK_API_KEY || secrets.ENV_DEEPSEEK_API_KEY }}"
+          set_kv DEEPSEEK_BASE_URL "https://api.deepseek.com/v1"
+          set_kv DEEPSEEK_MODEL deepseek-chat
+          set_kv QCC_AUTH_TOKEN "${{ secrets.VULTR_QCC_AUTH_TOKEN || secrets.ENV_QCC_AUTH_TOKEN }}"
+          set_kv QCC_ENABLED true
           set_kv OPENAI_API_KEY "${{ secrets.ENV_OPENAI_API_KEY }}"
           set_kv GOOGLE_CLIENT_ID "${{ secrets.ENV_GOOGLE_CLIENT_ID }}"
           set_kv GOOGLE_CLIENT_SECRET "${{ secrets.ENV_GOOGLE_CLIENT_SECRET }}"
