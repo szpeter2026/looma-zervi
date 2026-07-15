@@ -14,6 +14,7 @@ interface NavItem {
   labelKey: string;
   icon: string;
   overseasHidden?: boolean;
+  mainlandHidden?: boolean;
 }
 
 function tierLabel(tier: string, t: (key: string) => string) {
@@ -33,12 +34,17 @@ export default function Sidebar() {
       { path: "/", labelKey: "nav.dashboard", icon: "◉" },
       { path: "/query", labelKey: "nav.query", icon: "◈" },
       { path: "/poetry", labelKey: "nav.poetry", icon: "◇" },
+      { path: "/poetry/challenge", labelKey: "nav.challenge", icon: "✧", mainlandHidden: true },
       { path: "/candidates", labelKey: IS_OVERSEAS ? "nav.profile" : "nav.candidates", icon: "◎", overseasHidden: true },
       { path: "/jobs", labelKey: IS_OVERSEAS ? "nav.jobsOverseas" : "nav.jobs", icon: "◈" },
       { path: "/resume", labelKey: "nav.resume", icon: "◈" },
       { path: "/reports", labelKey: "nav.reports", icon: "◆" },
       { path: "/settings/consent", labelKey: "nav.consent", icon: "🛡" },
-    ].filter((item) => !(IS_OVERSEAS && item.overseasHidden)),
+    ].filter(
+      (item) =>
+        !(IS_OVERSEAS && item.overseasHidden) &&
+        !(!IS_OVERSEAS && item.mainlandHidden),
+    ),
     [t],
   );
 

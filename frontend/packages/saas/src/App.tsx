@@ -24,6 +24,7 @@ import Register from "./features/auth/Register";
 import Dashboard from "./features/dashboard/Dashboard";
 import Chat from "./features/chat/Chat";
 import Poetry from "./features/poetry/Poetry";
+import Challenge from "./features/poetry/Challenge";
 import Jobs from "./features/hr/Jobs";
 import Resume from "./features/hr/Resume";
 import Reports from "./features/reports/Reports";
@@ -79,6 +80,7 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/query" element={<FeatureGuard><Chat /></FeatureGuard>} />
               <Route path="/poetry" element={<FeatureGuard><Poetry /></FeatureGuard>} />
+              <Route path="/poetry/challenge" element={<FeatureGuard><Challenge /></FeatureGuard>} />
               <Route path="/jobs" element={<FeatureGuard><Jobs /></FeatureGuard>} />
               <Route path="/resume" element={<FeatureGuard><Resume /></FeatureGuard>} />
               <Route path="/reports" element={<FeatureGuard><Reports /></FeatureGuard>} />

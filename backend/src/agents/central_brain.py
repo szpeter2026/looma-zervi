@@ -25,7 +25,7 @@ INTENTS = ("job_match", "resume_parse", "poetry", "credit", "mbti", "rag", "repo
 INTENT_KEYWORDS = {
     "poetry": ["诗词", "诗人", "古诗", "推荐一句", "陪伴", "安慰", "思乡", "送别", "山水", "边塞", "励志", "一句诗", "唐诗", "宋词", "的诗", "的诗句", "词", "诗句", "绝句", "律诗"],
     "job_match": ["匹配", "职位", "找工作", "有没有适合", "岗位", "求职", "招聘"],
-    "resume_parse": ["上传", "简历", "解析简历"],
+    "resume_parse": ["上传", "解析简历", "分析简历", "提取简历"],
     "credit": ["征信", "信用", "验证"],
     "mbti": ["人格", "MBTI", "测评", "性格"],
     "report": ["报告", "日报", "周报", "月报", "生成报告"],
@@ -239,6 +239,21 @@ def dispatch(
 
     # ── 简历解析 ──
     if intent == "resume_parse":
+        # Guard: if text looks like a search query rather than resume content,
+        # fall through to RAG instead of trying to parse it as a resume.
+        search_indicators = ["查找", "搜索", "帮我找", "帮我查", "有没有", "在哪里", "是谁", "介绍", "了解"]
+        if text and any(ind in text for ind in search_indicators) and len(text) < 200:
+            # Redirect to RAG with a helpful note
+            rag_prompt = (
+                "用户似乎在查找或了解某个人，而不是上传简历进行解析。"
+                "请根据你的知识尽可能回答用户的问题。"
+                "如果你无法获取该人物的实时信息，请诚实说明，并建议用户通过正规渠道核实。\n\n"
+                f"用户问题：{query}\n\n"
+                f"回答："
+            )
+            answer = _call_llm(rag_prompt) or "我暂时无法获取该人物的详细信息，建议通过 LinkedIn 或相关学校/公司官网核实。"
+            return {"answer": answer, "intent_redirected": "rag", "slots": slots}
+
         if text:
             try:
                 from src.agents.document_agents import run_document_analysis

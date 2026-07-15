@@ -249,6 +249,13 @@ export {
   BRAND_PLANETX,
   BRAND_SAAS,
 } from "./types/brand";
+export type {
+  ChallengePoem,
+  ChallengeRound,
+  ChallengeEntry,
+  ChallengeCurrentResponse,
+} from "./types/poetry-challenge";
+
 export type { BrandId, BrandConfig } from "./types/brand";
 
 // Constants

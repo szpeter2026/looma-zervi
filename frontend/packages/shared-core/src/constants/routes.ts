@@ -98,6 +98,15 @@ export const API_ROUTES = {
   CREDIT_CHECK_COMPANY: "/v1/credit/check-company",
   CREDIT_CHECK_COMPANY_DETAIL: "/v1/credit/check-company/detail",
 
+  // Poetry library + Xin-Da-Ya challenge (overseas)
+  POETRY_SEARCH: "/v1/poetry/search",
+  POETRY_BROWSE: "/v1/poetry/browse",
+  POETRY_RANDOM: "/v1/poetry/random",
+  POETRY_STATS: "/v1/poetry/stats",
+  POETRY_AUTHORS: "/v1/poetry/authors",
+  POETRY_CHALLENGE_CURRENT: "/v1/poetry/challenge/current",
+  POETRY_CHALLENGE_ENTRIES: "/v1/poetry/challenge/entries",
+
   // Health
   HEALTH: "/health",
 

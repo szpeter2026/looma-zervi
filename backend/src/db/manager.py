@@ -408,6 +408,41 @@ CREATE INDEX IF NOT EXISTS idx_poems_theme ON poems(theme);
 CREATE INDEX IF NOT EXISTS idx_poems_title ON poems(title);
 
 -- ============================================
+-- Poetry challenge: 信达雅英译赛 (Jason / overseas)
+-- ============================================
+CREATE TABLE IF NOT EXISTS challenge_rounds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_key TEXT NOT NULL UNIQUE,          -- e.g. 2026-W29
+    poem_id INTEGER NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open',    -- open | closed
+    starts_at TEXT NOT NULL,
+    ends_at TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (poem_id) REFERENCES poems(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_challenge_rounds_status ON challenge_rounds(status);
+CREATE INDEX IF NOT EXISTS idx_challenge_rounds_ends ON challenge_rounds(ends_at);
+
+CREATE TABLE IF NOT EXISTS challenge_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    round_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
+    translation TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    license_accepted INTEGER NOT NULL DEFAULT 0,
+    vote_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(round_id, user_id),
+    FOREIGN KEY (round_id) REFERENCES challenge_rounds(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_challenge_entries_round ON challenge_entries(round_id);
+
+-- ============================================
 -- Knowledge: documents (szbenyx)
 -- ============================================
 CREATE TABLE IF NOT EXISTS documents (
@@ -1631,6 +1666,192 @@ class DatabaseManager:
         with self.get_conn() as conn:
             row = conn.execute("SELECT COUNT(*) as cnt FROM poems").fetchone()
         return row["cnt"] if row else 0
+
+    # ============================================
+    # Poetry challenge (信达雅)
+    # ============================================
+
+    @staticmethod
+    def _iso_week_key(dt=None) -> str:
+        from datetime import datetime, timezone
+        d = dt or datetime.now(timezone.utc)
+        iso = d.isocalendar()
+        return f"{iso.year}-W{iso.week:02d}"
+
+    @staticmethod
+    def _week_bounds_utc(dt=None):
+        """Return (starts_at, ends_at) ISO strings for the UTC ISO week containing dt."""
+        from datetime import datetime, timedelta, timezone
+        d = dt or datetime.now(timezone.utc)
+        # Monday 00:00 UTC → next Monday 00:00 UTC
+        monday = (d - timedelta(days=d.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        next_monday = monday + timedelta(days=7)
+        fmt = "%Y-%m-%dT%H:%M:%SZ"
+        return monday.strftime(fmt), next_monday.strftime(fmt)
+
+    def pick_short_poem_for_challenge(self, max_chars: int = 80):
+        """Prefer short classical poems suitable for weekly translation."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT id, title, author, dynasty, theme, content, tags
+                   FROM poems
+                   WHERE LENGTH(content) > 0 AND LENGTH(content) <= ?
+                   ORDER BY RANDOM()
+                   LIMIT 1""",
+                (max_chars,),
+            ).fetchone()
+            if row:
+                return dict(row)
+            # Fallback: any poem
+            row = conn.execute(
+                """SELECT id, title, author, dynasty, theme, content, tags
+                   FROM poems
+                   ORDER BY RANDOM()
+                   LIMIT 1"""
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_challenge_round_by_week(self, week_key: str):
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM challenge_rounds WHERE week_key = ?",
+                (week_key,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_open_challenge_round(self):
+        """Current open round whose ends_at is still in the future (UTC)."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT * FROM challenge_rounds
+                   WHERE status = 'open' AND ends_at > datetime('now')
+                   ORDER BY starts_at DESC
+                   LIMIT 1"""
+            ).fetchone()
+        return dict(row) if row else None
+
+    def create_challenge_round(self, week_key: str, poem_id: int, title: str,
+                               starts_at: str, ends_at: str):
+        with self.get_conn() as conn:
+            cur = conn.execute(
+                """INSERT INTO challenge_rounds
+                   (week_key, poem_id, title, status, starts_at, ends_at)
+                   VALUES (?, ?, ?, 'open', ?, ?)""",
+                (week_key, poem_id, title, starts_at, ends_at),
+            )
+            return cur.lastrowid
+
+    def ensure_current_challenge_round(self) -> dict | None:
+        """Return this week's open round, creating one from a short poem if needed.
+
+        Returns None when the poems library is empty (cannot seed a round).
+        """
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        week_key = self._iso_week_key(now)
+
+        existing = self.get_challenge_round_by_week(week_key)
+        if existing:
+            # Auto-close stale rounds from previous weeks still marked open
+            if existing.get("status") == "open" and existing.get("ends_at", "") <= now.strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            ):
+                with self.get_conn() as conn:
+                    conn.execute(
+                        "UPDATE challenge_rounds SET status = 'closed' WHERE id = ?",
+                        (existing["id"],),
+                    )
+                existing["status"] = "closed"
+            else:
+                return existing
+
+        # Close any other lingering open rounds
+        with self.get_conn() as conn:
+            conn.execute(
+                """UPDATE challenge_rounds SET status = 'closed'
+                   WHERE status = 'open' AND week_key != ?""",
+                (week_key,),
+            )
+
+        poem = self.pick_short_poem_for_challenge()
+        if not poem:
+            return None
+
+        starts_at, ends_at = self._week_bounds_utc(now)
+        title = f"Xin-Da-Ya · {poem.get('title', '')}"
+        round_id = self.create_challenge_round(
+            week_key=week_key,
+            poem_id=poem["id"],
+            title=title,
+            starts_at=starts_at,
+            ends_at=ends_at,
+        )
+        return self.get_challenge_round_by_week(week_key) or {
+            "id": round_id,
+            "week_key": week_key,
+            "poem_id": poem["id"],
+            "title": title,
+            "status": "open",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+        }
+
+    def get_challenge_entry(self, round_id: int, user_id: str):
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT * FROM challenge_entries
+                   WHERE round_id = ? AND user_id = ?""",
+                (round_id, user_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def upsert_challenge_entry(
+        self,
+        round_id: int,
+        user_id: str,
+        translation: str,
+        note: str = "",
+        license_accepted: bool = False,
+    ):
+        """Create or update the user's single entry for a round. Returns entry dict."""
+        existing = self.get_challenge_entry(round_id, user_id)
+        with self.get_conn() as conn:
+            if existing:
+                conn.execute(
+                    """UPDATE challenge_entries
+                       SET translation = ?, note = ?, license_accepted = ?,
+                           updated_at = datetime('now')
+                       WHERE id = ?""",
+                    (
+                        translation,
+                        note,
+                        1 if license_accepted else 0,
+                        existing["id"],
+                    ),
+                )
+                entry_id = existing["id"]
+            else:
+                cur = conn.execute(
+                    """INSERT INTO challenge_entries
+                       (round_id, user_id, translation, note, license_accepted)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        round_id,
+                        user_id,
+                        translation,
+                        note,
+                        1 if license_accepted else 0,
+                    ),
+                )
+                entry_id = cur.lastrowid
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM challenge_entries WHERE id = ?", (entry_id,)
+            ).fetchone()
+        return dict(row) if row else None
 
     def get_poetry_stats(self) -> dict:
         """Get poetry collection stats: total, dynasty distribution, theme distribution."""

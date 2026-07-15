@@ -37,11 +37,25 @@ export default function Resume() {
         setMsg("简历解析完成");
       } else if (result.error) {
         setMsg(result.error);
+      } else if (result.markdown && !result.extracted) {
+        // LLM extraction failed but MarkItDown succeeded - show partial result
+        setMsg("简历已提取文本，但结构化解析失败，请稍后重试");
       } else {
         setMsg("简历解析完成，但未能提取结构化信息");
       }
-    } catch {
-      setMsg("解析失败，请检查文件格式");
+    } catch (err: any) {
+      // ApiError from upload() includes status and body
+      if (err?.status === 422) {
+        setMsg(err?.body?.message || "文档解析失败，请检查文件格式或文件是否损坏");
+      } else if (err?.status === 400) {
+        setMsg(err?.body?.message || "不支持的文件格式，请上传 PDF 或 Word 文件");
+      } else if (err?.status === 429) {
+        setMsg("今日简历解析配额已用尽，请明天再试或升级套餐");
+      } else if (err?.message === "request_timeout") {
+        setMsg("请求超时，请检查网络或稍后重试");
+      } else {
+        setMsg("解析失败，请检查文件格式");
+      }
     } finally {
       setParsing(false);
     }
