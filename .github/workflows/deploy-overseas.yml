@@ -95,7 +95,8 @@ jobs:
 
       - name: Build overseas SaaS
         env:
-          VITE_API_BASE: https://api.genz.ltd
+          # Same-origin /v1 via tspace nginx — avoids cross-origin CORS to api.genz.ltd
+          VITE_API_BASE: ""
           VITE_DEPLOY_REGION: SG
         run: pnpm --filter @looma/saas build
 
@@ -192,7 +193,7 @@ jobs:
               'CHROMA_PORT=8000' \
               'RATE_LIMIT_STORAGE_URI=redis://redis:6379/1' \
               'DEPLOY_REGION=SG' \
-              "CORS_ORIGINS=https://\${DOMAIN},https://www.\${DOMAIN},https://\${TSPACE_HOST},https://\${API_HOST}" \
+              "CORS_ORIGINS=https://\${DOMAIN},https://www.\${DOMAIN},https://\${TSPACE_HOST},https://\${API_HOST},https://app.\${DOMAIN}" \
               "GOOGLE_REDIRECT_URI=https://\${API_HOST}/v1/auth/google/callback" \
               "GOOGLE_CLIENT_ID=${{ secrets.ENV_GOOGLE_CLIENT_ID }}" \
               "GOOGLE_CLIENT_SECRET=${{ secrets.ENV_GOOGLE_CLIENT_SECRET }}" \
@@ -225,7 +226,7 @@ jobs:
           set_kv CHROMA_PORT 8000
           set_kv RATE_LIMIT_STORAGE_URI redis://redis:6379/1
           set_kv DEPLOY_REGION SG
-          set_kv CORS_ORIGINS "https://\${DOMAIN},https://www.\${DOMAIN},https://\${TSPACE_HOST},https://\${API_HOST}"
+          set_kv CORS_ORIGINS "https://\${DOMAIN},https://www.\${DOMAIN},https://\${TSPACE_HOST},https://\${API_HOST},https://app.\${DOMAIN}"
           set_kv GOOGLE_REDIRECT_URI "https://\${API_HOST}/v1/auth/google/callback"
           set_kv JWT_SECRET "${{ env.ENV_JWT_SECRET }}"
           set_kv DEEPSEEK_API_KEY "${{ secrets.VULTR_DEEPSEEK_API_KEY || secrets.ENV_DEEPSEEK_API_KEY }}"
@@ -435,6 +436,12 @@ jobs:
         run: |
           echo "=== Public https://api.genz.ltd/health ==="
           curl -sf --connect-timeout 20 "https://api.genz.ltd/health"
+          echo ""
+          echo "=== CORS for tspace.genz.ltd ==="
+          curl -sf -D - -o /dev/null -X POST "https://api.genz.ltd/v1/auth/login" \
+            -H "Content-Type: application/json" \
+            -H "Origin: https://tspace.genz.ltd" \
+            -d '{"email":"beta_free@looma.test","password":"looma123"}' | grep -i access-control-allow-origin
           echo ""
           echo "=== Public https://genz.ltd/ (first bytes) ==="
           curl -sf --connect-timeout 20 "https://genz.ltd/" | head -c 120
