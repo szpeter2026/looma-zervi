@@ -437,11 +437,21 @@ jobs:
           echo "=== Public https://api.genz.ltd/health ==="
           curl -sf --connect-timeout 20 "https://api.genz.ltd/health"
           echo ""
-          echo "=== CORS for tspace.genz.ltd ==="
-          curl -sf -D - -o /dev/null -X POST "https://api.genz.ltd/v1/auth/login" \
+          echo "=== CORS for tspace.genz.ltd (informational) ==="
+          CORS_HDR=$(curl -sf -D - -o /dev/null -X POST "https://api.genz.ltd/v1/auth/login" \
             -H "Content-Type: application/json" \
             -H "Origin: https://tspace.genz.ltd" \
-            -d '{"email":"beta_free@looma.test","password":"looma123"}' | grep -i access-control-allow-origin
+            -d '{"email":"beta_free@looma.test","password":"looma123"}' | grep -i access-control-allow-origin || true)
+          if [ -n "$CORS_HDR" ]; then
+            echo "$CORS_HDR"
+          else
+            echo "WARN: no CORS header for tspace (SaaS uses same-origin /v1 proxy)"
+          fi
+          echo ""
+          echo "=== tspace same-origin login proxy ==="
+          curl -sf -X POST "https://tspace.genz.ltd/v1/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"beta_free@looma.test","password":"looma123"}' | head -c 80
           echo ""
           echo "=== Public https://genz.ltd/ (first bytes) ==="
           curl -sf --connect-timeout 20 "https://genz.ltd/" | head -c 120

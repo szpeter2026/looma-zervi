@@ -54,10 +54,14 @@ class Config:
     DATABASE_PATH = os.getenv("DATABASE_PATH", "data/looma.db")
 
     # CORS — portal :3000 local; production add szbolent.cn via CORS_ORIGINS env
-    CORS_ORIGINS = os.getenv(
-        "CORS_ORIGINS",
-        "http://localhost:5173,http://localhost:5174,http://localhost:3000",
-    ).split(",")
+    CORS_ORIGINS = [
+        o.strip()
+        for o in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:5173,http://localhost:5174,http://localhost:3000",
+        ).split(",")
+        if o.strip()
+    ]
 
     # Quota
     FREE_DAILY_LIMIT = int(os.getenv("FREE_DAILY_LIMIT", "30"))
@@ -172,10 +176,14 @@ def _refresh_config():
     POETRY_SEARCH_MODE = os.getenv("POETRY_SEARCH_MODE", "auto").lower()
     POETRY_CHROMA_SEARCH_TIMEOUT = float(os.getenv("POETRY_CHROMA_SEARCH_TIMEOUT", "10"))
     Config.DATABASE_PATH = os.getenv("DATABASE_PATH", "data/looma.db")
-    Config.CORS_ORIGINS = os.getenv(
-        "CORS_ORIGINS",
-        "http://localhost:5173,http://localhost:5174,http://localhost:3000",
-    ).split(",")
+    Config.CORS_ORIGINS = [
+        o.strip()
+        for o in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:5173,http://localhost:5174,http://localhost:3000",
+        ).split(",")
+        if o.strip()
+    ]
     Config.FREE_DAILY_LIMIT = int(os.getenv("FREE_DAILY_LIMIT", "30"))
     Config.SUPPORTER_DAILY_LIMIT = int(os.getenv("SUPPORTER_DAILY_LIMIT", "999999"))
     Config.PRO_DAILY_LIMIT = int(os.getenv("PRO_DAILY_LIMIT", "999999"))
