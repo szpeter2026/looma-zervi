@@ -2478,21 +2478,18 @@ class DatabaseManager:
                 "SELECT COUNT(*) as cnt FROM product_events WHERE event_name = 'quiz_complete'"
             ).fetchone()["cnt"]
 
-            total_resumes = conn.execute(
-                "SELECT COUNT(*) as cnt FROM resumes"
-            ).fetchone()["cnt"]
+            def _safe_count(table: str) -> int:
+                try:
+                    return conn.execute(
+                        f"SELECT COUNT(*) as cnt FROM {table}"
+                    ).fetchone()["cnt"]
+                except Exception:
+                    return 0
 
-            total_jobs = conn.execute(
-                "SELECT COUNT(*) as cnt FROM jobs"
-            ).fetchone()["cnt"]
-
-            total_matches = conn.execute(
-                "SELECT COUNT(*) as cnt FROM job_matches"
-            ).fetchone()["cnt"]
-
-            total_poems = conn.execute(
-                "SELECT COUNT(*) as cnt FROM poems"
-            ).fetchone()["cnt"]
+            total_resumes = _safe_count("resumes")
+            total_jobs = _safe_count("jobs")
+            total_matches = _safe_count("job_matches")
+            total_poems = _safe_count("poems")
 
             # ── Daily active users (7-day window) ──
             dau_rows = conn.execute(
