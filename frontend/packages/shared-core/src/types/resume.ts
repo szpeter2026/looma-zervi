@@ -136,7 +136,7 @@ export interface JobUploadResult {
 // Company Credit types (Tripod leg 3: Resume → Job → Company)
 // ============================================================
 
-/** Parsed credit analysis from LLM (migrated from Tatha CreditAnalysis) */
+/** Parsed credit analysis (supports both LLM and QCC data sources) */
 export interface CreditAnalysis {
   entity_name?: string;
   report_type?: string;
@@ -148,6 +148,52 @@ export interface CheckCompanyRequest {
   company_name: string;
   location?: string;
   industry?: string;
+}
+
+/** QCC company basic info */
+export interface QccCompanyInfo {
+  name: string;
+  legal_person: string;
+  registered_capital: string;
+  established_date: string;
+  credit_code: string;
+  status: string;
+  industry: string;
+  address: string;
+  business_scope: string;
+}
+
+/** QCC risk data */
+export interface QccRiskData {
+  level: string;           // 低风险 / 中风险 / 高风险
+  summary: string;
+  count: number;
+  items: Array<Record<string, string>>;
+}
+
+/** QCC operation data */
+export interface QccOperationData {
+  summary: string;
+}
+
+/** Extended QCC credit data (rich fields from official source) */
+export interface CreditExtended {
+  source: "qcc" | "llm";
+  company: QccCompanyInfo;
+  risk: QccRiskData;
+  operation: QccOperationData;
+  executives: Array<Record<string, string>>;
+  ipr: Array<Record<string, string>>;
+  history: Array<Record<string, string>>;
+  legal_cases: Array<Record<string, string>>;
+}
+
+/** Response from POST /v1/credit/check-company */
+export interface CheckCompanyResponse {
+  extracted: CreditAnalysis;
+  extended?: CreditExtended;
+  source?: "qcc" | "llm";
+  warning?: string;
 }
 
 /** Return type for POST /v1/resume/upload (file → parsed + metadata) */

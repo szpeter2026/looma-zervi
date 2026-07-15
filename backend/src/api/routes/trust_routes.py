@@ -5,9 +5,10 @@ See: backend/contracts/trust.v1.json, docs/TRUST_LAYER.md
 """
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, current_app, g
+from flask import Blueprint, jsonify, request, current_app, g
 
 from src.api.auth.decorators import require_auth
+from src.trust.service import INTERSECTION_CREDIT_CHECK
 
 trust_bp = Blueprint("trust", __name__)
 
@@ -16,6 +17,9 @@ def _get_db():
     return current_app._db
 
 
+# ---------------------------------------------------------------------------
+# GET /v1/trust/memories — 查询记忆体
+# ---------------------------------------------------------------------------
 @trust_bp.route("/memories", methods=["GET"])
 @require_auth
 def list_memories():
@@ -23,6 +27,72 @@ def list_memories():
     db = _get_db()
     memories = db.list_trust_memories_for_user(g.user_id)
     return jsonify(memories=memories, count=len(memories))
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/trust/memories — CLI 上报征信记录（或其他 trust 事件）
+# ---------------------------------------------------------------------------
+@trust_bp.route("/memories", methods=["POST"])
+@require_auth
+def create_memory():
+    """CLI / 外部客户端上报信任记忆体。
+
+    Request body (JSON):
+      {
+        "intersection_type": "enterprise_credit_check",
+        "evidence": {
+          "behavior": {
+            "company_name": "腾讯科技",
+            "registered_capital": "10000万人民币",
+            "credit_code": "91440300...",
+            "legal_person": "马化腾",
+            "status": "存续",
+            "established": "2000-02-24",
+            "region": "深圳市"
+          },
+          "channels": ["cli"]
+        },
+        "platform": "cli",
+        "visibility": "trusted"
+      }
+
+    Response:
+      201 { "memory_id": "...", "intersection_type": "...", "occurred_at": "..." }
+    """
+    db = _get_db()
+    body = request.get_json(silent=True) or {}
+
+    intersection_type = body.get("intersection_type", "").strip()
+    if not intersection_type:
+        return jsonify(error="bad_request", message="intersection_type is required"), 400
+
+    # 目前只接受已知类型的上报
+    allowed_types = {INTERSECTION_CREDIT_CHECK, "consensus_exchange", "personality_completion"}
+    if intersection_type not in allowed_types:
+        return jsonify(
+            error="bad_request",
+            message=f"unknown intersection_type: {intersection_type}. Allowed: {', '.join(sorted(allowed_types))}",
+        ), 400
+
+    evidence = body.get("evidence") or {}
+    platform = body.get("platform", "cli")
+    visibility = body.get("visibility", "trusted")
+
+    memory_id = db.create_trust_memory(
+        intersection_type=intersection_type,
+        participants=[g.user_id],
+        evidence=evidence,
+        visibility=visibility,
+        platform=platform,
+    )
+
+    memory = db.get_trust_memory(memory_id)
+
+    return jsonify(
+        memory_id=memory_id,
+        intersection_type=intersection_type,
+        occurred_at=memory.get("occurred_at") if memory else None,
+    ), 201
 
 
 @trust_bp.route("/memories/<memory_id>", methods=["GET"])

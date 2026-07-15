@@ -155,6 +155,11 @@ export type {
   JobMatchScore,
   CreditAnalysis,
   CheckCompanyRequest,
+  CheckCompanyResponse,
+  CreditExtended,
+  QccCompanyInfo,
+  QccRiskData,
+  QccOperationData,
 } from "./types/resume";
 
 export type {

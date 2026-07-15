@@ -2,10 +2,11 @@
 """
 Looma-Zervi MCP Sidecar — MVP Temporary Adapter Layer.
 
-Provides 3 tools for internal testing:
-  - rag_query     RAG knowledge-base query with AI answer
-  - match_jobs    Resume-to-job-posting matching
-  - parse_resume  Resume text → structured JSON
+Provides 4 tools for internal testing:
+  - rag_query        RAG knowledge-base query with AI answer
+  - match_jobs       Resume-to-job-posting matching
+  - parse_resume     Resume text → structured JSON
+  - credit_check     Enterprise credit check via QCC (企查查) official data
 
 ⚠  This is a **temporary** Python FastMCP adapter.  The permanent MCP
    implementation will be Rust zervi (origin/feature/llm-provider-fallback-k6-baseline).
@@ -62,7 +63,7 @@ def health_status() -> dict:
     return {
         "status": "ok",
         "service": "looma-mcp-sidecar",
-        "tools": ["rag_query", "match_jobs", "parse_resume"],
+        "tools": ["rag_query", "match_jobs", "parse_resume", "credit_check"],
     }
 
 # ---------------------------------------------------------------------------
@@ -179,6 +180,94 @@ def parse_resume(resume_text: str, token: str = "", user_id: str = "") -> dict:
         return {"extracted": extracted}
     except ImportError as e:
         return {"extracted": {}, "error": str(e)}
+
+
+@mcp.tool(
+    name="credit_check",
+    description="Enterprise credit check via QCC (企查查) official data — company info, risk, operation, executives (requires JWT token + consent)",
+)
+def credit_check(company_name: str, token: str = "", user_id: str = "", detail: bool = False) -> dict:
+    """Check enterprise credit using QCC (企查查) official MCP data source.
+
+    Parameters
+    ----------
+    company_name : str
+        Full company name to look up (e.g. "深圳市腾讯计算机系统有限公司").
+    token : str
+        Looma JWT bearer token (required).
+    user_id : str
+        Authenticated user id (optional, cross-checked against token).
+    detail : bool
+        If True, fetch all categories (IPR, history, legal cases, documents).
+        Default False returns basic report (company + risk + operation + executives).
+    """
+    try:
+        payload = _auth_guard(token, user_id)
+    except MCPAuthError as e:
+        return _error_dict(str(e))
+
+    # Consent gate
+    uid = payload["sub"]
+    try:
+        from src.compliance.consent import get_consent_manager
+        cm = get_consent_manager()
+        if not cm.check(uid, "credit_query"):
+            return _error_dict("Consent required: credit_query (请先授权征信查询)", "consent_required")
+    except Exception as e:
+        logger.warning(f"Consent check skipped (DB unavailable): {e}")
+
+    try:
+        from src.credit.qcc_client import (
+            check_company_credit,
+            format_credit_summary,
+            QccMcpError,
+        )
+
+        report = check_company_credit(
+            company_name=company_name,
+            include_risk=True,
+            include_operation=True,
+            include_executives=True,
+            include_ipr=detail,
+            include_history=detail,
+            include_legal_cases=detail,
+            include_documents=detail,
+        )
+
+        if not report.company.company_name:
+            return _error_dict(f"Company not found: {company_name}", "not_found")
+
+        c = report.company
+        return {
+            "source": "qcc",
+            "company": {
+                "name": c.company_name,
+                "legal_person": c.legal_person,
+                "registered_capital": c.registered_capital,
+                "established_date": c.established_date,
+                "credit_code": c.credit_code,
+                "status": c.status,
+                "industry": c.industry,
+                "address": c.address,
+                "business_scope": c.business_scope,
+            },
+            "risk": {
+                "level": report.risk.risk_level,
+                "summary": report.risk.summary,
+                "count": len(report.risk.risk_items),
+                "items": report.risk.risk_items[:10],
+            },
+            "operation": {
+                "summary": report.operation.summary,
+            },
+            "executives": report.executives[:10],
+            "summary": format_credit_summary(report),
+        }
+
+    except QccMcpError as e:
+        return _error_dict(f"QCC service error: {e}", "qcc_unavailable")
+    except ImportError as e:
+        return _error_dict(f"Credit module unavailable: {e}", "module_error")
 
 # ---------------------------------------------------------------------------
 # Entrypoint

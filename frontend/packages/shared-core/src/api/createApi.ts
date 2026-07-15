@@ -54,7 +54,7 @@ import type {
   JobPostMatchesResponse,
   CandidateListResponse,
 } from "../types/enterprise";
-import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job, ResumeUploadResult, ParsedJob, JobUploadResult, CreditAnalysis, CheckCompanyRequest, ResumeListResponse, ResumeAnalysisResponse } from "../types/resume";
+import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job, ResumeUploadResult, ParsedJob, JobUploadResult, CreditAnalysis, CheckCompanyRequest, CheckCompanyResponse, ResumeListResponse, ResumeAnalysisResponse } from "../types/resume";
 import type { Report, GenerateReportRequest } from "../types/misc";
 import { API_ROUTES } from "../constants/routes";
 
@@ -415,9 +415,13 @@ export function createCreditApi(client: ApiClient) {
     analyze: (text: string) =>
       client.post<{ extracted: CreditAnalysis }>(API_ROUTES.CREDIT_ANALYZE, { text }),
 
-    /** Evaluate a company by name (post-match flow) */
+    /** Evaluate a company by name (post-match flow) — powered by QCC official data */
     checkCompany: (payload: CheckCompanyRequest) =>
-      client.post<{ extracted: CreditAnalysis }>(API_ROUTES.CREDIT_CHECK_COMPANY, payload),
+      client.post<CheckCompanyResponse>(API_ROUTES.CREDIT_CHECK_COMPANY, payload),
+
+    /** Full detailed credit check with all QCC categories */
+    checkCompanyDetail: (payload: { company_name: string }) =>
+      client.post<CheckCompanyResponse>(API_ROUTES.CREDIT_CHECK_COMPANY_DETAIL, payload),
   };
 }
 

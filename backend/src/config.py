@@ -137,6 +137,20 @@ class Config:
     # Deployment region (overseas: US | EU | SG)
     DEPLOY_REGION = os.getenv("DEPLOY_REGION", "US")
 
+    # QCC (企查查) MCP — Official enterprise credit data source
+    QCC_ENABLED = os.getenv("QCC_ENABLED", "true").lower() == "true"
+    QCC_AUTH_TOKEN = os.getenv("QCC_AUTH_TOKEN", "")
+    QCC_TIMEOUT = float(os.getenv("QCC_TIMEOUT", "30.0"))
+    QCC_COMPANY_URL = os.getenv("QCC_COMPANY_URL", "https://agent.qcc.com/mcp/company/stream")
+    QCC_RISK_URL = os.getenv("QCC_RISK_URL", "https://agent.qcc.com/mcp/risk/stream")
+    QCC_IPR_URL = os.getenv("QCC_IPR_URL", "https://agent.qcc.com/mcp/ipr/stream")
+    QCC_OPERATION_URL = os.getenv("QCC_OPERATION_URL", "https://agent.qcc.com/mcp/operation/stream")
+    QCC_EXECUTIVE_URL = os.getenv("QCC_EXECUTIVE_URL", "https://agent.qcc.com/mcp/executive/stream")
+    QCC_HISTORY_URL = os.getenv("QCC_HISTORY_URL", "https://agent.qcc.com/mcp/history/stream")
+    QCC_LEGAL_REGULATION_URL = os.getenv("QCC_LEGAL_REGULATION_URL", "https://agent.qcc.com/mcp/regulation/stream")
+    QCC_LEGAL_CASE_URL = os.getenv("QCC_LEGAL_CASE_URL", "https://agent.qcc.com/mcp/case/stream")
+    QCC_DOCUMENT_URL = os.getenv("QCC_DOCUMENT_URL", "https://agent.qcc.com/mcp/document/stream")
+
     @property
     def is_production(self):
         return self.FLASK_ENV == "production"
@@ -242,3 +256,17 @@ def _refresh_config():
 
     # Deployment region
     Config.DEPLOY_REGION = os.getenv("DEPLOY_REGION", "US")
+
+    # QCC (企查查) MCP
+    Config.QCC_ENABLED = os.getenv("QCC_ENABLED", "true").lower() == "true"
+    Config.QCC_AUTH_TOKEN = os.getenv("QCC_AUTH_TOKEN", "")
+    Config.QCC_TIMEOUT = float(os.getenv("QCC_TIMEOUT", "30.0"))
+    Config.QCC_COMPANY_URL = os.getenv("QCC_COMPANY_URL", "https://agent.qcc.com/mcp/company/stream")
+    Config.QCC_RISK_URL = os.getenv("QCC_RISK_URL", "https://agent.qcc.com/mcp/risk/stream")
+    Config.QCC_IPR_URL = os.getenv("QCC_IPR_URL", "https://agent.qcc.com/mcp/ipr/stream")
+    Config.QCC_OPERATION_URL = os.getenv("QCC_OPERATION_URL", "https://agent.qcc.com/mcp/operation/stream")
+    Config.QCC_EXECUTIVE_URL = os.getenv("QCC_EXECUTIVE_URL", "https://agent.qcc.com/mcp/executive/stream")
+    Config.QCC_HISTORY_URL = os.getenv("QCC_HISTORY_URL", "https://agent.qcc.com/mcp/history/stream")
+    Config.QCC_LEGAL_REGULATION_URL = os.getenv("QCC_LEGAL_REGULATION_URL", "https://agent.qcc.com/mcp/regulation/stream")
+    Config.QCC_LEGAL_CASE_URL = os.getenv("QCC_LEGAL_CASE_URL", "https://agent.qcc.com/mcp/case/stream")
+    Config.QCC_DOCUMENT_URL = os.getenv("QCC_DOCUMENT_URL", "https://agent.qcc.com/mcp/document/stream")

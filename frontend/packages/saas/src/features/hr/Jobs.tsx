@@ -13,7 +13,7 @@
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { createJobsApi, createCreditApi, type Job, type JobMatchItem, type CreditAnalysis } from "@looma/shared-core";
+import { createJobsApi, createCreditApi, type Job, type JobMatchItem, type CreditAnalysis, type CreditExtended } from "@looma/shared-core";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
 import { IS_OVERSEAS } from "../../config/region";
@@ -53,6 +53,7 @@ export default function Jobs() {
 
   // Credit check state (Tripod leg 3)
   const [creditResults, setCreditResults] = useState<Record<string, CreditAnalysis | null>>({});
+  const [creditExtended, setCreditExtended] = useState<Record<string, CreditExtended | null>>({});
   const [creditLoading, setCreditLoading] = useState<Record<string, boolean>>({});
 
   // Upload state
@@ -176,6 +177,9 @@ export default function Jobs() {
     try {
       const result = await creditApi.checkCompany({ company_name: companyName }) as any;
       setCreditResults((prev) => ({ ...prev, [companyName]: result.extracted }));
+      if (result.extended) {
+        setCreditExtended((prev) => ({ ...prev, [companyName]: result.extended }));
+      }
     } catch {
       setCreditResults((prev) => ({
         ...prev,
@@ -443,42 +447,185 @@ export default function Jobs() {
                   {/* Credit result card (mainland only) */}
                   {!IS_OVERSEAS && m.company && creditResults[m.company] && (
                     <div
-                      className="mt-3 p-3 rounded border-l-4"
+                      className="mt-3 rounded border-l-4 overflow-hidden"
                       style={{
                         backgroundColor: "var(--color-bg-surface)",
-                        borderColor: "var(--color-success)",
+                        borderColor: creditExtended[m.company]?.risk?.level === "高风险"
+                          ? "var(--color-danger)"
+                          : creditExtended[m.company]?.risk?.level === "中风险"
+                          ? "var(--color-warning)"
+                          : "var(--color-success)",
                       }}
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span
-                          className="text-xs font-medium"
-                          style={{ color: "var(--color-success)" }}
-                        >
-                          🛡 {t("jobs.creditReport")}
-                        </span>
-                        <span
-                          className="text-xs px-1.5 py-0.5 rounded"
-                          style={{
-                            backgroundColor: "var(--color-success)",
-                            color: "#fff",
-                          }}
-                        >
-                          {creditResults[m.company]?.report_type || t("jobs.creditReport")}
-                        </span>
+                      {/* Header */}
+                      <div className="flex items-center justify-between p-3 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="text-xs font-bold"
+                            style={{ color: "var(--color-text-primary)" }}
+                          >
+                            🛡 {t("jobs.creditReport")}
+                          </span>
+                          {creditResults[m.company]?.report_type && (
+                            <span
+                              className="text-xs px-1.5 py-0.5 rounded"
+                              style={{
+                                backgroundColor: "var(--color-success)",
+                                color: "#fff",
+                              }}
+                            >
+                              {creditResults[m.company]?.report_type}
+                            </span>
+                          )}
+                          {creditExtended[m.company] && (
+                            <span
+                              className="text-xs px-1.5 py-0.5 rounded"
+                              style={{
+                                backgroundColor: "#f0f9ff",
+                                color: "var(--color-primary)",
+                                border: "1px solid var(--color-primary)",
+                              }}
+                            >
+                              QCC 官方数据
+                            </span>
+                          )}
+                        </div>
+                        {creditExtended[m.company]?.risk?.level && (
+                          <span
+                            className="text-xs font-bold px-2 py-0.5 rounded"
+                            style={{
+                              backgroundColor:
+                                creditExtended[m.company]!.risk.level === "高风险"
+                                  ? "var(--color-danger)"
+                                  : creditExtended[m.company]!.risk.level === "中风险"
+                                  ? "var(--color-warning)"
+                                  : "var(--color-success)",
+                              color: "#fff",
+                            }}
+                          >
+                            {creditExtended[m.company]!.risk.level}
+                          </span>
+                        )}
                       </div>
-                      <p
-                        className="text-xs"
-                        style={{ color: "var(--color-text-secondary)" }}
-                      >
-                        <strong>{t("jobs.creditEntity")}:</strong>
-                        {creditResults[m.company]?.entity_name || m.company}
-                      </p>
-                      <p
-                        className="text-xs mt-1"
-                        style={{ color: "var(--color-text-secondary)" }}
-                      >
-                        {creditResults[m.company]?.summary || t("jobs.creditNoData")}
-                      </p>
+
+                      {/* QCC Extended data — multi-dimension grid */}
+                      {creditExtended[m.company] ? (
+                        <div className="px-3 pb-3 space-y-2">
+                          {/* Company info row */}
+                          {creditExtended[m.company]!.company && (
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                              {creditExtended[m.company]!.company.legal_person && (
+                                <div>
+                                  <span style={{ color: "var(--color-text-muted)" }}>{t("jobs.creditLegalPerson")}: </span>
+                                  <span style={{ color: "var(--color-text-primary)" }}>
+                                    {creditExtended[m.company]!.company.legal_person}
+                                  </span>
+                                </div>
+                              )}
+                              {creditExtended[m.company]!.company.registered_capital && (
+                                <div>
+                                  <span style={{ color: "var(--color-text-muted)" }}>{t("jobs.creditRegCapital")}: </span>
+                                  <span style={{ color: "var(--color-text-primary)" }}>
+                                    {creditExtended[m.company]!.company.registered_capital}
+                                  </span>
+                                </div>
+                              )}
+                              {creditExtended[m.company]!.company.established_date && (
+                                <div>
+                                  <span style={{ color: "var(--color-text-muted)" }}>{t("jobs.creditEstDate")}: </span>
+                                  <span style={{ color: "var(--color-text-primary)" }}>
+                                    {creditExtended[m.company]!.company.established_date}
+                                  </span>
+                                </div>
+                              )}
+                              {creditExtended[m.company]!.company.status && (
+                                <div>
+                                  <span style={{ color: "var(--color-text-muted)" }}>{t("jobs.creditStatus")}: </span>
+                                  <span
+                                    style={{
+                                      color: ["存续", "在业"].includes(creditExtended[m.company]!.company.status)
+                                        ? "var(--color-success)"
+                                        : "var(--color-danger)",
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    {creditExtended[m.company]!.company.status}
+                                  </span>
+                                </div>
+                              )}
+                              {creditExtended[m.company]!.company.industry && (
+                                <div className="col-span-2">
+                                  <span style={{ color: "var(--color-text-muted)" }}>{t("jobs.creditIndustry")}: </span>
+                                  <span style={{ color: "var(--color-text-primary)" }}>
+                                    {creditExtended[m.company]!.company.industry}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Risk summary */}
+                          {creditExtended[m.company]!.risk && creditExtended[m.company]!.risk.summary && (
+                            <div
+                              className="text-xs p-2 rounded"
+                              style={{
+                                backgroundColor: "var(--color-bg-card)",
+                                color: "var(--color-text-secondary)",
+                              }}
+                            >
+                              <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>
+                                {t("jobs.creditRiskSummary")}:
+                              </span>{" "}
+                              {creditExtended[m.company]!.risk.summary}
+                            </div>
+                          )}
+
+                          {/* Executives */}
+                          {creditExtended[m.company]!.executives && creditExtended[m.company]!.executives.length > 0 && (
+                            <div className="text-xs">
+                              <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>
+                                {t("jobs.creditExecutives")}:
+                              </span>{" "}
+                              <span style={{ color: "var(--color-text-secondary)" }}>
+                                {creditExtended[m.company]!.executives
+                                  .slice(0, 5)
+                                  .map((e: Record<string, string>) => e.name || e["姓名"] || "")
+                                  .filter(Boolean)
+                                  .join("、")}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Full summary text */}
+                          <p
+                            className="text-xs mt-1"
+                            style={{
+                              color: "var(--color-text-secondary)",
+                              lineHeight: 1.6,
+                              whiteSpace: "pre-line",
+                            }}
+                          >
+                            {creditResults[m.company]?.summary || t("jobs.creditNoData")}
+                          </p>
+                        </div>
+                      ) : (
+                        /* Legacy / LLM fallback card (no extended data) */
+                        <div className="px-3 pb-3">
+                          <p
+                            className="text-xs"
+                            style={{ color: "var(--color-text-secondary)" }}
+                          >
+                            <strong>{t("jobs.creditEntity")}:</strong>{" "}
+                            {creditResults[m.company]?.entity_name || m.company}
+                          </p>
+                          <p
+                            className="text-xs mt-1"
+                            style={{ color: "var(--color-text-secondary)" }}
+                          >
+                            {creditResults[m.company]?.summary || t("jobs.creditNoData")}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

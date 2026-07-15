@@ -93,8 +93,10 @@ export const API_ROUTES = {
   PAYMENT_WECHAT_NOTIFY: "/v1/payment/wechat/notify",
 
   // Credit (company evaluation — tripod leg 3: Resume → Job → Company)
+  // ⭐ Powered by QCC (企查查) official data source
   CREDIT_ANALYZE: "/v1/credit/analyze",
   CREDIT_CHECK_COMPANY: "/v1/credit/check-company",
+  CREDIT_CHECK_COMPANY_DETAIL: "/v1/credit/check-company/detail",
 
   // Health
   HEALTH: "/health",

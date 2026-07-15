@@ -20,6 +20,8 @@
     "e2e:poetry": "playwright test e2e/poetry",
     "e2e:live": "playwright test --config=playwright.live.config.ts --project=live-saas",
     "e2e:live:all": "playwright test --config=playwright.live.config.ts",
+    "e2e:overseas": "playwright test --config=playwright.overseas.live.config.ts",
+    "e2e:overseas:api": "playwright test --config=playwright.overseas.live.config.ts --project=overseas-landing -- -g 'API'",
     "storybook": "storybook dev -p 6007",
     "build-storybook": "storybook build"
   },
