@@ -12,9 +12,11 @@
  * Uses shared-core typed API factories for backend contract alignment.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { createJobsApi, createCreditApi, type Job, type JobMatchItem, type CreditAnalysis } from "@looma/shared-core";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
+import { IS_OVERSEAS } from "../../config/region";
 
 // ── Types ──
 
@@ -38,21 +40,11 @@ function getScoreColor(score: number): string {
   return "var(--color-danger)";
 }
 
-/** Short label for scoring dimensions */
-const SCORE_LABELS: Record<string, string> = {
-  skills_overlap: "技能",
-  experience_relevance: "经历",
-  seniority: "职级",
-  salary_match: "薪资",
-  location_match: "地点",
-  culture_workload_match: "强度",
-  company_score: "公司",
-};
-
 // ── Component ──
 
 export default function Jobs() {
-  const [tab, setTab] = useState<TabId>("browse");
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<TabId>(IS_OVERSEAS ? "upload" : "browse");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [matches, setMatches] = useState<JobMatchItem[] | null>(null);
   const [resumeText, setResumeText] = useState("");
@@ -82,8 +74,8 @@ export default function Jobs() {
     jobsApi
       .list()
       .then((res) => setJobs(res.jobs))
-      .catch(() => setMsg("加载职位列表失败"));
-  }, [jobsApi]);
+      .catch(() => setMsg(t("jobs.loadFailed")));
+  }, [jobsApi, t]);
 
   useEffect(() => {
     loadJobs();
@@ -98,17 +90,17 @@ export default function Jobs() {
       const result = await jobsApi.upload(file) as any;
       if (result.parsed) {
         setParsedJob(result.parsed);
-        setMsg("JD 解析完成");
+        setMsg(t("jobs.uploadDone"));
         loadJobs(); // Refresh job list
         // Auto-fill JD text for preview
         setJdText(result.markdown || "");
       } else if (result.error) {
         setMsg(result.error);
       } else {
-        setMsg("JD 解析完成，但未能提取结构化信息");
+        setMsg(t("jobs.uploadPartial"));
       }
     } catch {
-      setMsg("文件上传失败，请检查文件格式");
+      setMsg(t("jobs.uploadFailed"));
     } finally {
       setUploading(false);
     }
@@ -136,13 +128,13 @@ export default function Jobs() {
       const result = await jobsApi.parse(jdText) as any;
       if (result.parsed) {
         setParsedJob(result.parsed);
-        setMsg("JD 文本解析完成");
+        setMsg(t("jobs.parseTextDone"));
         loadJobs();
       } else {
-        setMsg("文本解析未返回结果");
+        setMsg(t("jobs.parseTextEmpty"));
       }
     } catch {
-      setMsg("文本解析失败");
+      setMsg(t("jobs.parseTextFailed"));
     } finally {
       setParsing(false);
     }
@@ -154,7 +146,7 @@ export default function Jobs() {
     if (!resumeText.trim()) return;
     const allowed = await ensureConsent("job_match");
     if (!allowed) {
-      setMsg("需要授权后才能进行职位匹配");
+      setMsg(t("jobs.consentRequired"));
       return;
     }
     setMatching(true);
@@ -165,7 +157,7 @@ export default function Jobs() {
       const res = await jobsApi.match(payload) as any;
       setMatches(res.matches);
     } catch {
-      setMsg("匹配失败，请重试");
+      setMsg(t("jobs.matchFailed"));
     } finally {
       setMatching(false);
     }
@@ -177,7 +169,7 @@ export default function Jobs() {
     if (!companyName) return;
     const allowed = await ensureConsent("credit_query");
     if (!allowed) {
-      setMsg("需要授权后才能查询企业征信");
+      setMsg(t("jobs.creditConsentRequired"));
       return;
     }
     setCreditLoading((prev) => ({ ...prev, [companyName]: true }));
@@ -190,7 +182,7 @@ export default function Jobs() {
         [companyName]: {
           entity_name: companyName,
           report_type: "企业信用评估",
-          summary: "暂无法获取该公司征信信息，请稍后重试。",
+          summary: t("jobs.creditUnavailable"),
         },
       }));
     } finally {
@@ -239,7 +231,7 @@ export default function Jobs() {
         className="text-2xl font-bold mb-6"
         style={{ color: "var(--color-text-primary)" }}
       >
-        职位匹配
+        {t("jobs.title")}
       </h1>
 
       {/* ── Tab Bar ── */}
@@ -255,7 +247,7 @@ export default function Jobs() {
               marginBottom: -1,
             }}
           >
-            {id === "browse" ? "在招职位" : "上传JD"}
+            {id === "browse" ? t("jobs.tabBrowse") : t("jobs.tabUpload")}
           </button>
         ))}
       </div>
@@ -275,7 +267,7 @@ export default function Jobs() {
               <textarea
                 value={resumeText}
                 onChange={(e) => setResumeText(e.target.value)}
-                placeholder="在此粘贴简历文本，AI 将为你匹配最合适的职位..."
+                placeholder={t("jobs.resumePlaceholder")}
                 rows={5}
                 className="border rounded-lg px-3 py-2 text-sm outline-none resize-y w-full"
                 style={{
@@ -291,7 +283,7 @@ export default function Jobs() {
                   className="px-4 py-2 text-sm rounded-lg text-white border-none cursor-pointer disabled:opacity-50 transition-colors"
                   style={{ backgroundColor: "var(--color-primary)" }}
                 >
-                  {matching ? "AI 匹配中..." : "开始匹配"}
+                  {matching ? t("jobs.matching") : t("jobs.matchStart")}
                 </button>
                 <button
                   onClick={() => {
@@ -301,7 +293,7 @@ export default function Jobs() {
                   className="text-sm bg-transparent border-none cursor-pointer"
                   style={{ color: "var(--color-text-muted)" }}
                 >
-                  重置
+                  {t("jobs.reset")}
                 </button>
               </div>
             </div>
@@ -356,7 +348,7 @@ export default function Jobs() {
                           ] as [string, number][]
                         ).map(([key, max]) => {
                           const val = (m.scores as any)?.[key] ?? 5;
-                          return renderScoreBar(SCORE_LABELS[key] || key, val, max);
+                          return renderScoreBar(t(`jobs.scores.${key}`), val, max);
                         }))}
                       </div>
 
@@ -420,11 +412,11 @@ export default function Jobs() {
                         </text>
                       </svg>
                       <p className="text-xs mt-1" style={{ color: "var(--color-text-muted)" }}>
-                        综合匹配
+                        {t("jobs.overallMatch")}
                       </p>
 
-                      {/* Credit check button */}
-                      {m.company && (
+                      {/* Credit check (mainland only) */}
+                      {!IS_OVERSEAS && m.company && (
                         <button
                           onClick={() => handleCheckCredit(m.company!)}
                           disabled={creditLoading[m.company]}
@@ -439,17 +431,17 @@ export default function Jobs() {
                           }}
                         >
                           {creditLoading[m.company]
-                            ? "查证中..."
+                            ? t("jobs.checkingCredit")
                             : creditResults[m.company]
-                            ? "已查征信 ✓"
-                            : "查征信"}
+                            ? t("jobs.creditDone")
+                            : t("jobs.checkCredit")}
                         </button>
                       )}
                     </div>
                   </div>
 
-                  {/* Credit result card (below match card) */}
-                  {m.company && creditResults[m.company] && (
+                  {/* Credit result card (mainland only) */}
+                  {!IS_OVERSEAS && m.company && creditResults[m.company] && (
                     <div
                       className="mt-3 p-3 rounded border-l-4"
                       style={{
@@ -462,7 +454,7 @@ export default function Jobs() {
                           className="text-xs font-medium"
                           style={{ color: "var(--color-success)" }}
                         >
-                          🛡 企业征信
+                          🛡 {t("jobs.creditReport")}
                         </span>
                         <span
                           className="text-xs px-1.5 py-0.5 rounded"
@@ -471,21 +463,21 @@ export default function Jobs() {
                             color: "#fff",
                           }}
                         >
-                          {creditResults[m.company]?.report_type || "企业信用报告"}
+                          {creditResults[m.company]?.report_type || t("jobs.creditReport")}
                         </span>
                       </div>
                       <p
                         className="text-xs"
                         style={{ color: "var(--color-text-secondary)" }}
                       >
-                        <strong>主体：</strong>
+                        <strong>{t("jobs.creditEntity")}:</strong>
                         {creditResults[m.company]?.entity_name || m.company}
                       </p>
                       <p
                         className="text-xs mt-1"
                         style={{ color: "var(--color-text-secondary)" }}
                       >
-                        {creditResults[m.company]?.summary || "暂无评估信息"}
+                        {creditResults[m.company]?.summary || t("jobs.creditNoData")}
                       </p>
                     </div>
                   )}
@@ -499,9 +491,39 @@ export default function Jobs() {
                 className="text-sm font-medium mb-3"
                 style={{ color: "var(--color-text-muted)" }}
               >
-                当前职位 ({jobs.length})
+                {t("jobs.currentRoles", { count: jobs.length })}
               </h3>
-              {jobs.map((job) => (
+              {jobs.length === 0 ? (
+                <div
+                  className="rounded-lg p-8 text-center"
+                  style={{
+                    backgroundColor: "var(--color-bg-card)",
+                    boxShadow: "var(--shadow-sm)",
+                  }}
+                >
+                  <p
+                    className="font-medium mb-2"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    {t("jobs.emptyTitle")}
+                  </p>
+                  <p
+                    className="text-sm mb-4"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    {t("jobs.emptyDesc")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTab("upload")}
+                    className="px-4 py-2 text-sm rounded-lg text-white border-none cursor-pointer"
+                    style={{ backgroundColor: "var(--color-primary)" }}
+                  >
+                    {t("jobs.uploadFirst")}
+                  </button>
+                </div>
+              ) : (
+              jobs.map((job) => (
                 <div
                   key={job.id}
                   className="rounded-lg p-4 transition-shadow hover:shadow-sm"
@@ -551,12 +573,12 @@ export default function Jobs() {
                           color: "#fff",
                         }}
                       >
-                        匹配此职位
+                        {t("jobs.matchRole")}
                       </button>
                     </div>
                   </div>
                 </div>
-              ))}
+              )))}
             </div>
           )}
         </>
@@ -587,15 +609,15 @@ export default function Jobs() {
             />
             {uploading ? (
               <p className="text-sm" style={{ color: "var(--color-primary)" }}>
-                AI 正在解析 JD 文件...
+                {t("jobs.uploading")}
               </p>
             ) : (
               <>
                 <p className="text-sm font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
-                  点击上传或拖拽 JD 文件到此处
+                  {t("jobs.dropTitle")}
                 </p>
                 <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                  支持 PDF、Word、TXT、Markdown 格式
+                  {t("jobs.dropHint")}
                 </p>
               </>
             )}
@@ -605,7 +627,7 @@ export default function Jobs() {
           <div className="flex items-center gap-3">
             <div className="flex-1 border-t" style={{ borderColor: "#e0e0e0" }} />
             <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-              或直接粘贴 JD 文本
+              {t("jobs.pasteDivider")}
             </span>
             <div className="flex-1 border-t" style={{ borderColor: "#e0e0e0" }} />
           </div>
@@ -621,7 +643,7 @@ export default function Jobs() {
             <textarea
               value={jdText}
               onChange={(e) => setJdText(e.target.value)}
-              placeholder="在此粘贴职位描述文本，AI 将自动提取职位名称、公司、要求等信息..."
+              placeholder={t("jobs.jdPlaceholder")}
               rows={8}
               className="border rounded-lg px-3 py-2 text-sm outline-none resize-y w-full mb-3"
               style={{
@@ -636,7 +658,7 @@ export default function Jobs() {
               className="px-4 py-2 text-sm rounded-lg text-white border-none cursor-pointer disabled:opacity-50 transition-colors"
               style={{ backgroundColor: "var(--color-primary)" }}
             >
-              {parsing ? "AI 解析中..." : "解析 JD 文本"}
+              {parsing ? t("jobs.parsing") : t("jobs.parseJd")}
             </button>
           </div>
 
@@ -660,36 +682,36 @@ export default function Jobs() {
                 className="font-bold text-base mb-3"
                 style={{ color: "var(--color-text-primary)" }}
               >
-                ✅ JD 解析结果
+                ✅ {t("jobs.parseResult")}
               </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex gap-2">
-                  <span style={{ color: "var(--color-text-muted)", minWidth: 60 }}>职位：</span>
+                  <span style={{ color: "var(--color-text-muted)", minWidth: 60 }}>{t("jobs.fieldTitle")}:</span>
                   <span style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>
                     {parsedJob.title}
                   </span>
                 </div>
                 {parsedJob.company && (
                   <div className="flex gap-2">
-                    <span style={{ color: "var(--color-text-muted)", minWidth: 60 }}>公司：</span>
+                    <span style={{ color: "var(--color-text-muted)", minWidth: 60 }}>{t("jobs.fieldCompany")}:</span>
                     <span style={{ color: "var(--color-text-primary)" }}>{parsedJob.company}</span>
                   </div>
                 )}
                 {parsedJob.location && (
                   <div className="flex gap-2">
-                    <span style={{ color: "var(--color-text-muted)", minWidth: 60 }}>地点：</span>
+                    <span style={{ color: "var(--color-text-muted)", minWidth: 60 }}>{t("jobs.fieldLocation")}:</span>
                     <span style={{ color: "var(--color-text-primary)" }}>{parsedJob.location}</span>
                   </div>
                 )}
                 {parsedJob.salary_range && (
                   <div className="flex gap-2">
-                    <span style={{ color: "var(--color-text-muted)", minWidth: 60 }}>薪资：</span>
+                    <span style={{ color: "var(--color-text-muted)", minWidth: 60 }}>{t("jobs.fieldSalary")}:</span>
                     <span style={{ color: "var(--color-text-primary)" }}>{parsedJob.salary_range}</span>
                   </div>
                 )}
                 {parsedJob.requirements && parsedJob.requirements.length > 0 && (
                   <div className="flex gap-2">
-                    <span style={{ color: "var(--color-text-muted)", minWidth: 60 }}>要求：</span>
+                    <span style={{ color: "var(--color-text-muted)", minWidth: 60 }}>{t("jobs.fieldRequirements")}:</span>
                     <div className="flex flex-wrap gap-1">
                       {parsedJob.requirements.map((r, j) => (
                         <span
@@ -708,7 +730,7 @@ export default function Jobs() {
                 )}
               </div>
               <p className="text-xs mt-3" style={{ color: "var(--color-text-muted)" }}>
-                JD 已保存到职位库，可在"在招职位"标签页查看
+                {t("jobs.savedHint")}
               </p>
             </div>
           )}

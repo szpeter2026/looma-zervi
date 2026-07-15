@@ -34,7 +34,7 @@ export default function Sidebar() {
       { path: "/query", labelKey: "nav.query", icon: "◈" },
       { path: "/poetry", labelKey: "nav.poetry", icon: "◇" },
       { path: "/candidates", labelKey: IS_OVERSEAS ? "nav.profile" : "nav.candidates", icon: "◎", overseasHidden: true },
-      { path: "/jobs", labelKey: "nav.jobs", icon: "◈" },
+      { path: "/jobs", labelKey: IS_OVERSEAS ? "nav.jobsOverseas" : "nav.jobs", icon: "◈" },
       { path: "/resume", labelKey: "nav.resume", icon: "◈" },
       { path: "/reports", labelKey: "nav.reports", icon: "◆" },
       { path: "/settings/consent", labelKey: "nav.consent", icon: "🛡" },

@@ -54,6 +54,18 @@ MOCK_JOBS = [
 ]
 
 
+def _is_overseas_deploy() -> bool:
+    """SG/US regions skip mainland demo job fixtures."""
+    region = (current_app.config.get("DEPLOY_REGION") or "US").upper()
+    return region in ("SG", "US")
+
+
+def _fallback_jobs() -> list[dict]:
+    if _is_overseas_deploy():
+        return []
+    return MOCK_JOBS
+
+
 def _get_persisted_jobs() -> list[dict]:
     """Read all persisted jobs from DB, fallback to MOCK_JOBS if empty."""
     try:
@@ -101,7 +113,8 @@ def list_jobs():
     persisted = _get_persisted_jobs()
     if persisted:
         return jsonify(jobs=persisted, total=len(persisted))
-    return jsonify(jobs=MOCK_JOBS, total=len(MOCK_JOBS))
+    fallback = _fallback_jobs()
+    return jsonify(jobs=fallback, total=len(fallback))
 
 
 @jobs_bp.route("/upload", methods=["POST"])
@@ -266,13 +279,13 @@ def job_match():
         target_jobs = [j for j in persisted if j["id"] == job_id_filter]
         if not target_jobs:
             # Try mock
-            target_jobs = [j for j in MOCK_JOBS if j["id"] == job_id_filter]
+            target_jobs = [j for j in _fallback_jobs() if j["id"] == job_id_filter]
         if not target_jobs:
             return jsonify(error="not_found", message=f"职位 {job_id_filter} 不存在"), 404
     else:
         # Match against all available jobs
         persisted = _get_persisted_jobs()
-        target_jobs = persisted if persisted else MOCK_JOBS
+        target_jobs = persisted if persisted else _fallback_jobs()
 
     try:
         from src.pipeline.job_match_pipeline import run_job_match_pipeline
@@ -310,7 +323,7 @@ def search_jobs():
         return list_jobs()
 
     persisted = _get_persisted_jobs()
-    source = persisted if persisted else MOCK_JOBS
+    source = persisted if persisted else _fallback_jobs()
 
     filtered = []
     for j in source:
@@ -343,7 +356,7 @@ def recommend_jobs():
     """
     # Build a simple sorted list with simulated match_score
     persisted = _get_persisted_jobs()
-    source = persisted if persisted else MOCK_JOBS
+    source = persisted if persisted else _fallback_jobs()
 
     # Simulate match scores based on job index (MVP)
     import random
@@ -365,7 +378,7 @@ def recommend_jobs():
 def job_detail(job_id: str):
     """Get job detail by ID (HarmonyOS JobDetailPage)."""
     persisted = _get_persisted_jobs()
-    source = persisted if persisted else MOCK_JOBS
+    source = persisted if persisted else _fallback_jobs()
 
     for j in source:
         if j.get("id") == job_id:
