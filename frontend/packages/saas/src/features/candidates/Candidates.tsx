@@ -7,10 +7,12 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   ApiError,
+  CANDIDATE_LIMITS,
   createEnterpriseApi,
   hasMinTier,
   type Candidate,
   type EnterpriseProfile,
+  type Tier,
 } from "@looma/shared-core";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useSaasAuthStore } from "../auth/authStore";
@@ -151,13 +153,27 @@ export default function Candidates() {
     );
   }
 
+  const tier = (user?.tier ?? "free") as Tier;
+  const limit =
+    tier in CANDIDATE_LIMITS
+      ? CANDIDATE_LIMITS[tier as keyof typeof CANDIDATE_LIMITS]
+      : CANDIDATE_LIMITS.free;
+  const atCap = limit !== null && candidates.length >= limit;
+
   return (
     <div className="max-w-3xl">
       <h1 className="text-2xl font-bold mb-1" style={{ color: "var(--color-text-primary)" }}>
         {t("candidates.title")}
       </h1>
-      <p className="text-sm mb-6" style={{ color: "var(--color-text-muted)" }}>
+      <p className="text-sm mb-2" style={{ color: "var(--color-text-muted)" }}>
         {enterprise?.name} · {t("candidates.importHint")}
+      </p>
+      <p className="text-xs mb-6" style={{ color: atCap ? "var(--color-warning)" : "var(--color-text-muted)" }}>
+        {t("candidates.capacity", {
+          used: candidates.length,
+          limit: limit === null ? t("tier.unlimited") : String(limit),
+        })}
+        {atCap ? ` · ${t("candidates.capacityFull")}` : ""}
       </p>
 
       <div

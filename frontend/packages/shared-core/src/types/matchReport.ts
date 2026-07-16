@@ -50,10 +50,42 @@ export interface MatchReportSummary {
   updated_at: string;
 }
 
+export type ShareDimension =
+  | "personal_info"
+  | "skills"
+  | "experience"
+  | "scores"
+  | "gap_analysis"
+  | "credit";
+
+export interface ReportSharing {
+  id: string;
+  report_id: string;
+  user_id: string;
+  shared_with_type: string;
+  shared_with_id: string;
+  shared_dimensions: ShareDimension[] | string[];
+  purpose: string;
+  status: "active" | "revoked" | "expired" | string;
+  granted_at: string;
+  revoked_at?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MatchReport extends MatchReportSummary {
   resume_id?: string;
   resume_snapshot?: string;
   items: MatchReportItem[];
+  sharings?: ReportSharing[];
+}
+
+export interface ShareMatchReportRequest {
+  shared_dimensions: ShareDimension[];
+  purpose?: string;
+  shared_with_id?: string;
+  expires_at?: string | null;
 }
 
 export interface CreateMatchReportRequest {

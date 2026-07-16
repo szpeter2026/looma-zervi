@@ -146,12 +146,17 @@ export default function Sidebar() {
                 className="h-full rounded-full transition-all duration-300"
                 style={{
                   width: `${Math.min(usagePercent, 100)}%`,
-                  backgroundColor: usagePercent >= 90
+                  backgroundColor: usagePercent >= 80
                     ? "var(--color-warning, #f59e0b)"
                     : "var(--color-primary)",
                 }}
               />
             </div>
+          )}
+          {!paid && usagePercent >= 80 && (
+            <p className="text-[10px] mt-1.5 text-amber-200/80">
+              {t("tier.quotaNearLimit")}
+            </p>
           )}
           <div className="mt-1.5 flex items-center justify-between">
             <span className="text-xs text-white/30">

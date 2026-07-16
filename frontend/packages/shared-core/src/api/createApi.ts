@@ -60,6 +60,8 @@ import type {
   CreateMatchReportRequest,
   MatchReport,
   MatchReportListResponse,
+  ReportSharing,
+  ShareMatchReportRequest,
 } from "../types/matchReport";
 import { API_ROUTES } from "../constants/routes";
 
@@ -429,8 +431,30 @@ export function createMatchReportsApi(client: ApiClient) {
     get: (id: string) =>
       client.get<MatchReport>(`${API_ROUTES.MATCH_REPORTS}/${id}`),
 
+    export: (id: string) =>
+      client.get<MatchReport>(`${API_ROUTES.MATCH_REPORTS}/${id}/export`),
+
     remove: (id: string) =>
       client.delete<{ ok: boolean; id: string }>(`${API_ROUTES.MATCH_REPORTS}/${id}`),
+
+    listSharings: (id: string) =>
+      client.get<{ sharings: ReportSharing[] }>(
+        `${API_ROUTES.MATCH_REPORTS}/${id}/sharings`,
+      ),
+
+    share: (id: string, payload: ShareMatchReportRequest) =>
+      client.post<ReportSharing>(`${API_ROUTES.MATCH_REPORTS}/${id}/share`, payload),
+
+    updateShare: (id: string, sharingId: string, payload: ShareMatchReportRequest) =>
+      client.put<ReportSharing>(
+        `${API_ROUTES.MATCH_REPORTS}/${id}/share/${sharingId}`,
+        payload,
+      ),
+
+    revokeShare: (id: string, sharingId: string) =>
+      client.delete<ReportSharing>(
+        `${API_ROUTES.MATCH_REPORTS}/${id}/share/${sharingId}`,
+      ),
   };
 }
 

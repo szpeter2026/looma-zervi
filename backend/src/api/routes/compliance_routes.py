@@ -91,6 +91,7 @@ def required_consents():
         "mbti_analyze": "MBTI 性格测评",
         "navigator_memory": "对话记忆持久化",
         "report_generate": "生成并保存匹配报告",
+        "report_share": "授权匹配报告给职业成长合伙人",
     }
     return jsonify(
         available_scopes=sorted(ALL_SCOPES),

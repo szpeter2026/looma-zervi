@@ -79,6 +79,29 @@ def test_create_list_get_delete(db):
     assert detail is not None
     assert detail["items"][0]["company_name"] == "测试科技"
 
+    sharing = reports.share_report(
+        report_id=created["id"],
+        user_id=uid,
+        shared_dimensions=["skills", "scores", "gap_analysis"],
+        purpose="test",
+    )
+    assert sharing["status"] == "active"
+    assert "skills" in sharing["shared_dimensions"]
+
+    revoked = reports.revoke_sharing(sharing["id"], uid, created["id"])
+    assert revoked["status"] == "revoked"
+
     assert reports.delete_report(created["id"], uid) is True
     assert reports.get_report(created["id"], user_id=uid) is None
     assert reports.list_user_reports(uid)["total"] == 0
+
+    # Soft-deleted report can be purged immediately with days=0 not allowed;
+    # use days=1 after forcing updated_at into the past.
+    with mgr.get_conn() as conn:
+        conn.execute(
+            """UPDATE match_reports SET updated_at=datetime('now', '-40 days')
+               WHERE id=?""",
+            (created["id"],),
+        )
+    purged = reports.purge_deleted(days=30)
+    assert purged["purged"] >= 1

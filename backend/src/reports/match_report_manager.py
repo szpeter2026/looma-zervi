@@ -184,10 +184,17 @@ class MatchReportManager:
                    WHERE report_id=? ORDER BY rank_order ASC, overall_score DESC""",
                 (report_id,),
             ).fetchall()
+            sharings = conn.execute(
+                """SELECT * FROM report_sharing
+                   WHERE report_id=? AND user_id=?
+                   ORDER BY created_at DESC""",
+                (report_id, row["user_id"]),
+            ).fetchall()
         report = self._row_to_summary(dict(row))
         report["resume_snapshot"] = row["resume_snapshot"] or ""
         report["resume_id"] = row["resume_id"] or ""
         report["items"] = [self._item_to_dict(dict(i)) for i in items]
+        report["sharings"] = [self._sharing_to_dict(dict(s)) for s in sharings]
         return report
 
     def delete_report(self, report_id: str, user_id: str) -> bool:
@@ -200,6 +207,150 @@ class MatchReportManager:
                 (now, report_id, user_id),
             )
             return cur.rowcount > 0
+
+    ALLOWED_DIMENSIONS = frozenset({
+        "personal_info", "skills", "experience", "scores", "gap_analysis", "credit",
+    })
+
+    def share_report(
+        self,
+        report_id: str,
+        user_id: str,
+        shared_dimensions: list,
+        purpose: str = "",
+        shared_with_type: str = "career_partner",
+        shared_with_id: str = "",
+        expires_at: str | None = None,
+    ) -> dict:
+        if shared_with_type != "career_partner":
+            raise ValueError("unsupported_partner_type")
+        dims = [d for d in shared_dimensions if d in self.ALLOWED_DIMENSIONS]
+        if not dims:
+            raise ValueError("invalid_dimensions")
+        report = self.get_report(report_id, user_id=user_id)
+        if not report:
+            raise ValueError("not_found")
+        now = _now_iso()
+        sharing_id = str(uuid.uuid4())
+        with self.db.get_conn() as conn:
+            # Revoke prior active career_partner grants for this report
+            conn.execute(
+                """UPDATE report_sharing
+                   SET status='revoked', revoked_at=?, updated_at=?
+                   WHERE report_id=? AND user_id=? AND shared_with_type=?
+                     AND status='active'""",
+                (now, now, report_id, user_id, shared_with_type),
+            )
+            conn.execute(
+                """INSERT INTO report_sharing
+                   (id, report_id, user_id, shared_with_type, shared_with_id,
+                    shared_dimensions, purpose, status, granted_at, expires_at, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)""",
+                (
+                    sharing_id,
+                    report_id,
+                    user_id,
+                    shared_with_type,
+                    shared_with_id or "",
+                    json.dumps(dims, ensure_ascii=False),
+                    purpose[:500],
+                    now,
+                    expires_at,
+                    now,
+                    now,
+                ),
+            )
+        return self._get_sharing(sharing_id)
+
+    def update_sharing(
+        self,
+        sharing_id: str,
+        user_id: str,
+        report_id: str,
+        shared_dimensions: list,
+    ) -> dict:
+        dims = [d for d in shared_dimensions if d in self.ALLOWED_DIMENSIONS]
+        if not dims:
+            raise ValueError("invalid_dimensions")
+        now = _now_iso()
+        with self.db.get_conn() as conn:
+            cur = conn.execute(
+                """UPDATE report_sharing
+                   SET shared_dimensions=?, updated_at=?
+                   WHERE id=? AND user_id=? AND report_id=? AND status='active'""",
+                (json.dumps(dims, ensure_ascii=False), now, sharing_id, user_id, report_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("not_found")
+        return self._get_sharing(sharing_id)
+
+    def revoke_sharing(self, sharing_id: str, user_id: str, report_id: str) -> dict:
+        now = _now_iso()
+        with self.db.get_conn() as conn:
+            cur = conn.execute(
+                """UPDATE report_sharing
+                   SET status='revoked', revoked_at=?, updated_at=?
+                   WHERE id=? AND user_id=? AND report_id=? AND status='active'""",
+                (now, now, sharing_id, user_id, report_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("not_found")
+        return self._get_sharing(sharing_id)
+
+    def list_sharings(self, report_id: str, user_id: str) -> list[dict]:
+        if not self.get_report(report_id, user_id=user_id):
+            raise ValueError("not_found")
+        with self.db.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM report_sharing
+                   WHERE report_id=? AND user_id=?
+                   ORDER BY created_at DESC""",
+                (report_id, user_id),
+            ).fetchall()
+        return [self._sharing_to_dict(dict(r)) for r in rows]
+
+    def purge_deleted(self, days: int = 30) -> dict:
+        """Hard-delete soft-deleted reports older than `days`."""
+        days = max(1, min(int(days), 365))
+        with self.db.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT id FROM match_reports
+                   WHERE status='deleted'
+                     AND datetime(updated_at) <= datetime('now', ?)""",
+                (f"-{days} days",),
+            ).fetchall()
+            ids = [r["id"] for r in rows]
+            for rid in ids:
+                conn.execute("DELETE FROM match_report_items WHERE report_id=?", (rid,))
+                conn.execute("DELETE FROM report_sharing WHERE report_id=?", (rid,))
+                conn.execute("DELETE FROM match_reports WHERE id=?", (rid,))
+        return {"purged": len(ids), "days": days}
+
+    def _get_sharing(self, sharing_id: str) -> dict:
+        with self.db.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM report_sharing WHERE id=?", (sharing_id,)
+            ).fetchone()
+        if not row:
+            raise ValueError("not_found")
+        return self._sharing_to_dict(dict(row))
+
+    def _sharing_to_dict(self, row: dict) -> dict:
+        return {
+            "id": row["id"],
+            "report_id": row["report_id"],
+            "user_id": row["user_id"],
+            "shared_with_type": row.get("shared_with_type") or "career_partner",
+            "shared_with_id": row.get("shared_with_id") or "",
+            "shared_dimensions": _json_loads(row.get("shared_dimensions"), []),
+            "purpose": row.get("purpose") or "",
+            "status": row.get("status") or "active",
+            "granted_at": row.get("granted_at") or "",
+            "revoked_at": row.get("revoked_at"),
+            "expires_at": row.get("expires_at"),
+            "created_at": row.get("created_at") or "",
+            "updated_at": row.get("updated_at") or "",
+        }
 
     def _row_to_summary(self, row: dict) -> dict:
         meta = _json_loads(row.get("metadata"), {})

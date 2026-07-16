@@ -13,12 +13,13 @@
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ApiError,
   createJobsApi,
   createCreditApi,
   createMatchReportsApi,
+  isPaidTier,
   type Job,
   type JobMatchItem,
   type CreditAnalysis,
@@ -30,6 +31,7 @@ import { useConsent } from "../../compliance/useConsent";
 import { IS_OVERSEAS } from "../../config/region";
 import QuotaExhaustedModal from "../../brand/components/QuotaExhaustedModal";
 import { loadResumeMatchText } from "./resumeMatchBridge";
+import { useSaasAuthStore } from "../auth/authStore";
 
 function isQuotaExceeded(err: unknown): boolean {
   return (
@@ -85,6 +87,7 @@ function getScoreColor(score: number): string {
 export default function Jobs() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user, quota } = useSaasAuthStore();
   const [tab, setTab] = useState<TabId>(IS_OVERSEAS ? "upload" : "browse");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [matches, setMatches] = useState<JobMatchItem[] | null>(null);
@@ -92,8 +95,17 @@ export default function Jobs() {
   const [resumePrefill, setResumePrefill] = useState(false);
   const [matching, setMatching] = useState(false);
   const [savingReport, setSavingReport] = useState(false);
+  const [batchCreditBusy, setBatchCreditBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [msgOk, setMsgOk] = useState(false);
   const [quotaExhausted, setQuotaExhausted] = useState(false);
+
+  const matchRecord = quota?.records?.find((r) => r.resource === "job_match");
+  const matchUsagePct =
+    matchRecord && matchRecord.daily_limit > 0
+      ? Math.round((matchRecord.used / matchRecord.daily_limit) * 100)
+      : 0;
+  const showQuotaWarn = !isPaidTier(user?.tier ?? quota?.tier) && matchUsagePct >= 80;
 
   // Credit check state (Tripod leg 3)
   const [creditResults, setCreditResults] = useState<Record<string, CreditAnalysis | null>>({});
@@ -241,6 +253,7 @@ export default function Jobs() {
     if (!matches?.length) return;
     const allowed = await ensureConsent("report_generate");
     if (!allowed) {
+      setMsgOk(false);
       setMsg(t("jobs.reportConsentRequired"));
       return;
     }
@@ -251,10 +264,16 @@ export default function Jobs() {
         resume_text: resumeText,
         matches,
       });
+      setMsgOk(true);
       setMsg(t("jobs.reportSaved"));
       navigate(`/reports?match=${report.id}`);
-    } catch {
-      setMsg(t("jobs.reportSaveFailed"));
+    } catch (err) {
+      setMsgOk(false);
+      if (err instanceof ApiError && err.status === 403) {
+        setMsg(t("jobs.reportConsentRequired"));
+      } else {
+        setMsg(t("jobs.reportSaveFailed"));
+      }
     } finally {
       setSavingReport(false);
     }
@@ -287,6 +306,36 @@ export default function Jobs() {
       }));
     } finally {
       setCreditLoading((prev) => ({ ...prev, [companyName]: false }));
+    }
+  };
+
+  const handleBatchCredit = async () => {
+    if (!matches?.length || IS_OVERSEAS) return;
+    const companies = Array.from(
+      new Set(matches.map((m) => m.company).filter(Boolean) as string[]),
+    ).filter((c) => !creditResults[c]);
+    if (companies.length === 0) {
+      setMsgOk(true);
+      setMsg(t("jobs.batchCreditDone"));
+      return;
+    }
+    const allowed = await ensureConsent("credit_query");
+    if (!allowed) {
+      setMsgOk(false);
+      setMsg(t("jobs.creditConsentRequired"));
+      return;
+    }
+    setBatchCreditBusy(true);
+    setMsg(null);
+    try {
+      for (const company of companies) {
+        await handleCheckCredit(company);
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      setMsgOk(true);
+      setMsg(t("jobs.batchCreditDone"));
+    } finally {
+      setBatchCreditBusy(false);
     }
   };
 
@@ -368,9 +417,25 @@ export default function Jobs() {
             }}
           >
             <div className="flex flex-col gap-3">
-              {resumePrefill && (
-                <p className="text-xs" style={{ color: "var(--color-primary)" }}>
-                  {t("jobs.resumePrefillHint")}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                {resumePrefill ? (
+                  <p className="text-xs" style={{ color: "var(--color-primary)" }}>
+                    {t("jobs.resumePrefillHint")}
+                  </p>
+                ) : (
+                  <span />
+                )}
+                <Link
+                  to="/resume"
+                  className="text-xs no-underline"
+                  style={{ color: "var(--color-primary)" }}
+                >
+                  {t("jobs.goParseResume")}
+                </Link>
+              </div>
+              {showQuotaWarn && (
+                <p className="text-xs" style={{ color: "var(--color-warning)" }}>
+                  {t("jobs.quotaNearLimit", { pct: matchUsagePct })}
                 </p>
               )}
               <textarea
@@ -413,7 +478,10 @@ export default function Jobs() {
           </div>
 
           {msg && (
-            <p className="text-sm mb-4 text-center" style={{ color: "var(--color-danger)" }}>
+            <p
+              className="text-sm mb-4 text-center"
+              style={{ color: msgOk ? "var(--color-success)" : "var(--color-danger)" }}
+            >
               {msg}
             </p>
           )}
@@ -425,15 +493,32 @@ export default function Jobs() {
                 <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
                   {t("jobs.matchCount", { count: matches.length })}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => void handleSaveReport()}
-                  disabled={savingReport || matches.length === 0}
-                  className="px-4 py-2 text-sm rounded-lg text-white border-none cursor-pointer disabled:opacity-50"
-                  style={{ backgroundColor: "var(--color-primary)" }}
-                >
-                  {savingReport ? t("jobs.reportSaving") : t("jobs.saveAsReport")}
-                </button>
+                <div className="flex gap-2 flex-wrap">
+                  {!IS_OVERSEAS && (
+                    <button
+                      type="button"
+                      onClick={() => void handleBatchCredit()}
+                      disabled={batchCreditBusy}
+                      className="px-3 py-2 text-sm rounded-lg border cursor-pointer disabled:opacity-50"
+                      style={{
+                        borderColor: "#e0e0e0",
+                        backgroundColor: "var(--color-bg-surface)",
+                        color: "var(--color-text-secondary)",
+                      }}
+                    >
+                      {batchCreditBusy ? t("jobs.batchCreditBusy") : t("jobs.batchCredit")}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveReport()}
+                    disabled={savingReport || matches.length === 0}
+                    className="px-4 py-2 text-sm rounded-lg text-white border-none cursor-pointer disabled:opacity-50"
+                    style={{ backgroundColor: "var(--color-primary)" }}
+                  >
+                    {savingReport ? t("jobs.reportSaving") : t("jobs.saveAsReport")}
+                  </button>
+                </div>
               </div>
               {matches.map((m, i) => (
                 <div

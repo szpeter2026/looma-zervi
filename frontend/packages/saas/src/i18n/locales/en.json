@@ -78,7 +78,8 @@
     "viewUpgrade": "View plans & upgrade →",
     "lockBadge": "Supporter+",
     "lockHint": "Upgrade to unlock this feature",
-    "unlimited": "Unlimited"
+    "unlimited": "Unlimited",
+    "quotaNearLimit": "Daily quota almost used — consider upgrading"
   },
   "candidates": {
     "title": "Candidate Profiles",
@@ -95,7 +96,9 @@
     "importing": "Importing…",
     "empty": "No candidates yet. Ask applicants to finish the PlanetX quiz, then share a code with you.",
     "unknownType": "Unknown",
-    "upgradeForMore": "Upgrade to Pro for deeper matching →"
+    "upgradeForMore": "Upgrade to Pro for deeper matching →",
+    "capacity": "Pool capacity {{used}} / {{limit}}",
+    "capacityFull": "Limit reached — please upgrade"
   },
   "quota": {
     "exhaustedTitle": "Daily Quota Exhausted",
@@ -152,6 +155,11 @@
     "reportSaved": "Match report saved",
     "reportSaveFailed": "Failed to save report",
     "reportConsentRequired": "Consent required to save a match report",
+    "goParseResume": "Parse resume first →",
+    "quotaNearLimit": "Job-match quota is at {{pct}}% today — upgrade or try tomorrow",
+    "batchCredit": "Check all credits",
+    "batchCreditBusy": "Checking…",
+    "batchCreditDone": "Credit checks finished (cache included)",
     "overallMatch": "Overall fit",
     "matchedSkills": "Strengths",
     "gapTitle": "Skill gaps",

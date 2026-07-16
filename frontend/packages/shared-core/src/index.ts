@@ -208,6 +208,9 @@ export type {
   MatchReportMetadata,
   CreateMatchReportRequest,
   MatchReportListResponse,
+  ReportSharing,
+  ShareDimension,
+  ShareMatchReportRequest,
 } from "./types/matchReport";
 
 export type {
@@ -275,6 +278,8 @@ export {
   QUOTA_LIMITS,
   TIER_ORDER,
   TOP_N_LIMIT,
+  CANDIDATE_LIMITS,
+  JOB_POST_LIMITS,
   RESOURCE_ASK,
   RESOURCE_JOB_MATCH,
   RESOURCE_RESUME_PARSE,

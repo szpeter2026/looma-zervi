@@ -17,7 +17,7 @@ logger = logging.getLogger("looma.compliance.consent")
 ALL_SCOPES = frozenset({
     "resume_upload", "resume_parse", "credit_query", "credit_analyze",
     "profile_share", "ask_rag", "job_match", "mbti_analyze", "navigator_memory",
-    "report_generate",
+    "report_generate", "report_share",
 })
 
 

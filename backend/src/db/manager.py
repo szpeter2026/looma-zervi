@@ -790,6 +790,32 @@ CREATE TABLE IF NOT EXISTS match_report_items (
 
 CREATE INDEX IF NOT EXISTS idx_report_items_report ON match_report_items(report_id);
 CREATE INDEX IF NOT EXISTS idx_report_items_company ON match_report_items(company_name);
+
+-- ============================================
+-- Report sharing (career_partner slice; multi-industry later)
+-- ============================================
+CREATE TABLE IF NOT EXISTS report_sharing (
+    id                  TEXT PRIMARY KEY,
+    report_id           TEXT NOT NULL,
+    user_id             TEXT NOT NULL,
+    shared_with_type    TEXT NOT NULL DEFAULT 'career_partner',
+    shared_with_id      TEXT DEFAULT '',
+    shared_dimensions   TEXT NOT NULL DEFAULT '[]',
+    purpose             TEXT DEFAULT '',
+    status              TEXT DEFAULT 'active',   -- active | revoked | expired
+    granted_at          TEXT DEFAULT (datetime('now')),
+    revoked_at          TEXT DEFAULT NULL,
+    expires_at          TEXT DEFAULT NULL,
+    created_at          TEXT DEFAULT (datetime('now')),
+    updated_at          TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (report_id) REFERENCES match_reports(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sharing_report ON report_sharing(report_id);
+CREATE INDEX IF NOT EXISTS idx_sharing_user ON report_sharing(user_id);
+CREATE INDEX IF NOT EXISTS idx_sharing_status ON report_sharing(status);
+CREATE INDEX IF NOT EXISTS idx_sharing_type ON report_sharing(shared_with_type);
 """
 
 

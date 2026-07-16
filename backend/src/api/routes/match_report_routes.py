@@ -92,6 +92,139 @@ def get_match_report(report_id: str):
     return jsonify(report)
 
 
+@match_report_bp.route("/<report_id>/export", methods=["GET"])
+@require_auth
+def export_match_report(report_id: str):
+    """Export full report JSON (user data sovereignty)."""
+    report = _manager().get_report(report_id, user_id=g.user_id)
+    if not report:
+        return jsonify(error="not_found", message="报告不存在"), 404
+    AuditLogger().log_from_request(
+        actor=g.user_id,
+        action="report_export",
+        resource_type="match_report",
+        resource_id=report_id,
+        metadata={"format": "json"},
+    )
+    return jsonify(report)
+
+
+@match_report_bp.route("/<report_id>/share", methods=["POST"])
+@require_auth
+@require_consent("report_share")
+def share_match_report(report_id: str):
+    """Grant career_partner access to selected dimensions (mid-term slice)."""
+    body = request.get_json(silent=True) or {}
+    dimensions = body.get("shared_dimensions") or []
+    if not isinstance(dimensions, list) or not dimensions:
+        return jsonify(error="bad_request", message="shared_dimensions 不能为空"), 400
+    purpose = (body.get("purpose") or "").strip()
+    shared_with_id = (body.get("shared_with_id") or "").strip()
+    try:
+        sharing = _manager().share_report(
+            report_id=report_id,
+            user_id=g.user_id,
+            shared_dimensions=dimensions,
+            purpose=purpose,
+            shared_with_type="career_partner",
+            shared_with_id=shared_with_id,
+            expires_at=body.get("expires_at"),
+        )
+    except ValueError as e:
+        code = str(e)
+        if code == "not_found":
+            return jsonify(error="not_found", message="报告不存在"), 404
+        return jsonify(error="bad_request", message=code), 400
+    AuditLogger().log_from_request(
+        actor=g.user_id,
+        action="report_share_grant",
+        resource_type="report_sharing",
+        resource_id=sharing["id"],
+        metadata={"report_id": report_id, "dimensions": dimensions},
+    )
+    return jsonify(sharing), 201
+
+
+@match_report_bp.route("/<report_id>/share/<sharing_id>", methods=["PUT"])
+@require_auth
+def update_match_report_share(report_id: str, sharing_id: str):
+    body = request.get_json(silent=True) or {}
+    dimensions = body.get("shared_dimensions")
+    if not isinstance(dimensions, list) or not dimensions:
+        return jsonify(error="bad_request", message="shared_dimensions 不能为空"), 400
+    try:
+        sharing = _manager().update_sharing(
+            sharing_id=sharing_id,
+            user_id=g.user_id,
+            report_id=report_id,
+            shared_dimensions=dimensions,
+        )
+    except ValueError as e:
+        if str(e) == "not_found":
+            return jsonify(error="not_found", message="授权记录不存在"), 404
+        return jsonify(error="bad_request", message=str(e)), 400
+    AuditLogger().log_from_request(
+        actor=g.user_id,
+        action="report_share_update",
+        resource_type="report_sharing",
+        resource_id=sharing_id,
+        metadata={"dimensions": dimensions},
+    )
+    return jsonify(sharing)
+
+
+@match_report_bp.route("/<report_id>/share/<sharing_id>", methods=["DELETE"])
+@require_auth
+def revoke_match_report_share(report_id: str, sharing_id: str):
+    try:
+        sharing = _manager().revoke_sharing(
+            sharing_id=sharing_id,
+            user_id=g.user_id,
+            report_id=report_id,
+        )
+    except ValueError as e:
+        if str(e) == "not_found":
+            return jsonify(error="not_found", message="授权记录不存在"), 404
+        return jsonify(error="bad_request", message=str(e)), 400
+    AuditLogger().log_from_request(
+        actor=g.user_id,
+        action="report_share_revoke",
+        resource_type="report_sharing",
+        resource_id=sharing_id,
+    )
+    return jsonify(sharing)
+
+
+@match_report_bp.route("/<report_id>/sharings", methods=["GET"])
+@require_auth
+def list_match_report_sharings(report_id: str):
+    try:
+        rows = _manager().list_sharings(report_id=report_id, user_id=g.user_id)
+    except ValueError as e:
+        if str(e) == "not_found":
+            return jsonify(error="not_found", message="报告不存在"), 404
+        return jsonify(error="bad_request", message=str(e)), 400
+    return jsonify(sharings=rows)
+
+
+@match_report_bp.route("/maintenance/purge", methods=["POST"])
+@require_auth
+def purge_deleted_match_reports():
+    """Physically delete soft-deleted reports older than N days (admin only)."""
+    if getattr(g, "user_role", None) != "admin":
+        return jsonify(error="forbidden", message="仅管理员可执行清理"), 403
+    body = request.get_json(silent=True) or {}
+    days = int(body.get("days") or 30)
+    result = _manager().purge_deleted(days=days)
+    AuditLogger().log_from_request(
+        actor=g.user_id,
+        action="report_purge",
+        resource_type="match_report",
+        metadata=result,
+    )
+    return jsonify(result)
+
+
 @match_report_bp.route("/<report_id>", methods=["DELETE"])
 @require_auth
 def delete_match_report(report_id: str):

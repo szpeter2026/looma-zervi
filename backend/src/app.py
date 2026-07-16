@@ -134,7 +134,10 @@ def create_app(env="development"):
                     "POST /v1/match-reports",
                     "GET /v1/match-reports",
                     "GET /v1/match-reports/:id",
+                    "GET /v1/match-reports/:id/export",
+                    "POST /v1/match-reports/:id/share",
                     "DELETE /v1/match-reports/:id",
+                    "POST /v1/match-reports/maintenance/purge",
                 ],
                 "payment": [
                     "GET  /v1/payment/plans",

@@ -78,7 +78,8 @@
     "viewUpgrade": "查看套餐并升级 →",
     "lockBadge": "支持者+",
     "lockHint": "升级后解锁此功能",
-    "unlimited": "不限次数"
+    "unlimited": "不限次数",
+    "quotaNearLimit": "今日配额将尽，建议升级套餐"
   },
   "candidates": {
     "title": "求职者画像",
@@ -95,7 +96,9 @@
     "importing": "导入中…",
     "empty": "暂无候选人。让求职者在 PlanetX 完成测试后，点击「分享给 HR」复制链接或分享码。",
     "unknownType": "未知",
-    "upgradeForMore": "升级 Pro，解锁更多匹配能力 →"
+    "upgradeForMore": "升级 Pro，解锁更多匹配能力 →",
+    "capacity": "候选人容量 {{used}} / {{limit}}",
+    "capacityFull": "已达上限，请升级套餐"
   },
   "quota": {
     "exhaustedTitle": "今日配额已用尽",
@@ -152,6 +155,11 @@
     "reportSaved": "匹配报告已保存",
     "reportSaveFailed": "保存报告失败，请重试",
     "reportConsentRequired": "需要授权「生成并保存匹配报告」后才能保存",
+    "goParseResume": "去简历解析页 →",
+    "quotaNearLimit": "今日职位匹配配额已使用 {{pct}}%，建议升级或明日再试",
+    "batchCredit": "一键查征信",
+    "batchCreditBusy": "批量查询中…",
+    "batchCreditDone": "征信查询完成（含缓存命中）",
     "overallMatch": "综合匹配",
     "matchedSkills": "优势标签",
     "gapTitle": "技能差距",
