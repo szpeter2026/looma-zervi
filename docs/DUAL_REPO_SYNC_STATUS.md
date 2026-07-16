@@ -1,6 +1,6 @@
 # 双仓远端同步状态与职责对照
 
-> **更新：** 2026-07-05 · Storybook 双仓验收 · **szbenyx 请阅 §0 + [PAYMENT_TIER_CONTRACT.md](./PAYMENT_TIER_CONTRACT.md)**  
+> **更新：** 2026-07-16 · WordPress 阿里云主站部署 · 双端远端同步  
 > **联调报告：** [ROUND1_INTEGRATION_REPORT.md](./ROUND1_INTEGRATION_REPORT.md)（含 **§8 补充通知**）  
 > **远端 HEAD：** [looma `main`](https://github.com/szpeter2026/looma-zervi/tree/main) · [portal `main`](https://github.com/szpeter2026/szbolent-portal/tree/main)
 
@@ -9,8 +9,8 @@
 ## 0. 给 szbenyx 的三条必读
 
 1. **请 pull 两仓**，阅读 **[PAYMENT_TIER_CONTRACT.md](./PAYMENT_TIER_CONTRACT.md)**（支付/tier 统一标准 · CN ¥9.9 / US $1.99）。  
-2. **portal 待接：** `looma.ts` + Pricing 走 Looma `/v1/payment/*`（见契约 **§6.2**）。  
-3. **Storybook 验收：** portal `:6006`（Vue 过渡）· looma `:6007`（React Phase 3/4 主验收）。
+2. **大陆主站：** WordPress 已部署阿里云 `47.115.168.107`（Bolent 子主题 + Podman）；Vue 门户 SPA 逐步由 WP 承接营销页。  
+3. **同步命令：** 各仓 `npm run sync:push`（portal）或 `./scripts/sync-remotes.sh push`（looma，待补齐）。
 
 ---
 
@@ -42,9 +42,10 @@
 
 | 项 | 说明 |
 |----|------|
-| `main` | **2026-07-05** 已与 `origin/main` 同步 |
-| Storybook | `npm run storybook` → **:6006**（Header/Footer/LuckyWheel） |
-| Astra 资产 | `design-system/` · 外包文档 `docs/szbolent-portal-outsourcing-astra-deliverables.md` |
+| `main` | 待推送：WP 生产部署脚本 + GitHub/Gitee 同步工具 |
+| WordPress | 阿里云 `47.115.168.107` · `/opt/bolent-wp` · Bolent Astra Child |
+| 同步 | `npm run sync:push` → `origin` + `gitee`；CI `sync-to-gitee.yml` |
+| Storybook | `npm run storybook` → **:6006** |
 
 ---
 
