@@ -74,17 +74,17 @@ get_local_hash() {
 do_setup() {
   info "配置远程仓库..."
 
-  # 确保 GitHub origin 正确
-  if git remote get-url origin &>/dev/null; then
-    CURRENT_ORIGIN=$(git remote get-url origin)
-    if [[ "$CURRENT_ORIGIN" != "$GITHUB_URL" ]]; then
-      warn "更新 origin: $CURRENT_ORIGIN -> $GITHUB_URL"
-      git remote set-url origin "$GITHUB_URL"
+  # 确保 GitHub remote 正确
+  if git remote get-url "$GITHUB_REMOTE" &>/dev/null; then
+    CURRENT_GH=$(git remote get-url "$GITHUB_REMOTE")
+    if [[ "$CURRENT_GH" != "$GITHUB_URL" ]]; then
+      warn "更新 $GITHUB_REMOTE: $CURRENT_GH -> $GITHUB_URL"
+      git remote set-url "$GITHUB_REMOTE" "$GITHUB_URL"
     fi
-    success "origin (GitHub): $GITHUB_URL"
+    success "$GITHUB_REMOTE (GitHub): $GITHUB_URL"
   else
-    git remote add origin "$GITHUB_URL"
-    success "添加 origin (GitHub): $GITHUB_URL"
+    git remote add "$GITHUB_REMOTE" "$GITHUB_URL"
+    success "添加 $GITHUB_REMOTE (GitHub): $GITHUB_URL"
   fi
 
   # 配置 Gitee
@@ -124,8 +124,8 @@ do_push() {
     info "推送分支: $branch"
 
     # 推送到 GitHub
-    info "  -> GitHub (origin)..."
-    if git push $push_args origin "$branch"; then
+    info "  -> GitHub ($GITHUB_REMOTE)..."
+    if git push $push_args "$GITHUB_REMOTE" "$branch"; then
       success "  ✓ GitHub ($branch)"
     else
       error "  ✗ GitHub ($branch) 推送失败"
@@ -146,7 +146,7 @@ do_push() {
   if [[ "$SYNC_TAGS" == "true" ]]; then
     info "推送 tags..."
 
-    if git push origin --tags 2>/dev/null; then
+    if git push "$GITHUB_REMOTE" --tags 2>/dev/null; then
       success "  ✓ GitHub tags"
     else
       warn "  ! GitHub tags 推送失败或无 tags"
@@ -179,7 +179,7 @@ do_check() {
     has_gitee=true
   fi
 
-  git fetch origin --quiet 2>/dev/null || warn "无法 fetch origin"
+  git fetch "$GITHUB_REMOTE" --quiet 2>/dev/null || warn "无法 fetch $GITHUB_REMOTE"
   if $has_gitee; then
     git fetch "$GITEE_REMOTE" --quiet 2>/dev/null || warn "无法 fetch $GITEE_REMOTE"
   fi
@@ -191,7 +191,7 @@ do_check() {
     echo "  本地:        ${local_hash:0:8}"
 
     # GitHub
-    remote_hash=$(get_remote_hash "origin" "$branch")
+    remote_hash=$(get_remote_hash "$GITHUB_REMOTE" "$branch")
     if [[ -z "$remote_hash" ]]; then
       echo -e "  GitHub:      ${RED}未找到远程分支${NC}"
       all_synced=false
@@ -229,7 +229,7 @@ do_check() {
   if $has_gitee; then
     echo "--- 远程仓库互比 ---"
     for branch in $BRANCHES; do
-      local gh_hash=$(get_remote_hash "origin" "$branch")
+      local gh_hash=$(get_remote_hash "$GITHUB_REMOTE" "$branch")
       local ge_hash=$(get_remote_hash "$GITEE_REMOTE" "$branch")
       echo "  $branch: GitHub=${gh_hash:0:8}  Gitee=${ge_hash:0:8}"
       if [[ "$gh_hash" == "$ge_hash" ]] && [[ -n "$gh_hash" ]]; then
