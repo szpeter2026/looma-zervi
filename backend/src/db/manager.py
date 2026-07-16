@@ -736,6 +736,60 @@ CREATE TABLE IF NOT EXISTS quiz_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_quiz_sessions_user ON quiz_sessions(user_id, created_at);
+
+-- ============================================
+-- Match reports (resume × JD matching persistence)
+-- ============================================
+CREATE TABLE IF NOT EXISTS match_reports (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    resume_id       TEXT DEFAULT '',
+    resume_snapshot TEXT DEFAULT '',
+    title           TEXT DEFAULT '',
+    status          TEXT DEFAULT 'completed',   -- draft | completed | archived | deleted
+    summary         TEXT DEFAULT '',
+    metadata        TEXT DEFAULT '{}',          -- JSON: { total_jobs, matched_at, pipeline_version }
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_match_reports_user ON match_reports(user_id);
+CREATE INDEX IF NOT EXISTS idx_match_reports_created ON match_reports(created_at);
+CREATE INDEX IF NOT EXISTS idx_match_reports_status ON match_reports(status);
+
+CREATE TABLE IF NOT EXISTS match_report_items (
+    id                      TEXT PRIMARY KEY,
+    report_id               TEXT NOT NULL,
+    job_title               TEXT NOT NULL,
+    company_name            TEXT NOT NULL,
+    location                TEXT DEFAULT '',
+    salary_range            TEXT DEFAULT '',
+    jd_snapshot             TEXT DEFAULT '',
+    overall_score           REAL DEFAULT 0,
+    background_match        REAL DEFAULT 0,
+    skills_overlap          REAL DEFAULT 0,
+    experience_relevance    REAL DEFAULT 0,
+    seniority               REAL DEFAULT 0,
+    language_requirement    REAL DEFAULT 0,
+    company_score           REAL DEFAULT 0,
+    salary_match            REAL DEFAULT 0,
+    location_match          REAL DEFAULT 0,
+    culture_workload_match  REAL DEFAULT 0,
+    match_reason            TEXT DEFAULT '',
+    matched_skills          TEXT DEFAULT '[]',
+    missing_skills          TEXT DEFAULT '[]',
+    fit_bullets             TEXT DEFAULT '[]',
+    gap_analysis            TEXT DEFAULT '[]',
+    improvement_plan        TEXT DEFAULT '',
+    credit_snapshot         TEXT DEFAULT '{}',
+    rank_order              INTEGER DEFAULT 0,
+    created_at              TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (report_id) REFERENCES match_reports(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_items_report ON match_report_items(report_id);
+CREATE INDEX IF NOT EXISTS idx_report_items_company ON match_report_items(company_name);
 """
 
 

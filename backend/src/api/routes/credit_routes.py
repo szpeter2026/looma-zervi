@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
+from collections import OrderedDict
 
 from flask import Blueprint, request, jsonify, g
 
@@ -28,6 +30,34 @@ from src.credit.qcc_client import (
 logger = logging.getLogger("looma.credit_routes")
 
 credit_bp = Blueprint("credit", __name__)
+
+# Process-local cache: avoid repeat QCC calls for the same company within TTL.
+_CREDIT_CACHE: OrderedDict[str, tuple[float, dict]] = OrderedDict()
+_CREDIT_CACHE_TTL = 24 * 3600  # 24h
+_CREDIT_CACHE_MAX = 128
+
+
+def _credit_cache_get(company_name: str) -> dict | None:
+    key = company_name.strip().lower()
+    if not key or key not in _CREDIT_CACHE:
+        return None
+    ts, val = _CREDIT_CACHE[key]
+    if time.time() - ts >= _CREDIT_CACHE_TTL:
+        del _CREDIT_CACHE[key]
+        return None
+    _CREDIT_CACHE.move_to_end(key)
+    return val
+
+
+def _credit_cache_set(company_name: str, result: dict) -> None:
+    key = company_name.strip().lower()
+    if not key:
+        return
+    if key in _CREDIT_CACHE:
+        _CREDIT_CACHE.move_to_end(key)
+    _CREDIT_CACHE[key] = (time.time(), result)
+    while len(_CREDIT_CACHE) > _CREDIT_CACHE_MAX:
+        _CREDIT_CACHE.popitem(last=False)
 
 
 # ---- Helpers ----
@@ -159,6 +189,13 @@ def check_company():
     if not company_name:
         return jsonify(error="missing_company", message="请提供公司名称"), 400
 
+    cached = _credit_cache_get(company_name)
+    if cached is not None:
+        logger.info(f"[Credit] cache hit for '{company_name}'")
+        payload = dict(cached)
+        payload["cached"] = True
+        return jsonify(payload)
+
     location = (body.get("location") or "").strip()
     industry = (body.get("industry") or "").strip()
 
@@ -182,6 +219,7 @@ def check_company():
             )
             response = _build_qcc_credit_response(report)
             response["source"] = "qcc"
+            _credit_cache_set(company_name, response)
             return jsonify(response)
 
     except QccMcpError as e:
@@ -210,14 +248,16 @@ def check_company():
     if not extracted.get("entity_name"):
         extracted["entity_name"] = company_name
 
-    return jsonify(
-        extracted=extracted,
-        source="llm",
-        warning=(
+    response = {
+        "extracted": extracted,
+        "source": "llm",
+        "warning": (
             "⚠️ 正式数据源暂不可用，当前为 AI 训练知识评估。"
             "本评估基于大语言模型训练数据，不可作为正式征信/风控依据。"
         ),
-    )
+    }
+    _credit_cache_set(company_name, response)
+    return jsonify(response)
 
 
 @credit_bp.route("/check-company/detail", methods=["POST"])

@@ -55,6 +55,16 @@ export interface Job {
  * Actual API match item returned by POST /v1/jobs/match.
  * The pipeline returns flat fields + a nested scores object (11 dimensions).
  */
+export interface GapItem {
+  skill: string;
+  current_level: string;
+  required_level: string;
+  gap: string;
+  suggestion: string;
+  estimated_effort: string;
+  priority: "high" | "medium" | "low";
+}
+
 export interface JobMatchItem {
   job_id: string;
   title: string;
@@ -68,6 +78,8 @@ export interface JobMatchItem {
   matched_skills?: string[];
   missing_skills?: string[];
   fit_bullets?: string[];
+  gap_analysis?: GapItem[];
+  improvement_plan?: string;
 }
 
 export interface JobMatchRequest {
@@ -102,6 +114,9 @@ export interface JobMatchScore {
   summary: string;
   keywords: string[];
   fit_bullets: string[];
+  missing_skills?: string[];
+  gap_analysis?: GapItem[];
+  improvement_plan?: string;
 }
 
 /** Parsed job info from LLM extraction */

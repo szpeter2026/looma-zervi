@@ -13,19 +13,23 @@
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import {
   ApiError,
   createJobsApi,
   createCreditApi,
+  createMatchReportsApi,
   type Job,
   type JobMatchItem,
   type CreditAnalysis,
   type CreditExtended,
+  type GapItem,
 } from "@looma/shared-core";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
 import { IS_OVERSEAS } from "../../config/region";
 import QuotaExhaustedModal from "../../brand/components/QuotaExhaustedModal";
+import { loadResumeMatchText } from "./resumeMatchBridge";
 
 function isQuotaExceeded(err: unknown): boolean {
   return (
@@ -33,6 +37,25 @@ function isQuotaExceeded(err: unknown): boolean {
     err.status === 429 &&
     err.body?.error === "quota_exceeded"
   );
+}
+
+/** Align with backend 9 sub-dimensions + overall (product docs call this 11-dim). */
+const SCORE_DIMS: { key: string; max: number }[] = [
+  { key: "background_match", max: 10 },
+  { key: "skills_overlap", max: 30 },
+  { key: "experience_relevance", max: 30 },
+  { key: "seniority", max: 10 },
+  { key: "language_requirement", max: 10 },
+  { key: "company_score", max: 10 },
+  { key: "salary_match", max: 10 },
+  { key: "location_match", max: 10 },
+  { key: "culture_workload_match", max: 10 },
+];
+
+function priorityColor(priority: GapItem["priority"]): string {
+  if (priority === "high") return "var(--color-danger)";
+  if (priority === "low") return "var(--color-text-muted)";
+  return "var(--color-warning)";
 }
 
 // ── Types ──
@@ -61,11 +84,14 @@ function getScoreColor(score: number): string {
 
 export default function Jobs() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<TabId>(IS_OVERSEAS ? "upload" : "browse");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [matches, setMatches] = useState<JobMatchItem[] | null>(null);
   const [resumeText, setResumeText] = useState("");
+  const [resumePrefill, setResumePrefill] = useState(false);
   const [matching, setMatching] = useState(false);
+  const [savingReport, setSavingReport] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [quotaExhausted, setQuotaExhausted] = useState(false);
 
@@ -86,6 +112,7 @@ export default function Jobs() {
   const api = useMemo(() => createSaasApiClient(), []);
   const jobsApi = createJobsApi(api);
   const creditApi = createCreditApi(api);
+  const matchReportsApi = useMemo(() => createMatchReportsApi(api), [api]);
   const { ensureConsent, consentPrompt } = useConsent(() => api);
 
   // Load job list
@@ -99,6 +126,16 @@ export default function Jobs() {
   useEffect(() => {
     loadJobs();
   }, [loadJobs]);
+
+  // Prefill resume text brought from /resume (stage-1 → stage-3 bridge)
+  useEffect(() => {
+    const saved = loadResumeMatchText();
+    if (saved?.trim()) {
+      setResumeText(saved);
+      setResumePrefill(true);
+      setTab("browse");
+    }
+  }, []);
 
   // ── Job Upload ──
 
@@ -172,7 +209,10 @@ export default function Jobs() {
   // ── Job Match ──
 
   const handleMatch = async (jobId?: string) => {
-    if (!resumeText.trim()) return;
+    if (!resumeText.trim()) {
+      setMsg(t("jobs.emptyResume"));
+      return;
+    }
     const allowed = await ensureConsent("job_match");
     if (!allowed) {
       setMsg(t("jobs.consentRequired"));
@@ -194,6 +234,29 @@ export default function Jobs() {
       }
     } finally {
       setMatching(false);
+    }
+  };
+
+  const handleSaveReport = async () => {
+    if (!matches?.length) return;
+    const allowed = await ensureConsent("report_generate");
+    if (!allowed) {
+      setMsg(t("jobs.reportConsentRequired"));
+      return;
+    }
+    setSavingReport(true);
+    setMsg(null);
+    try {
+      const report = await matchReportsApi.create({
+        resume_text: resumeText,
+        matches,
+      });
+      setMsg(t("jobs.reportSaved"));
+      navigate(`/reports?match=${report.id}`);
+    } catch {
+      setMsg(t("jobs.reportSaveFailed"));
+    } finally {
+      setSavingReport(false);
     }
   };
 
@@ -305,9 +368,17 @@ export default function Jobs() {
             }}
           >
             <div className="flex flex-col gap-3">
+              {resumePrefill && (
+                <p className="text-xs" style={{ color: "var(--color-primary)" }}>
+                  {t("jobs.resumePrefillHint")}
+                </p>
+              )}
               <textarea
                 value={resumeText}
-                onChange={(e) => setResumeText(e.target.value)}
+                onChange={(e) => {
+                  setResumeText(e.target.value);
+                  if (resumePrefill) setResumePrefill(false);
+                }}
                 placeholder={t("jobs.resumePlaceholder")}
                 rows={5}
                 className="border rounded-lg px-3 py-2 text-sm outline-none resize-y w-full"
@@ -330,6 +401,7 @@ export default function Jobs() {
                   onClick={() => {
                     setMatches(null);
                     setResumeText("");
+                    setResumePrefill(false);
                   }}
                   className="text-sm bg-transparent border-none cursor-pointer"
                   style={{ color: "var(--color-text-muted)" }}
@@ -349,6 +421,20 @@ export default function Jobs() {
           {/* Match Results */}
           {matches ? (
             <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                  {t("jobs.matchCount", { count: matches.length })}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveReport()}
+                  disabled={savingReport || matches.length === 0}
+                  className="px-4 py-2 text-sm rounded-lg text-white border-none cursor-pointer disabled:opacity-50"
+                  style={{ backgroundColor: "var(--color-primary)" }}
+                >
+                  {savingReport ? t("jobs.reportSaving") : t("jobs.saveAsReport")}
+                </button>
+              </div>
               {matches.map((m, i) => (
                 <div
                   key={i}
@@ -375,22 +461,13 @@ export default function Jobs() {
                         {m.salary_range && ` · ${m.salary_range}`}
                       </p>
 
-                      {/* Multi-dimension scores */}
+                      {/* Multi-dimension scores (9 sub-dims) */}
                       <div className="space-y-1.5 mb-3">
-                        {((
-                          [
-                            ["skills_overlap", 30],
-                            ["experience_relevance", 30],
-                            ["seniority", 10],
-                            ["salary_match", 10],
-                            ["location_match", 10],
-                            ["culture_workload_match", 10],
-                            ["company_score", 10],
-                          ] as [string, number][]
-                        ).map(([key, max]) => {
-                          const val = (m.scores as any)?.[key] ?? 5;
+                        {SCORE_DIMS.map(({ key, max }) => {
+                          const scores = m.scores as unknown as Record<string, number>;
+                          const val = Number(scores?.[key] ?? 5);
                           return renderScoreBar(t(`jobs.scores.${key}`), val, max);
-                        }))}
+                        })}
                       </div>
 
                       {/* Summary + keywords */}
@@ -404,6 +481,29 @@ export default function Jobs() {
                         >
                           💡 {m.reason}
                         </p>
+                      )}
+
+                      {/* Matched skills */}
+                      {m.matched_skills && m.matched_skills.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-xs mb-1" style={{ color: "var(--color-text-muted)" }}>
+                            {t("jobs.matchedSkills")}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {m.matched_skills.slice(0, 8).map((s, j) => (
+                              <span
+                                key={j}
+                                className="text-xs px-2 py-0.5 rounded"
+                                style={{
+                                  backgroundColor: "var(--color-primary-bg, #e8f4fd)",
+                                  color: "var(--color-primary)",
+                                }}
+                              >
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       )}
 
                       {/* Fit bullets */}
@@ -421,6 +521,82 @@ export default function Jobs() {
                               ✓ {b}
                             </span>
                           ))}
+                        </div>
+                      )}
+
+                      {/* Gap analysis */}
+                      {((m.gap_analysis && m.gap_analysis.length > 0) ||
+                        (m.missing_skills && m.missing_skills.length > 0)) && (
+                        <div
+                          className="mt-2 mb-2 p-3 rounded"
+                          style={{ backgroundColor: "var(--color-bg-surface)" }}
+                        >
+                          <p
+                            className="text-xs font-medium mb-2"
+                            style={{ color: "var(--color-text-secondary)" }}
+                          >
+                            ⚠️ {t("jobs.gapTitle")}
+                          </p>
+                          {m.gap_analysis && m.gap_analysis.length > 0 ? (
+                            <ul className="space-y-2">
+                              {m.gap_analysis.slice(0, 5).map((g, j) => (
+                                <li key={j} className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <span className="font-medium" style={{ color: "var(--color-text-primary)" }}>
+                                      {g.skill}
+                                    </span>
+                                    <span
+                                      className="px-1.5 py-0.5 rounded"
+                                      style={{
+                                        color: "#fff",
+                                        backgroundColor: priorityColor(g.priority),
+                                        fontSize: 10,
+                                      }}
+                                    >
+                                      {t(`jobs.gapPriority.${g.priority}`)}
+                                    </span>
+                                    {g.estimated_effort && (
+                                      <span style={{ color: "var(--color-text-muted)" }}>
+                                        {g.estimated_effort}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {g.gap && <p className="mb-0.5">{g.gap}</p>}
+                                  {g.suggestion && (
+                                    <p style={{ color: "var(--color-primary)" }}>💡 {g.suggestion}</p>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {m.missing_skills!.map((s, j) => (
+                                <span
+                                  key={j}
+                                  className="text-xs px-2 py-0.5 rounded"
+                                  style={{
+                                    backgroundColor: "#fff3e0",
+                                    color: "var(--color-warning)",
+                                  }}
+                                >
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {m.improvement_plan && (
+                            <div className="mt-2 pt-2 border-t" style={{ borderColor: "var(--color-border, #e0e0e0)" }}>
+                              <p className="text-xs font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>
+                                {t("jobs.improvementTitle")}
+                              </p>
+                              <p
+                                className="text-xs whitespace-pre-wrap leading-relaxed"
+                                style={{ color: "var(--color-text-secondary)" }}
+                              >
+                                {m.improvement_plan}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -913,9 +1089,19 @@ export default function Jobs() {
                   </div>
                 )}
               </div>
-              <p className="text-xs mt-3" style={{ color: "var(--color-text-muted)" }}>
-                {t("jobs.savedHint")}
-              </p>
+              <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                  {t("jobs.savedHint")}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setTab("browse")}
+                  className="px-3 py-1.5 rounded-lg text-sm text-white border-none cursor-pointer"
+                  style={{ backgroundColor: "var(--color-primary)" }}
+                >
+                  {t("jobs.goMatchNext")}
+                </button>
+              </div>
             </div>
           )}
         </div>

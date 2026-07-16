@@ -56,6 +56,11 @@ import type {
 } from "../types/enterprise";
 import type { ParsedResume, JobMatchRequest, JobMatchResponse, Job, ResumeUploadResult, ParsedJob, JobUploadResult, CreditAnalysis, CheckCompanyRequest, CheckCompanyResponse, ResumeListResponse, ResumeAnalysisResponse } from "../types/resume";
 import type { Report, GenerateReportRequest } from "../types/misc";
+import type {
+  CreateMatchReportRequest,
+  MatchReport,
+  MatchReportListResponse,
+} from "../types/matchReport";
 import { API_ROUTES } from "../constants/routes";
 
 // ============================================================
@@ -403,6 +408,29 @@ export function createReportsApi(client: ApiClient) {
 
     /** List generated reports */
     list: () => client.get<{ reports: Report[]; total: number }>(API_ROUTES.REPORTS_LIST),
+  };
+}
+
+export function createMatchReportsApi(client: ApiClient) {
+  return {
+    create: (payload: CreateMatchReportRequest) =>
+      client.post<MatchReport>(API_ROUTES.MATCH_REPORTS, payload),
+
+    list: (params?: { page?: number; page_size?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.page) q.set("page", String(params.page));
+      if (params?.page_size) q.set("page_size", String(params.page_size));
+      const qs = q.toString();
+      return client.get<MatchReportListResponse>(
+        qs ? `${API_ROUTES.MATCH_REPORTS}?${qs}` : API_ROUTES.MATCH_REPORTS,
+      );
+    },
+
+    get: (id: string) =>
+      client.get<MatchReport>(`${API_ROUTES.MATCH_REPORTS}/${id}`),
+
+    remove: (id: string) =>
+      client.delete<{ ok: boolean; id: string }>(`${API_ROUTES.MATCH_REPORTS}/${id}`),
   };
 }
 

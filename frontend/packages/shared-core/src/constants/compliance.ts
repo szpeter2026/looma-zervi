@@ -11,6 +11,7 @@ export const CONSENT_SCOPE_LABELS: Record<ConsentScope, string> = {
   job_match: "职位智能匹配",
   mbti_analyze: "MBTI 性格测评",
   navigator_memory: "对话记忆持久化",
+  report_generate: "生成并保存匹配报告",
 };
 
 export const CONSENT_SCOPE_DESCRIPTIONS: Record<ConsentScope, string> = {
@@ -23,4 +24,5 @@ export const CONSENT_SCOPE_DESCRIPTIONS: Record<ConsentScope, string> = {
   job_match: "允许使用您的简历内容与职位库进行智能匹配评分。",
   mbti_analyze: "允许分析您输入的文字以推断性格倾向（娱乐/参考用途）。",
   navigator_memory: "允许 Navigator 在会话间记住您的域选择与关键决策，以延续叙事体验。",
+  report_generate: "允许将本次匹配评分结果持久化为报告，供您后续查看与对比。",
 };

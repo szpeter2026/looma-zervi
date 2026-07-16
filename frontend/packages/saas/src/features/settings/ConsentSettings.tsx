@@ -19,6 +19,7 @@ const SAAS_SCOPES: ConsentScope[] = [
   "resume_parse",
   "credit_query",
   "credit_analyze",
+  "report_generate",
 ];
 
 export default function ConsentSettings() {

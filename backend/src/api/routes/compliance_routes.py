@@ -90,6 +90,7 @@ def required_consents():
         "job_match": "职位智能匹配",
         "mbti_analyze": "MBTI 性格测评",
         "navigator_memory": "对话记忆持久化",
+        "report_generate": "生成并保存匹配报告",
     }
     return jsonify(
         available_scopes=sorted(ALL_SCOPES),

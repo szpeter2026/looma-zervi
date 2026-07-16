@@ -8,7 +8,8 @@ export type ConsentScope =
   | "ask_rag"
   | "job_match"
   | "mbti_analyze"
-  | "navigator_memory";
+  | "navigator_memory"
+  | "report_generate";
 
 export interface ConsentRecord {
   id: string;

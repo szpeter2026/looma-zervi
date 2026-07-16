@@ -30,6 +30,7 @@ export {
   createResumeApi,
   createJobsApi,
   createReportsApi,
+  createMatchReportsApi,
   createPaymentApi,
   createQuotaApi,
   createNarrativeApi,
@@ -151,6 +152,7 @@ export type {
   JobMatchResult,
   JobMatchRequest,
   JobMatchResponse,
+  GapItem,
   ParsedJob,
   JobUploadResult,
   JobMatchScore,
@@ -198,6 +200,15 @@ export type {
   ApiError as ApiErrorType,
   Poem,
 } from "./types/misc";
+
+export type {
+  MatchReport,
+  MatchReportSummary,
+  MatchReportItem,
+  MatchReportMetadata,
+  CreateMatchReportRequest,
+  MatchReportListResponse,
+} from "./types/matchReport";
 
 export type {
   PaymentPlan,

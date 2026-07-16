@@ -143,7 +143,24 @@
     "fieldSalary": "薪资",
     "fieldRequirements": "要求",
     "savedHint": "JD 已保存到职位库，可在\"在招职位\"标签页查看",
+    "goMatchNext": "下一步：去匹配 →",
+    "resumePrefillHint": "已从简历解析带入文本，可编辑后开始匹配",
+    "emptyResume": "请先粘贴简历文本，或从「简历解析」页带入",
+    "matchCount": "已匹配 {{count}} 个职位",
+    "saveAsReport": "保存为报告",
+    "reportSaving": "保存中…",
+    "reportSaved": "匹配报告已保存",
+    "reportSaveFailed": "保存报告失败，请重试",
+    "reportConsentRequired": "需要授权「生成并保存匹配报告」后才能保存",
     "overallMatch": "综合匹配",
+    "matchedSkills": "优势标签",
+    "gapTitle": "技能差距",
+    "improvementTitle": "改进建议",
+    "gapPriority": {
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    },
     "checkCredit": "查征信",
     "checkingCredit": "查证中...",
     "creditDone": "已查征信 ✓",
@@ -159,14 +176,20 @@
     "creditRiskSummary": "风险摘要",
     "creditExecutives": "主要人员",
     "scores": {
+      "background_match": "背景",
       "skills_overlap": "技能",
       "experience_relevance": "经历",
       "seniority": "职级",
+      "language_requirement": "语言",
+      "company_score": "公司",
       "salary_match": "薪资",
       "location_match": "地点",
-      "culture_workload_match": "强度",
-      "company_score": "公司"
+      "culture_workload_match": "强度"
     }
+  },
+  "resume": {
+    "bringToMatch": "带入匹配 →",
+    "bringToMatchHint": "将解析结果带入职位匹配页，开始双向评分"
   },
   "common": {
     "loading": "加载中...",

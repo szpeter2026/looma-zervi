@@ -143,7 +143,24 @@
     "fieldSalary": "Compensation",
     "fieldRequirements": "Requirements",
     "savedHint": "Saved to your list — switch to \"Your roles\" to match",
+    "goMatchNext": "Next: match roles →",
+    "resumePrefillHint": "Resume text imported from parsing — edit before matching",
+    "emptyResume": "Paste resume text first, or bring it from Resume parsing",
+    "matchCount": "{{count}} roles matched",
+    "saveAsReport": "Save as report",
+    "reportSaving": "Saving…",
+    "reportSaved": "Match report saved",
+    "reportSaveFailed": "Failed to save report",
+    "reportConsentRequired": "Consent required to save a match report",
     "overallMatch": "Overall fit",
+    "matchedSkills": "Strengths",
+    "gapTitle": "Skill gaps",
+    "improvementTitle": "Improvement plan",
+    "gapPriority": {
+      "high": "High",
+      "medium": "Med",
+      "low": "Low"
+    },
     "checkCredit": "Company credit",
     "checkingCredit": "Checking…",
     "creditDone": "Verified",
@@ -159,14 +176,20 @@
     "creditRiskSummary": "Risk summary",
     "creditExecutives": "Key personnel",
     "scores": {
+      "background_match": "Background",
       "skills_overlap": "Skills",
       "experience_relevance": "Experience",
       "seniority": "Level",
+      "language_requirement": "Language",
+      "company_score": "Company",
       "salary_match": "Pay",
       "location_match": "Location",
-      "culture_workload_match": "Workload",
-      "company_score": "Company"
+      "culture_workload_match": "Workload"
     }
+  },
+  "resume": {
+    "bringToMatch": "Bring to match →",
+    "bringToMatchHint": "Carry this profile into job matching for bidirectional scoring"
   },
   "common": {
     "loading": "Loading...",

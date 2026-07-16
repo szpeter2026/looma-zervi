@@ -79,9 +79,12 @@ export const API_ROUTES = {
   RESUME_ANALYSIS: "/v1/resume/analysis",// GET — AI 分析 (?resume_id=xxx)
   RESUME_DELETE: "/v1/resume",           // DELETE /:id — 拼接方式: `${RESUME_DELETE}/${resumeId}`
 
-  // Reports
+  // Reports (ops daily/weekly/monthly)
   REPORTS_GENERATE: "/v1/reports/generate",
   REPORTS_LIST: "/v1/reports/list",
+
+  // Match reports (user-owned resume×JD persistence)
+  MATCH_REPORTS: "/v1/match-reports",
 
   // Payment
   PAYMENT_PLANS: "/v1/payment/plans",

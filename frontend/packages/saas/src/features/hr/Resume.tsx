@@ -6,12 +6,17 @@
  * Uses authStore for token, direct fetch for file upload.
  */
 import { useState, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ApiError, createResumeApi, type ParsedResume } from "@looma/shared-core";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
 import QuotaExhaustedModal from "../../brand/components/QuotaExhaustedModal";
+import { buildResumeMatchText, saveResumeMatchText } from "./resumeMatchBridge";
 
 export default function Resume() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
   const [resume, setResume] = useState<ParsedResume | null>(null);
   const [parsing, setParsing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -22,6 +27,14 @@ export default function Resume() {
   const api = useMemo(() => createSaasApiClient(), []);
   const resumeApi = createResumeApi(api);
   const { ensureConsent, consentPrompt } = useConsent(() => api);
+
+  const handleBringToMatch = () => {
+    if (!resume) return;
+    const text = buildResumeMatchText(resume);
+    if (!text) return;
+    saveResumeMatchText(text);
+    navigate("/jobs");
+  };
 
   const handleUpload = async (file: File) => {
     const allowed = await ensureConsent("resume_upload");
@@ -153,9 +166,20 @@ export default function Resume() {
             boxShadow: "var(--shadow-sm)",
           }}
         >
-          <h2 className="text-lg font-bold mb-4" style={{ color: "var(--color-text-primary)" }}>
-            解析结果
-          </h2>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <h2 className="text-lg font-bold" style={{ color: "var(--color-text-primary)" }}>
+              解析结果
+            </h2>
+            <button
+              type="button"
+              onClick={handleBringToMatch}
+              className="shrink-0 px-3 py-1.5 rounded-lg text-sm text-white border-none cursor-pointer"
+              style={{ backgroundColor: "var(--color-primary)" }}
+              title={t("resume.bringToMatchHint")}
+            >
+              {t("resume.bringToMatch")}
+            </button>
+          </div>
 
           {/* 基本信息 */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">

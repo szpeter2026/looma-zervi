@@ -56,7 +56,7 @@ class TestConsentManager:
         assert r["revoked"] is True
 
     def test_all_scopes_count(self):
-        assert len(ALL_SCOPES) == 9
+        assert len(ALL_SCOPES) == 10
 
 
 class TestRedaction:

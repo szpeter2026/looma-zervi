@@ -29,6 +29,7 @@ def create_app(env="development"):
     from src.api.routes.jobs_routes import jobs_bp
     from src.api.routes.resume_routes import resume_bp
     from src.api.routes.reports_routes import reports_bp
+    from src.api.routes.match_report_routes import match_report_bp
     from src.api.routes.referral_routes import referral_bp
     from src.api.routes.credit_routes import credit_bp
     from src.api.routes.quota_routes import quota_bp
@@ -49,6 +50,7 @@ def create_app(env="development"):
     app.register_blueprint(jobs_bp, url_prefix="/v1/jobs")
     app.register_blueprint(resume_bp, url_prefix="/v1/resume")
     app.register_blueprint(reports_bp, url_prefix="/v1/reports")
+    app.register_blueprint(match_report_bp, url_prefix="/v1/match-reports")
     app.register_blueprint(referral_bp, url_prefix="/v1/referral")
     app.register_blueprint(credit_bp, url_prefix="/v1/credit")
     app.register_blueprint(compliance_bp, url_prefix="/v1/compliance")
@@ -128,6 +130,12 @@ def create_app(env="development"):
                     "DELETE /v1/resume/<resume_id>",
                 ],
                 "reports": ["POST /v1/reports/generate", "GET /v1/reports/list"],
+                "match_reports": [
+                    "POST /v1/match-reports",
+                    "GET /v1/match-reports",
+                    "GET /v1/match-reports/:id",
+                    "DELETE /v1/match-reports/:id",
+                ],
                 "payment": [
                     "GET  /v1/payment/plans",
                     "GET  /v1/payment/status",
