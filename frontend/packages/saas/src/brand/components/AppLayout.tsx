@@ -10,6 +10,8 @@
  *   │         │       <Outlet />            │
  *   │         │                             │
  *   └─────────┴─────────────────────────────┘
+ *
+ * Style: 浅色 B 端 SaaS，白色顶栏 + 浅灰内容区
  */
 import { Outlet, useNavigate } from "react-router-dom";
 import { useSaasAuthStore } from "../../features/auth/authStore";
@@ -36,19 +38,32 @@ export function AppLayout() {
       >
         {/* Header */}
         <header
-          className="flex items-center justify-between px-6 border-b border-gray-200 shrink-0"
+          className="flex items-center justify-between px-6 shrink-0"
           style={{
             height: "var(--header-height)",
             backgroundColor: "var(--color-bg-card)",
+            borderBottom: "1px solid var(--color-border)",
           }}
         >
-          <span className="text-sm text-[var(--color-text-secondary)]">
-            {user?.email || "Loading..."}
+          <span
+            className="text-sm"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            {user?.email || "加载中..."}
           </span>
           <button
             onClick={handleLogout}
-            className="bg-transparent border-none cursor-pointer text-sm"
-            style={{ color: "var(--color-danger)" }}
+            className="btn text-sm bg-transparent border-none cursor-pointer transition-colors"
+            style={{
+              color: "var(--color-danger)",
+              padding: "4px 12px",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = "var(--color-danger-light)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = "transparent")
+            }
           >
             退出登录
           </button>
