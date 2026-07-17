@@ -150,7 +150,13 @@ def create_app(env="development"):
     # --- Error handlers ---
     @app.errorhandler(404)
     def not_found(e):
-        return jsonify(error="not_found", message=str(e)), 404
+        from flask import request as _req
+        path = _req.path
+        if path.startswith("/v1/"):
+            msg = f"Endpoint {path} not found. See GET / for the full list."
+        else:
+            msg = f"Endpoint {path} not found."
+        return jsonify(error="not_found", message=msg), 404
 
     @app.errorhandler(500)
     def server_error(e):
