@@ -174,7 +174,7 @@ jobs:
               'CHROMA_HOST=chromadb' \
               'CHROMA_PORT=8000' \
               'WECHAT_DEV_MODE=true' \
-              'CORS_ORIGINS=https://genz.ltd,https://www.genz.ltd' \
+              'CORS_ORIGINS=https://genz.ltd,https://www.genz.ltd,https://app.genz.ltd' \
               > "\${ENV_FILE}"
             echo "=== .env created ==="
           else
@@ -196,7 +196,7 @@ jobs:
           set_kv CHROMA_MODE remote
           set_kv CHROMA_HOST chromadb
           set_kv CHROMA_PORT 8000
-          set_kv CORS_ORIGINS https://genz.ltd,https://www.genz.ltd
+          set_kv CORS_ORIGINS https://genz.ltd,https://www.genz.ltd,https://app.genz.ltd
 
           echo "=== Bootstrap done ==="
           BOOTSTRAP
