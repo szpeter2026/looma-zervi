@@ -255,7 +255,9 @@ jobs:
           sudo cp "\${NGINX_SRC}" /etc/nginx/sites-available/looma-zervi-overseas
           sudo ln -sf /etc/nginx/sites-available/looma-zervi-overseas /etc/nginx/sites-enabled/looma-zervi-overseas
 
-          # Remove old domestic config if present (avoid conflicts)
+          # Remove old/conflicting configs to avoid duplicate server_name matches
+          # (nginx picks the first-loaded server block by filename alphabet order)
+          sudo rm -f /etc/nginx/sites-enabled/api.genz.ltd 2>/dev/null || true
           sudo rm -f /etc/nginx/sites-enabled/looma-zervi 2>/dev/null || true
           sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 
