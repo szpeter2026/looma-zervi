@@ -239,7 +239,7 @@ jobs:
           $SSH_CMD ${{ env.DEPLOY_TARGET }} "bash -s" << 'NGINX'
           set -euo pipefail
           DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
-          NGINX_SRC="\${DEPLOY_PATH}/nginx-looma-zervi-overseas.conf"
+          NGINX_SRC="\${DEPLOY_PATH}/nginx-vultr.conf"
 
           if [ ! -f "\${NGINX_SRC}" ]; then
             echo "Missing \${NGINX_SRC}, skipping nginx config"
@@ -252,21 +252,16 @@ jobs:
             apt-get update -qq && apt-get install -y -qq nginx
           fi
 
-          sudo cp "\${NGINX_SRC}" /etc/nginx/sites-available/looma-zervi-overseas
-          sudo ln -sf /etc/nginx/sites-available/looma-zervi-overseas /etc/nginx/sites-enabled/looma-zervi-overseas
-
-          # Remove old/conflicting configs to avoid duplicate server_name matches
-          # (nginx picks the first-loaded server block by filename alphabet order)
-          sudo rm -f /etc/nginx/sites-enabled/api.genz.ltd 2>/dev/null || true
-          sudo rm -f /etc/nginx/sites-enabled/looma-zervi 2>/dev/null || true
-          sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+          # Vultr uses a monolithic nginx.conf (not sites-enabled/*.conf),
+          # so we deploy the full config directly.
+          sudo cp "\${NGINX_SRC}" /etc/nginx/nginx.conf
 
           # Allow port 80 through firewall
           if command -v ufw >/dev/null 2>&1; then sudo ufw allow 80/tcp 2>/dev/null || true; fi
 
           sudo nginx -t
           sudo nginx -s reload || sudo nginx
-          echo "=== Nginx reloaded (api.genz.ltd) ==="
+          echo "=== Nginx reloaded (monolithic nginx.conf for api.genz.ltd) ==="
           NGINX
 
       - name: Build & restart Docker backend
