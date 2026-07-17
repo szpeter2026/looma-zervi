@@ -2,11 +2,11 @@
   "remotes": {
     "github": {
       "name": "origin",
-      "url": "https://github.com/szpeter2026/looma-zervi.git"
+      "url": "git@github.com:szpeter2026/looma-zervi.git"
     },
     "gitee": {
       "name": "gitee",
-      "url": "https://gitee.com/szbenyx/looma-zervi.git"
+      "url": "git@gitee.com:szbenyx/looma-zervi.git"
     }
   },
   "branches": [
