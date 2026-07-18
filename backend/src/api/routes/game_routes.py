@@ -23,6 +23,10 @@ import math
 from flask import Blueprint, request, jsonify, current_app, g
 
 from src.api.auth.decorators import require_auth, optional_auth
+from src.agents.trust_agent import generate_attestations
+import logging
+
+logger = logging.getLogger("looma.game_routes")
 
 game_bp = Blueprint("game", __name__)
 
@@ -126,6 +130,22 @@ def sync_personality():
             source="server",
             properties={"personality_type": personality_type},
         )
+
+        # ── Trust Agent: record quiz memory ──
+        try:
+            db.insert_trust_memory(
+                user_id=g.user_id,
+                session_type="quiz",
+                session_id=f"profile_sync_{g.user_id}",
+                memory_content={
+                    "personality_type": personality_type,
+                    "personality_detail": personality_detail,
+                },
+                memory_level=2,
+            )
+            generate_attestations(g.user_id, db)
+        except Exception as e:
+            logger.warning("trust_agent: quiz memory skipped for %s: %s", g.user_id, e)
 
     # Return the full profile after sync (so frontend gets XP/level too)
     profile = db.get_game_profile(g.user_id)
@@ -372,6 +392,23 @@ def create_fleet():
     fleet = db.get_fleet_by_id(fleet_id)
     members = db.get_fleet_members(fleet_id)
 
+    # ── Trust Agent: record fleet creation memory ──
+    try:
+        db.insert_trust_memory(
+            user_id=g.user_id,
+            session_type="fleet",
+            session_id=fleet_id,
+            memory_content={
+                "action": "create_fleet",
+                "fleet_name": name,
+                "consensus_confirmed": True,
+            },
+            memory_level=2,
+        )
+        generate_attestations(g.user_id, db)
+    except Exception as e:
+        logger.warning("trust_agent: fleet create memory skipped for %s: %s", g.user_id, e)
+
     return jsonify(
         id=fleet["id"],
         name=fleet["name"],
@@ -421,6 +458,23 @@ def join_fleet():
 
     fleet = db.get_fleet_by_id(fleet_id)
     members = db.get_fleet_members(fleet_id)
+
+    # ── Trust Agent: record fleet join memory ──
+    try:
+        db.insert_trust_memory(
+            user_id=g.user_id,
+            session_type="fleet",
+            session_id=fleet_id,
+            memory_content={
+                "action": "join_fleet",
+                "fleet_name": fleet["name"],
+                "consensus_confirmed": True,
+            },
+            memory_level=1,
+        )
+        generate_attestations(g.user_id, db)
+    except Exception as e:
+        logger.warning("trust_agent: fleet join memory skipped for %s: %s", g.user_id, e)
 
     return jsonify(
         message="joined fleet",
@@ -661,6 +715,24 @@ def quiz_result():
             result_type=result_type,
             insights_json=_json.dumps(insights, ensure_ascii=False),
         )
+
+        # ── Trust Agent: record HarmonyOS quiz completion ──
+        try:
+            db.insert_trust_memory(
+                user_id=g.user_id,
+                session_type="quiz",
+                session_id=session_id,
+                memory_content={
+                    "result_type": result_type,
+                    "total_score": session["total_score"],
+                    "correct_count": session["correct_count"],
+                    "total_questions": session["total_questions"],
+                },
+                memory_level=1,
+            )
+            generate_attestations(g.user_id, db)
+        except Exception as e:
+            logger.warning("trust_agent: harmonyos quiz memory skipped for %s: %s", g.user_id, e)
     import json as _json
     insights = _json.loads(session.get("insights_json") or "[]")
 

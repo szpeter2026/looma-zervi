@@ -13,6 +13,8 @@ Tables:
   - candidates         (szbenyx owns)
   - invite_codes       (joint)
   - usage_logs         (joint)
+  - trust_memories     (joint — append-only trust behaviour log)
+  - trust_attestations (joint — verifiable claim cards)
 """
 from __future__ import annotations
 import json
@@ -628,6 +630,44 @@ CREATE TABLE IF NOT EXISTS quiz_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_quiz_sessions_user ON quiz_sessions(user_id, created_at);
+
+-- ============================================
+-- Trust Layer: trust_memories (joint — append-only behaviour log)
+-- ============================================
+CREATE TABLE IF NOT EXISTS trust_memories (
+    id              TEXT PRIMARY KEY,          -- UUID
+    user_id         TEXT NOT NULL,
+    session_type    TEXT NOT NULL,             -- quiz | fleet | match | ask | share
+    session_id      TEXT NOT NULL,
+    memory_content  TEXT NOT NULL,             -- JSON: structured behaviour snapshot
+    memory_level    INTEGER DEFAULT 1,         -- 1=surface, 2=deep, 3=fragment, 4=taboo
+    created_at      TEXT DEFAULT (datetime('now')),  -- immutable
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trust_memories_user ON trust_memories(user_id);
+CREATE INDEX IF NOT EXISTS idx_trust_memories_session ON trust_memories(session_type, session_id);
+
+-- ============================================
+-- Trust Layer: trust_attestations (joint — verifiable claim cards)
+-- ============================================
+CREATE TABLE IF NOT EXISTS trust_attestations (
+    id                  TEXT PRIMARY KEY,          -- UUID
+    candidate_id        TEXT NOT NULL,
+    claim_type          TEXT NOT NULL,             -- identity | collaboration | communication | influence
+    claim_statement     TEXT NOT NULL,
+    evidence_type       TEXT NOT NULL,             -- quiz | fleet_consensus | dialogue_analysis | share_signal
+    evidence_refs       TEXT DEFAULT '[]',         -- JSON array: trust_memories.id list
+    verification_status TEXT DEFAULT 'unverified', -- verified | weak | unverified | contradicted
+    confidence_score    REAL DEFAULT 0.0,          -- 0-1 internal only, never shown to users
+    generated_by        TEXT DEFAULT 'trust_agent_v0',
+    created_at          TEXT DEFAULT (datetime('now')),
+    updated_at          TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (candidate_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trust_attestations_candidate ON trust_attestations(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_trust_attestations_type ON trust_attestations(claim_type, verification_status);
 """
 
 
@@ -2157,3 +2197,89 @@ class DatabaseManager:
                     (user_id,),
                 )
         return cur.rowcount > 0
+
+    # ============================================
+    # Trust Layer: trust_memories (append-only)
+    # ============================================
+    def insert_trust_memory(self, user_id: str, session_type: str,
+                            session_id: str, memory_content: dict,
+                            memory_level: int = 1) -> str:
+        """Insert an append-only trust memory. Returns memory_id."""
+        memory_id = str(uuid.uuid4())
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO trust_memories
+                   (id, user_id, session_type, session_id, memory_content, memory_level)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (memory_id, user_id, session_type, session_id,
+                 json.dumps(memory_content, ensure_ascii=False), memory_level),
+            )
+        return memory_id
+
+    def get_trust_memories(self, user_id: str,
+                           session_type: str | None = None,
+                           limit: int = 50) -> list[dict]:
+        """Retrieve trust memories for a user, optionally filtered by type."""
+        if session_type:
+            sql = """SELECT * FROM trust_memories
+                     WHERE user_id = ? AND session_type = ?
+                     ORDER BY created_at DESC LIMIT ?"""
+            params = (user_id, session_type, limit)
+        else:
+            sql = """SELECT * FROM trust_memories
+                     WHERE user_id = ?
+                     ORDER BY created_at DESC LIMIT ?"""
+            params = (user_id, limit)
+        with self.get_conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    # ============================================
+    # Trust Layer: trust_attestations
+    # ============================================
+    def upsert_trust_attestation(self, candidate_id: str, claim_type: str,
+                                 claim_statement: str, evidence_type: str,
+                                 verification_status: str = "unverified",
+                                 evidence_refs: list | None = None,
+                                 confidence_score: float = 0.0) -> dict:
+        """Upsert a trust attestation claim card. Returns the attestation dict."""
+        attestation_id = str(uuid.uuid4())
+        refs_json = json.dumps(evidence_refs or [])
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO trust_attestations
+                   (id, candidate_id, claim_type, claim_statement, evidence_type,
+                    verification_status, evidence_refs, confidence_score)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                     claim_statement = excluded.claim_statement,
+                     verification_status = excluded.verification_status,
+                     evidence_refs = excluded.evidence_refs,
+                     confidence_score = excluded.confidence_score,
+                     updated_at = datetime('now')""",
+                (attestation_id, candidate_id, claim_type, claim_statement,
+                 evidence_type, verification_status, refs_json, confidence_score),
+            )
+            row = conn.execute(
+                "SELECT * FROM trust_attestations WHERE id = ?", (attestation_id,),
+            ).fetchone()
+        return dict(row) if row else {}
+
+    def get_trust_attestations(self, candidate_id: str) -> list[dict]:
+        """Get all attestation cards for a candidate."""
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM trust_attestations
+                   WHERE candidate_id = ?
+                   ORDER BY created_at DESC""",
+                (candidate_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_trust_attestation(self, attestation_id: str) -> dict | None:
+        """Get a single attestation by ID."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM trust_attestations WHERE id = ?", (attestation_id,),
+            ).fetchone()
+        return dict(row) if row else None

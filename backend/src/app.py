@@ -34,6 +34,7 @@ def create_app(env="development"):
     from src.api.routes.compliance_routes import compliance_bp
     from src.api.routes.analytics_routes import analytics_bp
     from src.api.routes.social_routes import social_bp  # 六度分隔社交图谱
+    from src.api.routes.trust_routes import trust_bp    # Trust Agent 信任证明
 
     app.register_blueprint(auth_bp, url_prefix="/v1/auth")
     app.register_blueprint(game_bp, url_prefix="/v1/game")
@@ -52,6 +53,7 @@ def create_app(env="development"):
     app.register_blueprint(narrative_bp, url_prefix="/v1/narrative")
     app.register_blueprint(analytics_bp, url_prefix="/v1")
     app.register_blueprint(social_bp, url_prefix="/v1/social")  # 六度分隔社交图谱
+    app.register_blueprint(trust_bp, url_prefix="/v1/trust")    # Trust Agent 信任证明
 
     # --- Health check ---
     @app.route("/health", methods=["GET"])
