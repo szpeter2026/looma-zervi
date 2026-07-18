@@ -28,6 +28,7 @@ from src.analytics.events import (
     EVENT_CANDIDATE_IMPORT_DUPLICATE,
 )
 from src.utils.tier_limits import get_candidate_limit, is_at_limit
+from src.db.manager import DatabaseManager
 
 logger = logging.getLogger("looma.enterprise")
 
@@ -247,7 +248,23 @@ def get_candidate(candidate_id: str):
             if not row:
                 return jsonify(error="not_found", message="候选人不存在"), 404
 
-        return jsonify(_candidate_response(dict(row)))
+            result = _candidate_response(dict(row))
+
+            # ── Trust Bridge: attach trust profile for HR view ──
+            candidate_user_id = result.get("user_id")
+            if candidate_user_id:
+                try:
+                    db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
+                    trust_db = DatabaseManager(db_path)
+                    attestations = trust_db.get_trust_attestations(candidate_user_id)
+                    result["trust_profile"] = {
+                        "attestations": attestations,
+                        "total": len(attestations),
+                    }
+                except Exception as e:
+                    logger.warning("trust_bridge: HR trust profile failed for %s: %s", candidate_user_id, e)
+
+        return jsonify(result)
     except Exception as e:
         return jsonify(error="get_failed", message=str(e)), 500
 
