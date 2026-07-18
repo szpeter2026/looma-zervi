@@ -663,7 +663,8 @@ CREATE TABLE IF NOT EXISTS trust_attestations (
     generated_by        TEXT DEFAULT 'trust_agent_v0',
     created_at          TEXT DEFAULT (datetime('now')),
     updated_at          TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (candidate_id) REFERENCES users(id)
+    FOREIGN KEY (candidate_id) REFERENCES users(id),
+    UNIQUE(candidate_id, claim_type)               -- one attestation per candidate per claim type
 );
 
 CREATE INDEX IF NOT EXISTS idx_trust_attestations_candidate ON trust_attestations(candidate_id);
@@ -2242,7 +2243,8 @@ class DatabaseManager:
                                  verification_status: str = "unverified",
                                  evidence_refs: list | None = None,
                                  confidence_score: float = 0.0) -> dict:
-        """Upsert a trust attestation claim card. Returns the attestation dict."""
+        """Upsert a trust attestation claim card. Returns the attestation dict.
+        One row per (candidate_id, claim_type) — subsequent calls update the same row."""
         attestation_id = str(uuid.uuid4())
         refs_json = json.dumps(evidence_refs or [])
         with self.get_conn() as conn:
@@ -2251,7 +2253,7 @@ class DatabaseManager:
                    (id, candidate_id, claim_type, claim_statement, evidence_type,
                     verification_status, evidence_refs, confidence_score)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(id) DO UPDATE SET
+                   ON CONFLICT(candidate_id, claim_type) DO UPDATE SET
                      claim_statement = excluded.claim_statement,
                      verification_status = excluded.verification_status,
                      evidence_refs = excluded.evidence_refs,
@@ -2261,7 +2263,9 @@ class DatabaseManager:
                  evidence_type, verification_status, refs_json, confidence_score),
             )
             row = conn.execute(
-                "SELECT * FROM trust_attestations WHERE id = ?", (attestation_id,),
+                """SELECT * FROM trust_attestations
+                   WHERE candidate_id = ? AND claim_type = ?""",
+                (candidate_id, claim_type),
             ).fetchone()
         return dict(row) if row else {}
 
