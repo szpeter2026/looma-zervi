@@ -1,9 +1,9 @@
 # Looma-Zervi 行动纲领
 
-> **版本：** 1.0 · **日期：** 2026-07-15  
+> **版本：** 1.2 · **日期：** 2026-07-19  
 > **性质：** 团队内部统一思想的基石文档 — 社会价值、技术路线、场景选择的"为什么"  
 > **读者：** 团队全员、评审专家、未来加入者  
-> **关联：** [TRUST_LAYER.md](./TRUST_LAYER.md) · [CURRENT_SYSTEM_ARCHITECTURE.md](./CURRENT_SYSTEM_ARCHITECTURE.md)
+> **关联：** [TRUST_PROFILE_DESIGN.md](./TRUST_PROFILE_DESIGN.md)（信任档案设计） · [CURRENT_SYSTEM_ARCHITECTURE.md](./CURRENT_SYSTEM_ARCHITECTURE.md) · [SAAS_INSPIRATION.md](./SAAS_INSPIRATION.md)
 
 ---
 
@@ -49,7 +49,25 @@
 | 社交图谱扩张 KPI | **不做** | 图是关系上下文，不是信任本体 |
 | 竞品功能堆砌 | **不做** | 体验可参考，信任本体不同——我们不模仿 |
 
+### 1.5 我们的定位：信任档案平台
+
+**我们不是数据提供商，不是招聘平台——我们是信任档案平台。**
+
+| 定位 | 核心资产 | 输出形态 | 我们在哪里 |
+|------|----------|----------|------------|
+| 数据提供商 | 原始行为数据 | API / 报告 | ❌ 数据在库中但没有被"产品化"呈现 |
+| 招聘平台 | 简历 + JD 匹配 | 匹配列表 + improve 报告 | ⚠️ 这是我们的数据入口，不是产品出口 |
+| **信任档案平台** | 行为记忆体 + 可验证声明 | 个人信任档案页、候选人行为画像、验证 API | 🎯 **这才是我们的产品形态** |
+
+招聘是我们的第一个应用场景——但不是产品形态。简历上传和职位匹配是**数据源头**，Trust Agent 生成的声明卡是**信任中间件**，个人信任档案页和候选人多维画像是**产品出口**。
+
+**生态服务的"输出"不是报告，是被看见的信任凭证：**
+- 求职者打开 PlanetX → "查看我的信任档案" → 看到自己的行为统计、声明状态、人格雷达图
+- HR 打开 T-space → 候选人详情 → 看到行为证据链（而非仅简历）
+- 第三方通过 MCP/API → 用 share_code 查询候选人的可验证声明
+
 ---
+
 
 ## 二、我们的核心命题
 
@@ -157,9 +175,11 @@
 
 | 阶段 | 信任智能体能力 | 状态 |
 |------|---------------|------|
-| **v0** | 规则引擎：consensus verified → match claim verified；人格 sync → weak | ✅ 已完成 |
+| **v0** | 规则引擎：4 类声明（identity/collaboration/communication/influence）基于 6 种 session_type 记忆流生成 | ✅ 已完成 — `agents/trust_agent.py` (175行) + `api/routes/trust_routes.py` + 7 处事件回调 |
 | **v1** | Trust Agent 读 memory stream：一致性检测、对话互惠分析、行为矛盾识别 | 🔲 P1 |
 | **v2** | 可训练信任模型 + 人工抽检；Genzer 终端信号作补充 evidence | 🔲 P2 |
+
+> **诚实声明（2026-07-18 修订）**：此前 v0 标记为"✅ 已完成"是不准确的。经代码审查，`trust_memories` / `trust_attestations` 表、`trust.v1.json` 契约文件、Trust API 端点均不存在。v0 的实际状态是"设计完成、代码未写"。本条目已纠正。详见 [TRUST_PROFILE_DESIGN.md](./TRUST_PROFILE_DESIGN.md)。
 
 ### 4.4 当前技术栈
 
@@ -212,14 +232,19 @@
 
 ### 6.1 当前阶段：MVP 内测
 
-- ✅ 信任层完整契约 `trust.v1.json` + 数据库表 + API 端点
-- ✅ PlanetX 游戏化闯关（人格测评 → 舰队 → Match → Ask）
-- ✅ T-space 企业 SaaS（企业创建、候选人管理、职位发布、简历匹配）
+- ✅ **Trust Agent v0** — `agents/trust_agent.py` (175行) + `trust_routes.py` + 7 处事件回调 + 信任桥接 (resume/match/HR)（2026-07-19 完成）
+- ✅ **trust_memories + trust_attestations 数据库表** — `manager.py` 中完整实现，含 UNIQUE(candidate_id, claim_type) 约束和 append-only 设计
+- ✅ **GET/POST /v1/trust API** — attestations 查询 + 手动 refresh 端点
+- ✅ PlanetX 游戏化闯关（人格测评 → 舰队 → Match → Ask）— 前端就绪，后端闯关逻辑可用
+- ✅ T-space 企业 SaaS（企业创建、候选人管理、职位发布、简历匹配）— 基础功能可用
 - ✅ MCP Sidecar 3 工具可交付
-- ✅ CLI 征信查询工具（QCC MCP + 自动上报信任层）
+- ⚠️ CLI 征信查询工具（已实现 LLM 文本解析 `credit_routes.py`，QCC MCP 集成 + 自动上报信任层待开发）
 - ✅ 双端部署上线（腾讯云大陆 + Vultr 海外 + Vercel 前端）
-- 🔲 合伙人档案 UI：展示 attestation 摘要
-- 🔲 废弃 trust_score(degrees) 语义
+- 🔲 **个人信任档案 UI** — 聚合页面展示 attestation 摘要 + 人格雷达图 + 行为统计（P0，信任产品化的最小可见载体）
+- 🔲 候选人信任档案 HR 视图 — 前端 `MatchScreen.tsx` 预留，后端 `enterprise_routes` 已附加 `trust_profile`
+- 🔲 废弃 `trust_score(degrees)` 语义（`social_bfs.py` 中仍存在旧实现）
+
+> **诚实基线（2026-07-19 更新）**：Trust Layer v0 已从"设计完成代码未写"变为"✅ 已完成"。信任数据已开始从 quiz/fleet/resume/match 等 6 种 session_type 事件中持续流入 trust_memories，Trust Agent 规则引擎自动生成 4 类 attestation 声明。但**产品出口仍缺失**——信任数据在数据库里，但没有被呈现为面向用户的产品（个人信任档案页）。
 
 ### 6.2 近期：P1 正式发布
 
@@ -249,7 +274,7 @@
 |------|------|
 | 修订门槛 | 涉及社会价值、核心命题、不做什么的修改，需两人一致同意 |
 | 技术路线 | 可随阶段演进更新，但须在本文中说明原因 |
-| 关联文档 | TRUST_LAYER.md（信任层详设）、CURRENT_SYSTEM_ARCHITECTURE.md（架构真源）为本文的工程补充 |
+| 关联文档 | TRUST_PROFILE_DESIGN.md（信任档案详设）、CURRENT_SYSTEM_ARCHITECTURE.md（架构真源）为本文的工程补充 |
 | 对外使用 | 本文可直接用于评审答辩、投资人沟通、团队 onboarding |
 
 ---
@@ -259,3 +284,5 @@
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0 | 2026-07-15 | 初稿：社会价值 + 技术路线 + 场景选择 + 不做什么，统一团队思想 |
+| 1.1 | 2026-07-18 | **诚实基线修正**：纠正 Trust Layer "已完成"的错误标注；v0 规则引擎改为 ❌；里程碑第一条改为 ❌ 并附审查结论；关联文档从不存在的 TRUST_LAYER.md 改为实际存在的 TRUST_PROFILE_DESIGN.md |
+| 1.2 | 2026-07-19 | **战略定位明确**：新增 §1.5 "信任档案平台" 定位；明确招聘是数据入口、信任档案是产品出口；更新 Trust Agent v0 状态为 ✅；更新里程碑反映 Trust Layer 代码完成 + 信任桥接完成 |
