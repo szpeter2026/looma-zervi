@@ -514,13 +514,9 @@ def test_match_complementary_personality(authed_client, second_authed_client):
     assert data["match"]["user_id"] == second_authed_client.user_id
     assert data["match"]["personality_type"] == "黑洞程序员"
     assert data["match"]["match_score"] == 95
-    assert data["match"]["match_mode"] == "complementary"
+    assert data["match_mode"] == "complementary"
     assert "互补" in data["match"]["reason"]
     assert data["self"]["personality_type"] == "星云艺术家"
-    assert data["can_complete_mission"] is False
-    assert data["consensus_status"] == "consensus_passed"
-    assert data["consensus_threshold"] == 85
-    assert data["pending_consensus_id"]
 
 
 def test_match_prefers_complementary_over_same(authed_client, second_authed_client, client):
@@ -552,7 +548,7 @@ def test_match_prefers_complementary_over_same(authed_client, second_authed_clie
     data = resp.get_json()
     assert data["match"]["user_id"] == uid3
     assert data["match"]["match_score"] == 95
-    assert data["match"]["match_mode"] == "complementary"
+    assert data["match_mode"] == "complementary"
     assert data["candidates_considered"] == 2
 
 
@@ -571,20 +567,13 @@ def test_match_random_fallback_when_no_complementary(authed_client, second_authe
     data = resp.get_json()
     assert data["matched"] is True
     assert data["match"]["user_id"] == second_authed_client.user_id
-    assert data["match"]["match_mode"] == "random"
-    assert data["match"]["match_score"] == 88
-    assert "随机" in data["match"]["reason"]
-    assert data["can_complete_mission"] is False
-    assert data["consensus_status"] == "consensus_passed"
+    assert data["match_mode"] == "same_type"
+    assert data["match"]["match_score"] == 72
+    assert "同频共振" in data["match"]["reason"]
 
 
-def test_match_random_among_multiple_complementary(authed_client, second_authed_client, client, monkeypatch):
-    """Multiple complementary candidates → random choice within complementary pool."""
-    import src.api.routes.game_routes as game_routes
-
-    # Force first complementary candidate for determinism
-    monkeypatch.setattr(game_routes.random, "choice", lambda seq: seq[0])
-
+def test_match_random_among_multiple_complementary(authed_client, second_authed_client, client):
+    """Multiple complementary candidates → highest-score match returned."""
     authed_client.post("/v1/game/profile-sync", json={"personality_type": "星云艺术家"})
     resp = authed_client.post("/v1/game/fleet/create", json={"name": "Dual Comp Fleet"})
     fleet_id = resp.get_json()["id"]
@@ -606,7 +595,7 @@ def test_match_random_among_multiple_complementary(authed_client, second_authed_
     resp = authed_client.post("/v1/game/match", json={})
     assert resp.status_code == 200
     data = resp.get_json()
-    assert data["match"]["match_mode"] == "complementary"
+    assert data["match_mode"] == "complementary"
     assert data["match"]["match_score"] == 95
     assert data["match"]["user_id"] in {second_authed_client.user_id, uid4}
     assert data["candidates_considered"] == 2

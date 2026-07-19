@@ -346,6 +346,14 @@ def fleet_match():
     scored.sort(key=lambda x: (-x["match_score"], x["user_id"]))
     best = scored[0]
 
+    # Determine match mode
+    if best["match_score"] >= 95:
+        match_mode = "complementary"
+    elif best["match_score"] >= 72:
+        match_mode = "same_type"
+    else:
+        match_mode = "best_available"
+
     return jsonify({
         "matched": True,
         "match": best,
@@ -357,6 +365,7 @@ def fleet_match():
         "fleet_id": fleet["id"],
         "fleet_name": fleet["name"],
         "candidates_considered": len(scored),
+        "match_mode": match_mode,
     })
 
 

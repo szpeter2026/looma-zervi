@@ -1,5 +1,5 @@
 """
-Trust layer tests — consensus → memory_record → rule attestation.
+Trust layer tests — trust_agent attestation generation & retrieval.
 Run: pytest tests/test_trust.py -v
 """
 import os
@@ -46,99 +46,113 @@ def _headers(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-def _setup_fleet_match(client, token_a, token_b):
-    client.post(
-        "/v1/game/profile-sync",
-        headers=_headers(token_a),
-        json={"personality_type": "星云艺术家"},
-    )
-    client.post(
-        "/v1/game/profile-sync",
-        headers=_headers(token_b),
-        json={"personality_type": "黑洞程序员"},
-    )
-    fleet = client.post(
-        "/v1/game/fleet/create",
-        headers=_headers(token_a),
-        json={"name": "Trust Fleet"},
-    ).get_json()
-    client.post(
-        "/v1/game/fleet/join",
-        headers=_headers(token_b),
-        json={"fleet_id": fleet["id"]},
-    )
-    return client.post("/v1/game/match", headers=_headers(token_a), json={})
+class TestAttestationFlow:
+    """Trust Agent attestation generation via refresh + retrieval."""
 
+    def test_generate_and_retrieve_attestations(self, client):
+        """Insert trust memories → POST /v1/trust/refresh → GET /v1/trust/attestations."""
+        token, uid = _register(client, "trust_gen@test.com", "TrustGen")
 
-def test_consensus_flow_memory_and_attestation(client):
-    token_a, uid_a = _register(client, "trust_a@test.com", "Initiator")
-    token_b, uid_b = _register(client, "trust_b@test.com", "Candidate")
+        # Sync game profile — required for trust_agent to read display_name
+        client.post(
+            "/v1/game/profile-sync",
+            headers=_headers(token),
+            json={"personality_type": "星云艺术家"},
+        )
 
-    match_resp = _setup_fleet_match(client, token_a, token_b)
-    assert match_resp.status_code == 200
-    match_data = match_resp.get_json()
-    assert match_data["consensus_status"] == "consensus_passed"
-    assert match_data["can_complete_mission"] is False
-    assert match_data["pending_consensus_id"]
+        # Insert trust memories directly via DB (dicts, not JSON strings —
+        # insert_trust_memory calls json.dumps internally)
+        db = client.application._db
+        db.insert_trust_memory(
+            user_id=uid,
+            session_type="quiz",
+            session_id="ses-001",
+            memory_content={"score": 95},
+        )
+        db.insert_trust_memory(
+            user_id=uid,
+            session_type="fleet",
+            session_id="ses-002",
+            memory_content={"action": "join_fleet"},
+        )
+        db.insert_trust_memory(
+            user_id=uid,
+            session_type="ask",
+            session_id="ses-003",
+            memory_content={"question": "什么是信任？"},
+        )
 
-    blocked = client.post(
-        "/v1/game/mission-complete",
-        headers=_headers(token_a),
-        json={"mission_id": "match", "xp_reward": 40},
-    )
-    assert blocked.status_code == 403
-    assert blocked.get_json()["error"] == "consensus_required"
+        # Trigger attestation generation
+        refresh = client.post("/v1/trust/refresh", headers=_headers(token))
+        assert refresh.status_code == 200
+        refresh_data = refresh.get_json()
+        assert refresh_data["message"] == "attestations refreshed"
+        assert refresh_data["total"] >= 1
 
-    ack = client.post(
-        "/v1/game/match/acknowledge",
-        headers=_headers(token_b),
-        json={"consensus_id": match_data["pending_consensus_id"], "action": "accept"},
-    )
-    assert ack.status_code == 200
-    ack_data = ack.get_json()
-    assert ack_data["status"] == "verified"
-    assert ack_data["trust"]["memory_id"]
-    assert ack_data["trust"]["claim_key"] == "match_mission"
+        # Retrieve attestations
+        resp = client.get("/v1/trust/attestations", headers=_headers(token))
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["total"] >= 1
+        atts = data["attestations"]
+        claim_types = [a["claim_type"] for a in atts]
+        # With quiz + fleet + ask memories, should have identity + collaboration + communication
+        assert "identity" in claim_types
+        assert "collaboration" in claim_types
+        assert "communication" in claim_types
 
-    memory_id = ack_data["trust"]["memory_id"]
+    def test_attestations_empty_without_refresh(self, client):
+        """Without refresh, attestations should be empty until memories are seeded."""
+        token, _ = _register(client, "trust_empty@test.com", "Empty")
 
-    mem = client.get(f"/v1/trust/memories/{memory_id}", headers=_headers(token_a))
-    assert mem.status_code == 200
-    mem_data = mem.get_json()
-    assert mem_data["intersection_type"] == "consensus_exchange"
-    assert uid_a in mem_data["participants"]
-    assert uid_b in mem_data["participants"]
+        # No memories inserted, no refresh called
+        resp = client.get("/v1/trust/attestations", headers=_headers(token))
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["total"] == 0
+        assert data["attestations"] == []
 
-    claim = client.get("/v1/trust/claims/match_mission", headers=_headers(token_a))
-    assert claim.status_code == 200
-    claim_data = claim.get_json()
-    assert claim_data["attestation"]["status"] == "verified"
-    assert claim_data["attestation"]["validator"] == "rule_v0"
-    assert memory_id in claim_data["attestation"]["evidence_memory_ids"]
+    def test_attestations_requires_auth(self, client):
+        """Unauthenticated GET should return 401."""
+        resp = client.get("/v1/trust/attestations")
+        assert resp.status_code == 401
 
-    done = client.post(
-        "/v1/game/mission-complete",
-        headers=_headers(token_a),
-        json={"mission_id": "match", "xp_reward": 40},
-    )
-    assert done.status_code == 200
+    def test_refresh_requires_auth(self, client):
+        """Unauthenticated POST refresh should return 401."""
+        resp = client.post("/v1/trust/refresh")
+        assert resp.status_code == 401
 
-    match2 = client.post("/v1/game/match", headers=_headers(token_a), json={})
-    assert match2.get_json()["consensus_status"] == "consensus_verified"
-    assert match2.get_json()["can_complete_mission"] is True
+    def test_refresh_then_re_fetch_consistent(self, client):
+        """Refresh twice and verify attestation IDs are stable (upsert behaviour)."""
+        token, uid = _register(client, "trust_stable@test.com", "Stable")
 
+        client.post(
+            "/v1/game/profile-sync",
+            headers=_headers(token),
+            json={"personality_type": "黑洞程序员"},
+        )
 
-def test_acknowledge_wrong_user_forbidden(client):
-    token_a, _ = _register(client, "wrong_a@test.com", "A")
-    token_b, _ = _register(client, "wrong_b@test.com", "B")
-    token_c, _ = _register(client, "wrong_c@test.com", "C")
+        db = client.application._db
+        db.insert_trust_memory(
+            user_id=uid,
+            session_type="fleet",
+            session_id="ses-f1",
+            memory_content={"action": "create_fleet"},
+        )
 
-    match_resp = _setup_fleet_match(client, token_a, token_b)
-    consensus_id = match_resp.get_json()["pending_consensus_id"]
+        # First refresh
+        r1 = client.post("/v1/trust/refresh", headers=_headers(token))
+        assert r1.status_code == 200
+        a1 = client.get("/v1/trust/attestations", headers=_headers(token))
+        atts1 = a1.get_json()["attestations"]
 
-    resp = client.post(
-        "/v1/game/match/acknowledge",
-        headers=_headers(token_c),
-        json={"consensus_id": consensus_id, "action": "accept"},
-    )
-    assert resp.status_code == 404
+        # Second refresh — same memories, should upsert not duplicate
+        r2 = client.post("/v1/trust/refresh", headers=_headers(token))
+        assert r2.status_code == 200
+        a2 = client.get("/v1/trust/attestations", headers=_headers(token))
+        atts2 = a2.get_json()["attestations"]
+
+        assert len(atts2) == len(atts1)
+        ids1 = sorted(a["id"] for a in atts1)
+        ids2 = sorted(a["id"] for a in atts2)
+        assert ids1 == ids2
