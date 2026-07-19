@@ -153,6 +153,8 @@ class TestAttestationFlow:
         atts2 = a2.get_json()["attestations"]
 
         assert len(atts2) == len(atts1)
-        ids1 = sorted(a["id"] for a in atts1)
-        ids2 = sorted(a["id"] for a in atts2)
+        # trust.v1 public schema uses attestation_id (not raw DB id)
+        ids1 = sorted(a["attestation_id"] for a in atts1)
+        ids2 = sorted(a["attestation_id"] for a in atts2)
         assert ids1 == ids2
+        assert all(a.get("signature") for a in atts2)
