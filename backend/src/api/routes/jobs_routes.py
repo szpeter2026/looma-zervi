@@ -39,6 +39,42 @@ def _quota_exceeded_response(tier: str):
     return jsonify(error="quota_exceeded", message="当日职位匹配配额已用尽", upgrade=upgrade), 429
 
 
+# ── Trust Bridge: record match results as trust memory ──
+
+def _record_match_trust(user_id: str, matches: list[dict]):
+    """Record job match interaction as trust_memories.
+    Bridges the gap between 'matching behaviour' and 'trust profile'.
+    """
+    if not user_id or not matches:
+        return
+    try:
+        from src.db.manager import DatabaseManager
+        from src.agents.trust_agent import generate_attestations
+
+        db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
+        db = DatabaseManager(db_path)
+
+        top = matches[0]
+        db.insert_trust_memory(
+            user_id=user_id,
+            session_type="match",
+            session_id=f"job_match_{user_id}",
+            memory_content={
+                "top_job": top.get("title", ""),
+                "top_company": top.get("company", ""),
+                "top_score": top.get("scores", {}).get("overall", 0),
+                "matched_skills": top.get("matched_skills", []),
+                "total_jobs_matched": len(matches),
+            },
+            memory_level=1,
+        )
+        generate_attestations(user_id, db)
+        logger.info("trust_bridge: match trust recorded for %s (top: %s, score: %s)",
+                     user_id, top.get("title"), top.get("scores", {}).get("overall"))
+    except Exception as e:
+        logger.warning("trust_bridge: match trust recording skipped for %s: %s", user_id, e)
+
+
 # ── Mock jobs (fallback when no persisted jobs) ──
 MOCK_JOBS = [
     {"id": "j1", "title": "前端开发工程师", "company": "字节跳动", "location": "深圳",
@@ -293,6 +329,11 @@ def job_match():
             resume_text=resume_text,
             jobs=target_jobs,
         )
+
+        # ── Trust Bridge: record match interaction ──
+        if user_id and user_id != "guest-anon" and matches:
+            _record_match_trust(user_id, matches)
+
         return jsonify(matches=matches, total_evaluated=total)
     except Exception as e:
         logger.error(f"Job match failed: {e}")

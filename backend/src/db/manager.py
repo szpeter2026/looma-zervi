@@ -158,6 +158,8 @@ CREATE TABLE IF NOT EXISTS trust_attestations (
     verification_status TEXT DEFAULT 'unverified', -- verified | weak | unverified | contradicted
     confidence_score    REAL DEFAULT 0.0,          -- 0-1 internal only, never shown to users
     generated_by        TEXT DEFAULT 'trust_agent_v0',
+    signature           TEXT DEFAULT '',                -- Ed25519 looma_sig_v1:...
+    expires_at          TEXT DEFAULT NULL,              -- ISO 8601, 90 days from issued_at
     created_at          TEXT DEFAULT (datetime('now')),
     updated_at          TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (candidate_id) REFERENCES users(id),
@@ -804,6 +806,43 @@ CREATE INDEX IF NOT EXISTS idx_sharing_report ON report_sharing(report_id);
 CREATE INDEX IF NOT EXISTS idx_sharing_user ON report_sharing(user_id);
 CREATE INDEX IF NOT EXISTS idx_sharing_status ON report_sharing(status);
 CREATE INDEX IF NOT EXISTS idx_sharing_type ON report_sharing(shared_with_type);
+
+-- ============================================
+-- Trust Layer: share_codes (joint — temporary access grants)
+-- ============================================
+CREATE TABLE IF NOT EXISTS share_codes (
+    id              TEXT PRIMARY KEY,              -- UUID
+    code            TEXT UNIQUE NOT NULL,           -- sc_{random}
+    owner_id        TEXT NOT NULL,                  -- candidate user_id who generated it
+    scope           TEXT NOT NULL DEFAULT '[]',     -- JSON array: authorised claim_types
+    max_access_count INTEGER NOT NULL DEFAULT 10,
+    access_count    INTEGER NOT NULL DEFAULT 0,
+    expires_at      TEXT NOT NULL,                  -- ISO 8601
+    status          TEXT NOT NULL DEFAULT 'active', -- active | revoked | expired
+    created_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (owner_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_share_codes_code ON share_codes(code);
+CREATE INDEX IF NOT EXISTS idx_share_codes_owner ON share_codes(owner_id);
+
+-- ============================================
+-- Trust Layer: verification_audit_log (joint — immutable access trail)
+-- ============================================
+CREATE TABLE IF NOT EXISTS verification_audit_log (
+    id              TEXT PRIMARY KEY,              -- UUID
+    share_code      TEXT NOT NULL,                 -- which code was used
+    owner_id        TEXT NOT NULL,                 -- candidate whose data was accessed
+    verifier_info   TEXT DEFAULT '',               -- caller IP / user-agent / optional identity
+    attestation_ids TEXT NOT NULL DEFAULT '[]',    -- JSON array of accessed attestation IDs
+    result          TEXT NOT NULL DEFAULT 'success', -- success | expired | exhausted | not_found
+    created_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (owner_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_verification_audit_owner ON verification_audit_log(owner_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_verification_audit_code ON verification_audit_log(share_code);
+
 """
 
 
@@ -1380,6 +1419,183 @@ class DatabaseManager:
     # ============================================
     # Quota operations (joint)
     # ============================================
+    def get_trust_attestations_by_type(self, candidate_id: str, claim_types: list[str] | None = None) -> list[dict]:
+        """Get attestations for candidate, optionally filtered by claim_type."""
+        if claim_types:
+            placeholders = ",".join("?" * len(claim_types))
+            sql = f"""SELECT * FROM trust_attestations
+                      WHERE candidate_id = ? AND claim_type IN ({placeholders})
+                      ORDER BY created_at DESC"""
+            params = [candidate_id] + claim_types
+        else:
+            sql = """SELECT * FROM trust_attestations
+                     WHERE candidate_id = ? ORDER BY created_at DESC"""
+            params = [candidate_id]
+        with self.get_conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_attestation_signature(self, attestation_id: str, signature: str, expires_at: str) -> bool:
+        """Set the Ed25519 signature and expiration on an attestation."""
+        with self.get_conn() as conn:
+            cur = conn.execute(
+                """UPDATE trust_attestations
+                   SET signature = ?, expires_at = ?, updated_at = datetime('now')
+                   WHERE id = ?""",
+                (signature, expires_at, attestation_id),
+            )
+        return cur.rowcount > 0
+
+    # ============================================
+    # Trust Layer: share_codes
+    # ============================================
+    def create_share_code(self, owner_id: str, scope: list[str],
+                          max_access_count: int = 10,
+                          expires_in_seconds: int = 604800) -> dict:
+        """Generate a temporary share code for third-party verification.
+        
+        Args:
+            owner_id: candidate user_id
+            scope: list of claim_types (e.g. ['identity', 'collaboration'])
+            max_access_count: max times this code can be used (default 10)
+            expires_in_seconds: TTL in seconds (default 604800 = 7 days, max 2592000 = 30 days)
+        """
+        import secrets
+        from datetime import datetime, timedelta, timezone
+
+        _SHA_TZ = timezone(timedelta(hours=8))
+        now = datetime.now(_SHA_TZ)
+        expires_at = (now + timedelta(seconds=min(expires_in_seconds, 2592000))).isoformat()
+
+        code_id = str(uuid.uuid4())
+        code = "sc_" + secrets.token_hex(8)
+
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO share_codes
+                   (id, code, owner_id, scope, max_access_count, expires_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (code_id, code, owner_id, json.dumps(scope), max_access_count, expires_at),
+            )
+            row = conn.execute(
+                "SELECT * FROM share_codes WHERE id = ?", (code_id,),
+            ).fetchone()
+        result = dict(row) if row else {}
+        if "scope" in result and isinstance(result["scope"], str):
+            result["scope"] = json.loads(result["scope"])
+        return result
+
+    def get_share_code(self, code: str) -> dict | None:
+        """Look up a share_code by its code string."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM share_codes WHERE code = ?", (code,),
+            ).fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        if "scope" in result and isinstance(result["scope"], str):
+            result["scope"] = json.loads(result["scope"])
+        return result
+
+    def consume_share_code(self, code: str) -> dict | None:
+        """Increment access_count for a share_code. Returns updated row or None if exhausted/expired."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM share_codes WHERE code = ? AND status = 'active'", (code,),
+            ).fetchone()
+            if not row:
+                return None
+
+            sc = dict(row)
+            # Check expiration
+            from datetime import datetime, timezone, timedelta
+            _SHA_TZ = timezone(timedelta(hours=8))
+            now = datetime.now(_SHA_TZ).isoformat()
+            if sc["expires_at"] < now:
+                conn.execute(
+                    "UPDATE share_codes SET status = 'expired' WHERE code = ?", (code,),
+                )
+                return None
+
+            # Check exhausted
+            if sc["access_count"] >= sc["max_access_count"]:
+                return None
+
+            conn.execute(
+                "UPDATE share_codes SET access_count = access_count + 1 WHERE code = ?",
+                (code,),
+            )
+            row2 = conn.execute(
+                "SELECT * FROM share_codes WHERE code = ?", (code,),
+            ).fetchone()
+        result = dict(row2) if row2 else {}
+        if "scope" in result and isinstance(result["scope"], str):
+            result["scope"] = json.loads(result["scope"])
+        return result
+
+    def revoke_share_code(self, code_id: str, owner_id: str) -> bool:
+        """Revoke a share_code (owner only)."""
+        with self.get_conn() as conn:
+            cur = conn.execute(
+                """UPDATE share_codes SET status = 'revoked'
+                   WHERE id = ? AND owner_id = ? AND status = 'active'""",
+                (code_id, owner_id),
+            )
+        return cur.rowcount > 0
+
+    def list_share_codes(self, owner_id: str) -> list[dict]:
+        """List all share codes for an owner."""
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM share_codes
+                   WHERE owner_id = ?
+                   ORDER BY created_at DESC""",
+                (owner_id,),
+            ).fetchall()
+        results = []
+        for r in rows:
+            d = dict(r)
+            if "scope" in d and isinstance(d["scope"], str):
+                d["scope"] = json.loads(d["scope"])
+            results.append(d)
+        return results
+
+    # ============================================
+    # Trust Layer: verification_audit_log
+    # ============================================
+    def insert_verification_audit(self, share_code: str, owner_id: str,
+                                  verifier_info: str, attestation_ids: list[str],
+                                  result: str = "success") -> str:
+        """Log a third-party verification access. Returns audit log ID."""
+        log_id = str(uuid.uuid4())
+        with self.get_conn() as conn:
+            conn.execute(
+                """INSERT INTO verification_audit_log
+                   (id, share_code, owner_id, verifier_info, attestation_ids, result)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (log_id, share_code, owner_id, verifier_info,
+                 json.dumps(attestation_ids), result),
+            )
+        return log_id
+
+    def get_verification_audit_log(self, owner_id: str, limit: int = 50) -> list[dict]:
+        """Get verification audit trail for a candidate."""
+        with self.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM verification_audit_log
+                   WHERE owner_id = ?
+                   ORDER BY created_at DESC LIMIT ?""",
+                (owner_id, limit),
+            ).fetchall()
+        results = []
+        for r in rows:
+            d = dict(r)
+            if "attestation_ids" in d and isinstance(d["attestation_ids"], str):
+                d["attestation_ids"] = json.loads(d["attestation_ids"])
+            results.append(d)
+        return results
+
     def get_quota(self, user_id: str, resource: str, date: str):
         """Get quota record for a specific user + resource + date."""
         with self.get_conn() as conn:

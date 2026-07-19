@@ -1,14 +1,17 @@
 {
   "remotes": {
     "github": {
-      "name": "github",
-      "url": "https://github.com/szpeter2026/looma-zervi.git"
+      "name": "origin",
+      "url": "git@github-szpeter2026:szpeter2026/looma-zervi.git"
     },
     "gitee": {
-      "name": "origin",
-      "url": "https://gitee.com/szbenyx/looma-zervi.git"
+      "name": "gitee",
+      "url": "git@gitee.com:szbenyx/looma-zervi.git"
     }
   },
-  "branches": ["main", "release/overseas"],
+  "branches": [
+    "main",
+    "release/overseas"
+  ],
   "syncTags": true
 }

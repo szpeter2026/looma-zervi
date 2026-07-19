@@ -60,10 +60,22 @@ export default function Dashboard() {
 
   useEffect(() => {
     const base = API_BASE ? API_BASE.replace(/\/$/, "") : "";
+    // 本地开发无后端时不发起请求，避免控制台 500 错误
+    if (import.meta.env.DEV && !API_BASE && !import.meta.env.VITE_API_BASE) {
+      return;
+    }
     fetch(`${base}/health`)
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (!r.ok) {
+          // 静默处理服务不可用
+          return null;
+        }
+        return r.json();
+      })
       .then((data) => data && setHealth(normalizeHealth(data)))
-      .catch(() => {});
+      .catch(() => {
+        // 网络错误静默处理
+      });
   }, []);
 
   const askRecord = quota?.records?.find((r) => r.resource === "ask");

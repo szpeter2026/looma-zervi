@@ -26,6 +26,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("import_poetry")
 
 
+def resolve_path(path: str) -> str:
+    """Resolve DB/source path; absolute paths are used as-is."""
+    if os.path.isabs(path):
+        return path
+    return os.path.join(PROJECT_ROOT, path)
+
+
 def read_chroma_poems(source_dir: str, collection_name: str = "poetry_full") -> list[dict]:
     """Read all poems from ChromaDB collection.
     Returns list of dicts with: title, author, dynasty, content.
@@ -155,9 +162,15 @@ def main():
                         help="Insert batch size (default: 500)")
     args = parser.parse_args()
 
-    # Resolve paths relative to project root
-    source_dir = os.path.join(PROJECT_ROOT, args.source_dir)
-    db_path = os.path.join(PROJECT_ROOT, args.db_path)
+    # Resolve paths (support absolute container paths like /app/poetry_data)
+    source_dir = resolve_path(args.source_dir)
+    db_path = resolve_path(args.db_path)
+
+    if not os.path.isfile(os.path.join(source_dir, "chroma.sqlite3")):
+        raise FileNotFoundError(
+            f"Missing ChromaDB at {os.path.join(source_dir, 'chroma.sqlite3')}. "
+            "Ensure poetry Docker volume is populated."
+        )
 
     logger.info(f"Source: {source_dir}")
     logger.info(f"Target: {db_path}")

@@ -26,6 +26,43 @@ logger = logging.getLogger("looma.resume")
 resume_bp = Blueprint("resume", __name__)
 
 # Shanghai timezone
+
+# ── Trust Bridge: record parsed skills as trust memory ──
+
+def _record_resume_trust(user_id: str, parsed: dict):
+    """Record skills claimed from resume as trust_memories.
+    Bridges the gap between 'self-claimed' resume data and 'behaviour-proven' trust data.
+    """
+    if user_id == "guest-anon":
+        return
+    try:
+        from src.db.manager import DatabaseManager
+        from src.agents.trust_agent import generate_attestations
+
+        db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
+        db = DatabaseManager(db_path)
+
+        skills = parsed.get("skills") or parsed.get("tech_stack") or []
+        if isinstance(skills, str):
+            skills = [s.strip() for s in skills.split(",") if s.strip()]
+
+        db.insert_trust_memory(
+            user_id=user_id,
+            session_type="resume",
+            session_id=f"resume_parse_{user_id}",
+            memory_content={
+                "skills_claimed": skills[:20],
+                "roles": parsed.get("roles") or parsed.get("desired_positions") or [],
+                "years": parsed.get("years_of_experience") or "",
+                "education": parsed.get("highest_degree") or "",
+            },
+            memory_level=2,
+        )
+        generate_attestations(user_id, db)
+        logger.info("trust_bridge: resume skills recorded for %s (%d skills)", user_id, len(skills))
+    except Exception as e:
+        logger.warning("trust_bridge: resume trust recording skipped for %s: %s", user_id, e)
+
 _SHA_TZ = timezone(timedelta(hours=8))
 
 
@@ -62,6 +99,10 @@ def parse_resume():
         result = run_document_analysis("resume", text)
         if result is None:
             return jsonify(error="parse_failed", message="简历解析未返回结果"), 500
+
+        # ── Trust Bridge: record skills_claimed from resume ──
+        _record_resume_trust(user_id, result)
+
         return jsonify(extracted=result)
     except Exception as e:
         return jsonify(error="parse_failed", message=str(e)), 500
@@ -137,6 +178,10 @@ def upload_resume():
             filename=filename,
             error=f"结构化提取失败: {e}",
         ), 200
+
+    # ── Trust Bridge: record upload resume trust ──
+    if extracted:
+        _record_resume_trust(user_id, extracted)
 
     # Step 3: Persist to DB
     resume_id = None

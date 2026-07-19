@@ -1,6 +1,16 @@
 # ============================================================
 # Deploy — 合并到 main 后自动部署到腾讯云内测机
 #
+# 范围（仅大陆产品，不含营销站）:
+#   - PlanetX  /var/www/planetx/dist  →  http://<IP>/
+#   - T-space    /var/www/saas/dist     →  http://<IP>/tspace/
+#   - Looma API  Docker :5200         →  http://<IP>/v1/
+#
+# 不在此 workflow 部署:
+#   - genz.ltd 营销站 → 独立仓 genz-web，Vercel 自动部署
+#   - Bolent 企业站   → szbolent-portal / WordPress，阿里云独立部署
+#   - 海外 Vultr      → deploy-overseas.yml（overseas-* tag 触发）
+#
 # 目标机默认: 1.14.202.161 (ubuntu, /opt/looma-zervi)
 #
 # GitHub Secrets（必填）:
@@ -24,6 +34,11 @@ name: Deploy
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.sync-config.json'
+      - 'scripts/sync-remotes.sh'
   workflow_dispatch:
 
 concurrency:
@@ -272,7 +287,8 @@ jobs:
           fi
 
           sudo nginx -t
-          sudo nginx -s reload
+          sudo systemctl start nginx 2>/dev/null || true
+          sudo nginx -s reload 2>/dev/null || sudo systemctl reload nginx
           echo "=== Nginx reloaded ==="
           NGINX
 
@@ -353,21 +369,44 @@ jobs:
           DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
           COMPOSE="docker compose -f ${DEPLOY_PATH}/docker/docker-compose.yml -p looma-zervi"
 
-          COUNT=$(${COMPOSE} exec -T backend \
-            python -c "from src.db.manager import DatabaseManager; db=DatabaseManager('/app/data/looma.db'); db.init_schema(); print(db.get_poetry_stats()['total'])" 2>/dev/null || echo "0")
+          count_poems() {
+            local out="0"
+            for i in $(seq 1 5); do
+              out=$(${COMPOSE} exec -T backend \
+                python -c "from src.db.manager import DatabaseManager; db=DatabaseManager('/app/data/looma.db'); db.init_schema(); print(db.get_poetry_stats()['total'])" 2>/dev/null || echo "0")
+              count="$(printf '%s' "$out" | tail -1 | tr -d '[:space:]')"
+              if [ "${count:-0}" -gt 0 ] 2>/dev/null; then
+                printf '%s' "$count"
+                return 0
+              fi
+              sleep 3
+            done
+            printf '%s' "$count"
+          }
 
+          COUNT="$(count_poems)"
           if [ "${COUNT:-0}" -gt 0 ] 2>/dev/null; then
             echo "=== Poems table already has ${COUNT} entries, skipping import ==="
-            exit 0
+          else
+            echo "=== Running poetry import (ChromaDB → SQLite) ==="
+            if ! ${COMPOSE} exec -T backend \
+              python scripts/import_poetry.py \
+                --source-dir /app/poetry_data \
+                --db-path /app/data/looma.db \
+                --batch-size 1000; then
+              echo "=== Import command returned non-zero; verifying SQLite count ==="
+            fi
+            COUNT="$(count_poems)"
           fi
 
-          echo "=== Running poetry import (ChromaDB → SQLite) ==="
-          ${COMPOSE} exec -T backend \
-            python scripts/import_poetry.py \
-              --source-dir /app/poetry_data \
-              --db-path /app/data/looma.db \
-              --batch-size 1000
-          echo "=== Poetry import complete ==="
+          if [ "${COUNT:-0}" -le 0 ] 2>/dev/null; then
+            echo "=== Poetry import verification FAILED (total=${COUNT}) ==="
+            ${COMPOSE} logs --tail 30 backend || true
+            exit 1
+          fi
+          echo "=== Poetry import OK: ${COUNT} poems in SQLite ==="
+          curl -sf http://127.0.0.1/v1/poetry/stats | head -c 120
+          echo ""
           POETRY_IMPORT
 
       - name: Health check (local + nginx)
