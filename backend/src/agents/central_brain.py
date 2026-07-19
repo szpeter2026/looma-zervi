@@ -443,7 +443,7 @@ def dispatch(
 
             # ── Build chat history ──
             history_text = ""
-            for msg in session_history[-4:]:
+            for msg in (session_history or [])[-4:]:
                 role = "用户" if msg.get("role") == "user" else "Navigator"
                 content = msg.get("content", "")[:80]
                 history_text += f"{role}：{content}\n"
