@@ -916,6 +916,19 @@ class DatabaseManager:
                 conn.execute("ALTER TABLE game_profiles ADD COLUMN identity TEXT")
             except sqlite3.OperationalError:
                 pass
+            # Migration: trust protocol columns on existing trust_attestations
+            try:
+                conn.execute(
+                    "ALTER TABLE trust_attestations ADD COLUMN signature TEXT DEFAULT ''"
+                )
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute(
+                    "ALTER TABLE trust_attestations ADD COLUMN expires_at TEXT DEFAULT NULL"
+                )
+            except sqlite3.OperationalError:
+                pass
 
     # ============================================
     # User operations (joint)
