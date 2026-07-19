@@ -20,10 +20,13 @@ Endpoints (HarmonyOS 元服务 - 答题游戏):
 """
 import json as _json
 import math
-import random
 from flask import Blueprint, request, jsonify, current_app, g
 
 from src.api.auth.decorators import require_auth, optional_auth
+from src.agents.trust_agent import generate_attestations
+import logging
+
+logger = logging.getLogger("looma.game_routes")
 
 game_bp = Blueprint("game", __name__)
 
@@ -40,7 +43,7 @@ def _calculate_level(xp: int) -> int:
     return int(math.sqrt(xp / 100)) + 1 if xp > 0 else 1
 
 
-# ── Match helpers (PlanetX 域内 v0：互补优先，否则随机) ──
+# ── Match helpers (PlanetX 域内 v0 规则配对) ──
 
 PERSONALITY_EMOJI = {
     "星云艺术家": "🎨",
@@ -70,82 +73,19 @@ MATCH_REASON = {
     ("暗物质漫游者", "双星星系守护者"): "人格互补 · 自由引力遇见安全感",
 }
 
-# 前端 deriveMatchUiState 默认阈值；≥ 此分可完成 match 任务
-CONSENSUS_THRESHOLD = 85
-COMPLEMENTARY_SCORE = 95
-RANDOM_FLEET_SCORE = 88
-
 
 def _score_personality_pair(self_type: str, other_type: str) -> tuple[int, str]:
-    """Score a candidate for ranking. Complementary wins; others used only for pooling."""
+    """Score a candidate pair. Returns (score 0-100, reason)."""
     if not other_type:
         return 0, "对方尚未完成人格测试"
     if COMPLEMENTARY_PERSONALITY.get(self_type) == other_type:
         reason = MATCH_REASON.get((self_type, other_type), "人格互补 · 舰队内最佳配对")
-        return COMPLEMENTARY_SCORE, reason
+        return 95, reason
     if self_type and self_type == other_type:
         return 72, f"同频共振 · 你们都是「{self_type}」"
     if self_type and other_type:
         return 58, f"舰队共鸣 · 「{self_type}」×「{other_type}」"
     return 40, "舰队初遇 · 继续探索彼此轨道"
-
-
-def _pick_fleet_match(self_type: str, scored: list[dict]) -> dict:
-    """互补优先：若有互补候选人则在互补池内随机；否则在舰队候选人中随机。
-
-    随机落点统一抬到 RANDOM_FLEET_SCORE，保证阶段一可过共识阈值完成任务。
-    """
-    complementary = [c for c in scored if c["match_score"] == COMPLEMENTARY_SCORE]
-    if complementary:
-        return random.choice(complementary)
-
-    # 优先有人格的成员，否则任意舰队成员
-    with_personality = [c for c in scored if c.get("personality_type") and c["personality_type"] != "未觉醒"]
-    pool = with_personality or scored
-    chosen = random.choice(pool)
-    other_type = chosen.get("personality_type") or "未觉醒"
-    chosen = {
-        **chosen,
-        "match_score": RANDOM_FLEET_SCORE,
-        "reason": f"舰队随机配对 · 星轨偶遇「{other_type}」",
-        "match_mode": "random",
-    }
-    return chosen
-
-
-def _consensus_fields(
-    match_score: int,
-    *,
-    pending_consensus_id: str | None = None,
-    attestation_verified: bool = False,
-) -> dict:
-    """按分数与双向确认状态填充共识字段。"""
-    passed = match_score >= CONSENSUS_THRESHOLD
-    if attestation_verified:
-        status = "consensus_verified"
-        can_complete = True
-    elif passed:
-        status = "consensus_passed"
-        can_complete = False
-    elif match_score >= 60:
-        status = "consensus_weak"
-        can_complete = False
-    else:
-        status = "consensus_failed"
-        can_complete = False
-    return {
-        "consensus_threshold": CONSENSUS_THRESHOLD,
-        "consensus_status": status,
-        "consensus_passed": passed,
-        "can_complete_mission": can_complete,
-        "pending_consensus_id": pending_consensus_id,
-        "spread_hint": {
-            "show_share_cta": not passed,
-            "message": None if passed else "契合度未达共识阈值，邀请更多舰员扩大验证池",
-            "spread_count": 0,
-            "spread_target": 3,
-        },
-    }
 
 
 # ── Personality & Profile ──
@@ -190,6 +130,22 @@ def sync_personality():
             source="server",
             properties={"personality_type": personality_type},
         )
+
+        # ── Trust Agent: record quiz memory ──
+        try:
+            db.insert_trust_memory(
+                user_id=g.user_id,
+                session_type="quiz",
+                session_id=f"profile_sync_{g.user_id}",
+                memory_content={
+                    "personality_type": personality_type,
+                    "personality_detail": personality_detail,
+                },
+                memory_level=2,
+            )
+            generate_attestations(g.user_id, db)
+        except Exception as e:
+            logger.warning("trust_agent: quiz memory skipped for %s: %s", g.user_id, e)
 
     # Return the full profile after sync (so frontend gets XP/level too)
     profile = db.get_game_profile(g.user_id)
@@ -296,13 +252,6 @@ def complete_mission():
 
     db = _get_db()
 
-    if mission_id == "match":
-        if not db.has_verified_trust_attestation(g.user_id, "match_mission"):
-            return jsonify(
-                error="consensus_required",
-                message="match mission requires verified consensus attestation",
-            ), 403
-
     # Ensure user has a game profile (create stub if none)
     profile = db.get_game_profile(g.user_id)
     if not profile:
@@ -339,12 +288,11 @@ def complete_mission():
 @game_bp.route("/match", methods=["POST"])
 @require_auth
 def fleet_match():
-    """Match current user 1:1 within fleet — complementary first, else random.
+    """Match current user 1:1 with a fleet member by personality complementarity.
 
     v0 rules (replaceable by trained model later):
       - Must be in a fleet with ≥1 other member
-      - If any complementary personality exists → random among those (score 95)
-      - Else → random among fleet candidates (score 88, still clears UI threshold)
+      - Prefer complementary personality; else same-type; else best available
       - Does NOT complete the match mission — caller must POST mission-complete
     """
     db = _get_db()
@@ -372,6 +320,7 @@ def fleet_match():
         ), 400
 
     candidates = db.get_game_profiles_for_users(other_ids)
+    # Prefer members who finished personality; still allow fallback to bare members
     by_id = {c["user_id"]: c for c in candidates}
     scored = []
     for uid in other_ids:
@@ -382,6 +331,7 @@ def fleet_match():
         if cand:
             display_name = (cand.get("display_name") or "").strip()
         if not display_name:
+            # fall back to fleet member join row
             member_row = next((m for m in members if m["user_id"] == uid), None)
             display_name = (member_row.get("name") or "神秘星际公民") if member_row else "神秘星际公民"
         scored.append({
@@ -391,26 +341,12 @@ def fleet_match():
             "personality_emoji": PERSONALITY_EMOJI.get(other_type, "🪐"),
             "match_score": score,
             "reason": reason,
-            "match_mode": "complementary" if score == COMPLEMENTARY_SCORE else "candidate",
         })
 
-    best = _pick_fleet_match(self_type, scored)
-    if best.get("match_mode") != "random":
-        best = {**best, "match_mode": "complementary"}
+    scored.sort(key=lambda x: (-x["match_score"], x["user_id"]))
+    best = scored[0]
 
-    pending_id = None
-    if best["match_score"] >= CONSENSUS_THRESHOLD:
-        pending_id = db.create_or_get_pending_consensus(
-            fleet_id=fleet["id"],
-            initiator_id=g.user_id,
-            candidate_id=best["user_id"],
-            match_score=best["match_score"],
-            reason=best.get("reason") or "",
-        )
-
-    attestation_verified = db.has_verified_trust_attestation(g.user_id, "match_mission")
-
-    payload = {
+    return jsonify({
         "matched": True,
         "match": best,
         "self": {
@@ -421,68 +357,7 @@ def fleet_match():
         "fleet_id": fleet["id"],
         "fleet_name": fleet["name"],
         "candidates_considered": len(scored),
-        **_consensus_fields(
-            best["match_score"],
-            pending_consensus_id=pending_id,
-            attestation_verified=attestation_verified,
-        ),
-    }
-    return jsonify(payload)
-
-
-@game_bp.route("/match/consensus", methods=["GET"])
-@require_auth
-def list_match_consensus():
-    """当前用户待处理 / 已验证的共识记录。"""
-    db = _get_db()
-    data = db.list_match_consensus_for_user(g.user_id)
-    return jsonify(**data)
-
-
-@game_bp.route("/match/acknowledge", methods=["POST"])
-@require_auth
-def acknowledge_match_consensus():
-    """候选方认可发起方的共识验证 → 写入 trust memory + rule attestation。"""
-    from src.trust.service import memorialize_and_attest_consensus
-
-    data = request.get_json() or {}
-    consensus_id = (data.get("consensus_id") or "").strip()
-    action = (data.get("action") or "accept").strip()
-
-    if not consensus_id:
-        return jsonify(error="bad_request", message="consensus_id required"), 400
-    if action != "accept":
-        return jsonify(error="bad_request", message="only action=accept supported in v0"), 400
-
-    db = _get_db()
-    verified = db.verify_match_consensus(consensus_id, g.user_id)
-    if verified is None:
-        return jsonify(error="not_found", message="consensus not found or not authorized"), 404
-    if verified["status"] != "verified":
-        return jsonify(
-            error="invalid_state",
-            message=f"consensus status is {verified['status']}, not verified",
-            consensus_status=verified["status"],
-        ), 409
-
-    from src.analytics.events import platform_from_request
-
-    trust_result = memorialize_and_attest_consensus(
-        db,
-        verified,
-        platform=platform_from_request(request),
-    )
-
-    return jsonify(
-        consensus_id=consensus_id,
-        status="verified",
-        match_score=verified["match_score"],
-        initiator_id=verified["initiator_id"],
-        candidate_id=verified["candidate_id"],
-        verified_at=verified.get("verified_at"),
-        trust=trust_result,
-        message="共识已验证；发起方可完成 match mission",
-    )
+    })
 
 
 # ── Fleet ──
@@ -516,6 +391,23 @@ def create_fleet():
     fleet_id = db.create_fleet(g.user_id, name, description)
     fleet = db.get_fleet_by_id(fleet_id)
     members = db.get_fleet_members(fleet_id)
+
+    # ── Trust Agent: record fleet creation memory ──
+    try:
+        db.insert_trust_memory(
+            user_id=g.user_id,
+            session_type="fleet",
+            session_id=fleet_id,
+            memory_content={
+                "action": "create_fleet",
+                "fleet_name": name,
+                "consensus_confirmed": True,
+            },
+            memory_level=2,
+        )
+        generate_attestations(g.user_id, db)
+    except Exception as e:
+        logger.warning("trust_agent: fleet create memory skipped for %s: %s", g.user_id, e)
 
     return jsonify(
         id=fleet["id"],
@@ -566,6 +458,23 @@ def join_fleet():
 
     fleet = db.get_fleet_by_id(fleet_id)
     members = db.get_fleet_members(fleet_id)
+
+    # ── Trust Agent: record fleet join memory ──
+    try:
+        db.insert_trust_memory(
+            user_id=g.user_id,
+            session_type="fleet",
+            session_id=fleet_id,
+            memory_content={
+                "action": "join_fleet",
+                "fleet_name": fleet["name"],
+                "consensus_confirmed": True,
+            },
+            memory_level=1,
+        )
+        generate_attestations(g.user_id, db)
+    except Exception as e:
+        logger.warning("trust_agent: fleet join memory skipped for %s: %s", g.user_id, e)
 
     return jsonify(
         message="joined fleet",
@@ -806,6 +715,24 @@ def quiz_result():
             result_type=result_type,
             insights_json=_json.dumps(insights, ensure_ascii=False),
         )
+
+        # ── Trust Agent: record HarmonyOS quiz completion ──
+        try:
+            db.insert_trust_memory(
+                user_id=g.user_id,
+                session_type="quiz",
+                session_id=session_id,
+                memory_content={
+                    "result_type": result_type,
+                    "total_score": session["total_score"],
+                    "correct_count": session["correct_count"],
+                    "total_questions": session["total_questions"],
+                },
+                memory_level=1,
+            )
+            generate_attestations(g.user_id, db)
+        except Exception as e:
+            logger.warning("trust_agent: harmonyos quiz memory skipped for %s: %s", g.user_id, e)
     import json as _json
     insights = _json.loads(session.get("insights_json") or "[]")
 

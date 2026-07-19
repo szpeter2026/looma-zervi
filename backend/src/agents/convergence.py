@@ -24,7 +24,6 @@ from src.agents.domain_engine import (
 from src.agents.navigator_memory import (
     NavigatorMemory, get_navigator_memory, MemoryLevel,
 )
-from src.trust.service import build_trust_context, build_trust_prompt_section
 
 logger = logging.getLogger("looma.convergence")
 
@@ -215,8 +214,7 @@ class ConvergenceOrchestrator:
                             confidence: float = 0.5,
                             stage: str = "greeting",
                             query: str = "",
-                            session_num: int = 1,
-                            db=None,
+                            session_num: int = 1
                             ) -> str:
         """Build the complete Navigator system prompt for an LLM call.
 
@@ -226,8 +224,7 @@ class ConvergenceOrchestrator:
           3. Confidence → emotion mapping
           4. Memory context (surface/deep/fragment/taboo)
           5. Engine context (echo/imprint/strategy)
-          6. Trust context (verified attestations, memories, credit checks)
-          7. Convergence state (if applicable)
+          6. Convergence state (if applicable)
         """
         state = self.get_state(session_id)
         state.confidence = confidence
@@ -272,24 +269,18 @@ class ConvergenceOrchestrator:
         if engine_ctx.get("active_strategies"):
             sections.append(self._strategy_section(engine_ctx["active_strategies"]))
 
-        # 8. Trust context — long-term memories, attestations, credit checks
-        trust_ctx = build_trust_context(db, user_id)
-        trust_section = build_trust_prompt_section(trust_ctx)
-        if trust_section:
-            sections.append(trust_section)
-
-        # 9. Memory context
+        # 8. Memory context
         sections.append(self._memory_section(memory_ctx))
 
-        # 10. Convergence state
+        # 9. Convergence state
         if stage == "convergence":
             sections.append(self._convergence_section(active_domain))
 
-        # 11. Taboo trigger (if applicable)
+        # 10. Taboo trigger (if applicable)
         if memory_ctx.get("taboo_trigger"):
             sections.append(self._taboo_section(memory_ctx["taboo_trigger"]))
 
-        # 12. Output constraints
+        # 11. Output constraints
         sections.append(self._output_constraints())
 
         prompt = "\n\n".join(sections)

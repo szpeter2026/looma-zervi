@@ -13,6 +13,8 @@ Tables:
   - candidates         (szbenyx owns)
   - invite_codes       (joint)
   - usage_logs         (joint)
+  - trust_memories     (joint — append-only trust behaviour log)
+  - trust_attestations (joint — verifiable claim cards)
 """
 from __future__ import annotations
 import json
@@ -127,57 +129,43 @@ CREATE TABLE IF NOT EXISTS mission_completions (
 CREATE INDEX IF NOT EXISTS idx_missions_user ON mission_completions(user_id);
 
 -- ============================================
--- Trust: match_consensus + memories + attestations (Jason / trust.v1)
+-- Trust Layer: trust_memories (joint — append-only behaviour log)
 -- ============================================
-CREATE TABLE IF NOT EXISTS match_consensus (
-    id              TEXT PRIMARY KEY,
-    fleet_id        TEXT NOT NULL,
-    initiator_id    TEXT NOT NULL,
-    candidate_id    TEXT NOT NULL,
-    match_score     INTEGER NOT NULL,
-    status          TEXT DEFAULT 'pending',
-    reason          TEXT,
-    created_at      TEXT DEFAULT (datetime('now')),
-    verified_at     TEXT,
-    expires_at      TEXT NOT NULL,
-    FOREIGN KEY (initiator_id) REFERENCES users(id),
-    FOREIGN KEY (candidate_id) REFERENCES users(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_match_consensus_initiator ON match_consensus(initiator_id, status);
-CREATE INDEX IF NOT EXISTS idx_match_consensus_candidate ON match_consensus(candidate_id, status);
-
 CREATE TABLE IF NOT EXISTS trust_memories (
-    id                  TEXT PRIMARY KEY,
-    intersection_type   TEXT NOT NULL,
-    participants_json   TEXT NOT NULL,
-    occurred_at         TEXT DEFAULT (datetime('now')),
-    evidence_json       TEXT DEFAULT '{}',
-    visibility          TEXT DEFAULT 'trusted',
-    fleet_id            TEXT,
-    consensus_id        TEXT,
-    platform            TEXT,
-    FOREIGN KEY (consensus_id) REFERENCES match_consensus(id)
+    id              TEXT PRIMARY KEY,          -- UUID
+    user_id         TEXT NOT NULL,
+    session_type    TEXT NOT NULL,             -- quiz | fleet | match | ask | share
+    session_id      TEXT NOT NULL,
+    memory_content  TEXT NOT NULL,             -- JSON: structured behaviour snapshot
+    memory_level    INTEGER DEFAULT 1,         -- 1=surface, 2=deep, 3=fragment, 4=taboo
+    created_at      TEXT DEFAULT (datetime('now')),  -- immutable
+    FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_trust_memories_consensus ON trust_memories(consensus_id);
+CREATE INDEX IF NOT EXISTS idx_trust_memories_user ON trust_memories(user_id);
+CREATE INDEX IF NOT EXISTS idx_trust_memories_session ON trust_memories(session_type, session_id);
 
+-- ============================================
+-- Trust Layer: trust_attestations (joint — verifiable claim cards)
+-- ============================================
 CREATE TABLE IF NOT EXISTS trust_attestations (
-    id                      TEXT PRIMARY KEY,
-    user_id                 TEXT NOT NULL,
-    claim_key               TEXT NOT NULL,
-    status                  TEXT NOT NULL,
-    confidence              REAL DEFAULT 1.0,
-    validator               TEXT DEFAULT 'rule_v0',
-    evidence_memory_ids_json TEXT DEFAULT '[]',
-    reason                  TEXT,
-    attested_at             TEXT DEFAULT (datetime('now')),
-    expires_at              TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    UNIQUE(user_id, claim_key)
+    id                  TEXT PRIMARY KEY,          -- UUID
+    candidate_id        TEXT NOT NULL,
+    claim_type          TEXT NOT NULL,             -- identity | collaboration | communication | influence
+    claim_statement     TEXT NOT NULL,
+    evidence_type       TEXT NOT NULL,             -- quiz | fleet_consensus | dialogue_analysis | share_signal
+    evidence_refs       TEXT DEFAULT '[]',         -- JSON array: trust_memories.id list
+    verification_status TEXT DEFAULT 'unverified', -- verified | weak | unverified | contradicted
+    confidence_score    REAL DEFAULT 0.0,          -- 0-1 internal only, never shown to users
+    generated_by        TEXT DEFAULT 'trust_agent_v0',
+    created_at          TEXT DEFAULT (datetime('now')),
+    updated_at          TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (candidate_id) REFERENCES users(id),
+    UNIQUE(candidate_id, claim_type)               -- one attestation per candidate per claim type
 );
 
-CREATE INDEX IF NOT EXISTS idx_trust_attestations_user ON trust_attestations(user_id);
+CREATE INDEX IF NOT EXISTS idx_trust_attestations_candidate ON trust_attestations(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_trust_attestations_type ON trust_attestations(claim_type, verification_status);
 
 -- ============================================
 -- Enterprise: enterprises (szbenyx owns)
@@ -1301,250 +1289,93 @@ class DatabaseManager:
         return row is not None
 
     # ============================================
-    # Match consensus + trust layer (Jason — trust.v1)
+    # Trust Layer: trust_memories (append-only)
     # ============================================
-    def create_or_get_pending_consensus(
-        self,
-        fleet_id: str,
-        initiator_id: str,
-        candidate_id: str,
-        match_score: int,
-        reason: str = "",
-        expires_days: int = 7,
-    ) -> str:
-        """Create pending consensus or return existing pending for same triple."""
-        from datetime import datetime, timedelta, timezone
-
-        with self.get_conn() as conn:
-            row = conn.execute(
-                """SELECT id FROM match_consensus
-                   WHERE fleet_id = ? AND initiator_id = ? AND candidate_id = ?
-                     AND status = 'pending'""",
-                (fleet_id, initiator_id, candidate_id),
-            ).fetchone()
-            if row:
-                return row["id"]
-
-            consensus_id = str(uuid.uuid4())
-            expires_at = (datetime.now(timezone.utc) + timedelta(days=expires_days)).strftime("%Y-%m-%d %H:%M:%S")
-            conn.execute(
-                """INSERT INTO match_consensus
-                   (id, fleet_id, initiator_id, candidate_id, match_score, status, reason, expires_at)
-                   VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)""",
-                (consensus_id, fleet_id, initiator_id, candidate_id, match_score, reason, expires_at),
-            )
-        return consensus_id
-
-    def get_match_consensus(self, consensus_id: str):
-        with self.get_conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM match_consensus WHERE id = ?", (consensus_id,)
-            ).fetchone()
-        return dict(row) if row else None
-
-    def verify_match_consensus(self, consensus_id: str, candidate_id: str) -> dict | None:
-        """Candidate acknowledges pending consensus → verified. Returns updated row or None."""
-        from datetime import datetime, timezone
-
-        with self.get_conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM match_consensus WHERE id = ?", (consensus_id,)
-            ).fetchone()
-            if not row:
-                return None
-            rec = dict(row)
-            if rec["candidate_id"] != candidate_id:
-                return None
-            if rec["status"] != "pending":
-                return rec
-            verified_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            conn.execute(
-                """UPDATE match_consensus
-                   SET status = 'verified', verified_at = ?
-                   WHERE id = ?""",
-                (verified_at, consensus_id),
-            )
-            row = conn.execute(
-                "SELECT * FROM match_consensus WHERE id = ?", (consensus_id,)
-            ).fetchone()
-        return dict(row) if row else None
-
-    def list_match_consensus_for_user(self, user_id: str) -> dict:
-        with self.get_conn() as conn:
-            pending_in = conn.execute(
-                """SELECT * FROM match_consensus
-                   WHERE candidate_id = ? AND status = 'pending'
-                   ORDER BY created_at DESC""",
-                (user_id,),
-            ).fetchall()
-            pending_out = conn.execute(
-                """SELECT * FROM match_consensus
-                   WHERE initiator_id = ? AND status = 'pending'
-                   ORDER BY created_at DESC""",
-                (user_id,),
-            ).fetchall()
-            verified = conn.execute(
-                """SELECT * FROM match_consensus
-                   WHERE (initiator_id = ? OR candidate_id = ?) AND status = 'verified'
-                   ORDER BY verified_at DESC LIMIT 20""",
-                (user_id, user_id),
-            ).fetchall()
-        return {
-            "pending_incoming": [dict(r) for r in pending_in],
-            "pending_outgoing": [dict(r) for r in pending_out],
-            "verified": [dict(r) for r in verified],
-        }
-
-    def create_trust_memory(
-        self,
-        intersection_type: str,
-        participants: list[str],
-        evidence: dict | None = None,
-        visibility: str = "trusted",
-        fleet_id: str | None = None,
-        consensus_id: str | None = None,
-        platform: str | None = None,
-    ) -> str:
+    def insert_trust_memory(self, user_id: str, session_type: str,
+                            session_id: str, memory_content: dict,
+                            memory_level: int = 1) -> str:
+        """Insert an append-only trust memory. Returns memory_id."""
         memory_id = str(uuid.uuid4())
         with self.get_conn() as conn:
             conn.execute(
                 """INSERT INTO trust_memories
-                   (id, intersection_type, participants_json, evidence_json,
-                    visibility, fleet_id, consensus_id, platform)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    memory_id,
-                    intersection_type,
-                    json.dumps(participants, ensure_ascii=False),
-                    json.dumps(evidence or {}, ensure_ascii=False),
-                    visibility,
-                    fleet_id,
-                    consensus_id,
-                    platform,
-                ),
+                   (id, user_id, session_type, session_id, memory_content, memory_level)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (memory_id, user_id, session_type, session_id,
+                 json.dumps(memory_content, ensure_ascii=False), memory_level),
             )
         return memory_id
 
-    def get_trust_memory(self, memory_id: str):
+    def get_trust_memories(self, user_id: str,
+                           session_type: str | None = None,
+                           limit: int = 50) -> list[dict]:
+        """Retrieve trust memories for a user, optionally filtered by type."""
+        if session_type:
+            sql = """SELECT * FROM trust_memories
+                     WHERE user_id = ? AND session_type = ?
+                     ORDER BY created_at DESC LIMIT ?"""
+            params = (user_id, session_type, limit)
+        else:
+            sql = """SELECT * FROM trust_memories
+                     WHERE user_id = ?
+                     ORDER BY created_at DESC LIMIT ?"""
+            params = (user_id, limit)
         with self.get_conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM trust_memories WHERE id = ?", (memory_id,)
-            ).fetchone()
-        if not row:
-            return None
-        rec = dict(row)
-        rec["participants"] = json.loads(rec.pop("participants_json"))
-        rec["evidence"] = json.loads(rec.pop("evidence_json"))
-        return rec
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
 
-    def list_trust_memories_for_user(self, user_id: str, limit: int = 50) -> list[dict]:
-        with self.get_conn() as conn:
-            rows = conn.execute(
-                """SELECT * FROM trust_memories
-                   ORDER BY occurred_at DESC LIMIT ?""",
-                (limit * 3,),
-            ).fetchall()
-        out = []
-        for row in rows:
-            rec = dict(row)
-            participants = json.loads(rec["participants_json"])
-            if user_id not in participants:
-                continue
-            rec["participants"] = participants
-            rec["evidence"] = json.loads(rec["evidence_json"])
-            del rec["participants_json"]
-            del rec["evidence_json"]
-            out.append(rec)
-            if len(out) >= limit:
-                break
-        return out
-
-    def upsert_trust_attestation(
-        self,
-        user_id: str,
-        claim_key: str,
-        status: str,
-        validator: str = "rule_v0",
-        evidence_memory_ids: list[str] | None = None,
-        reason: str = "",
-        confidence: float = 1.0,
-        expires_at: str | None = None,
-    ) -> str:
+    # ============================================
+    # Trust Layer: trust_attestations
+    # ============================================
+    def upsert_trust_attestation(self, candidate_id: str, claim_type: str,
+                                 claim_statement: str, evidence_type: str,
+                                 verification_status: str = "unverified",
+                                 evidence_refs: list | None = None,
+                                 confidence_score: float = 0.0) -> dict:
+        """Upsert a trust attestation claim card. Returns the attestation dict.
+        One row per (candidate_id, claim_type) — subsequent calls update the same row."""
         attestation_id = str(uuid.uuid4())
+        refs_json = json.dumps(evidence_refs or [])
         with self.get_conn() as conn:
-            existing = conn.execute(
-                """SELECT id FROM trust_attestations
-                   WHERE user_id = ? AND claim_key = ?""",
-                (user_id, claim_key),
-            ).fetchone()
-            if existing:
-                conn.execute(
-                    """UPDATE trust_attestations
-                       SET status = ?, confidence = ?, validator = ?,
-                           evidence_memory_ids_json = ?, reason = ?,
-                           attested_at = datetime('now'), expires_at = ?
-                       WHERE user_id = ? AND claim_key = ?""",
-                    (
-                        status,
-                        confidence,
-                        validator,
-                        json.dumps(evidence_memory_ids or [], ensure_ascii=False),
-                        reason,
-                        expires_at,
-                        user_id,
-                        claim_key,
-                    ),
-                )
-                return existing["id"]
             conn.execute(
                 """INSERT INTO trust_attestations
-                   (id, user_id, claim_key, status, confidence, validator,
-                    evidence_memory_ids_json, reason, expires_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    attestation_id,
-                    user_id,
-                    claim_key,
-                    status,
-                    confidence,
-                    validator,
-                    json.dumps(evidence_memory_ids or [], ensure_ascii=False),
-                    reason,
-                    expires_at,
-                ),
+                   (id, candidate_id, claim_type, claim_statement, evidence_type,
+                    verification_status, evidence_refs, confidence_score)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(candidate_id, claim_type) DO UPDATE SET
+                     claim_statement = excluded.claim_statement,
+                     verification_status = excluded.verification_status,
+                     evidence_refs = excluded.evidence_refs,
+                     confidence_score = excluded.confidence_score,
+                     updated_at = datetime('now')""",
+                (attestation_id, candidate_id, claim_type, claim_statement,
+                 evidence_type, verification_status, refs_json, confidence_score),
             )
-        return attestation_id
-
-    def get_trust_attestation(self, user_id: str, claim_key: str):
-        with self.get_conn() as conn:
             row = conn.execute(
                 """SELECT * FROM trust_attestations
-                   WHERE user_id = ? AND claim_key = ?""",
-                (user_id, claim_key),
+                   WHERE candidate_id = ? AND claim_type = ?""",
+                (candidate_id, claim_type),
             ).fetchone()
-        if not row:
-            return None
-        rec = dict(row)
-        rec["evidence_memory_ids"] = json.loads(rec.pop("evidence_memory_ids_json"))
-        return rec
+        return dict(row) if row else {}
 
-    def has_verified_trust_attestation(self, user_id: str, claim_key: str) -> bool:
-        att = self.get_trust_attestation(user_id, claim_key)
-        return bool(att and att.get("status") == "verified")
-
-    def list_trust_attestations_for_user(self, user_id: str) -> list[dict]:
+    def get_trust_attestations(self, candidate_id: str) -> list[dict]:
+        """Get all attestation cards for a candidate."""
         with self.get_conn() as conn:
             rows = conn.execute(
-                """SELECT * FROM trust_attestations WHERE user_id = ?
-                   ORDER BY attested_at DESC""",
-                (user_id,),
+                """SELECT * FROM trust_attestations
+                   WHERE candidate_id = ?
+                   ORDER BY created_at DESC""",
+                (candidate_id,),
             ).fetchall()
-        out = []
-        for row in rows:
-            rec = dict(row)
-            rec["evidence_memory_ids"] = json.loads(rec.pop("evidence_memory_ids_json"))
-            out.append(rec)
-        return out
+        return [dict(r) for r in rows]
+
+    def get_trust_attestation(self, attestation_id: str) -> dict | None:
+        """Get a single attestation by ID."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM trust_attestations WHERE id = ?", (attestation_id,),
+            ).fetchone()
+        return dict(row) if row else None
 
     # ============================================
     # Quota operations (joint)
