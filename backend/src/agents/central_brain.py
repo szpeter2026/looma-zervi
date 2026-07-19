@@ -429,7 +429,6 @@ def dispatch(
                 stage=current_stage,
                 query=query,
                 session_num=session_num,
-                db=db,
             )
 
             # ── Psychology layer (optional enhancement) ──
