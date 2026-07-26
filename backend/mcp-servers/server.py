@@ -20,6 +20,7 @@ Security: tools that touch user data require a valid looma JWT (+ consent where 
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
@@ -31,6 +32,8 @@ BACKEND_SRC = HERE.parent / "src"
 sys.path.insert(0, str(BACKEND_SRC))
 
 from mcp.server.fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from mcp_auth import MCPAuthError, verify_bearer_token_inline
 
@@ -196,20 +199,189 @@ def _run_credit(
 
 
 # ---------------------------------------------------------------------------
-# Health check resource
+# Browser / ops surface (not MCP protocol — /sse remains SSE-only)
+# ---------------------------------------------------------------------------
+
+def _public_status() -> dict:
+    return {
+        "status": "ok",
+        "service": "looma-mcp-sidecar",
+        "shape": "one_mcp_many_tools",
+        "sse_url": f"http://{_MCP_HOST}:{_MCP_PORT}/sse",
+        "health_url": f"http://{_MCP_HOST}:{_MCP_PORT}/health",
+        "tools": TOOL_NAMES,
+        "credit_tools": ["credit_check", "credit_company", "credit_risk", "credit_legal"],
+        "note": "/sse is an MCP protocol stream for clients (Cursor/scripts), not a web page.",
+    }
+
+
+def _landing_html() -> str:
+    status = _public_status()
+    tools_li = "\n".join(f"<li><code>{t}</code></li>" for t in TOOL_NAMES)
+    cursor_snippet = json.dumps(
+        {
+            "mcpServers": {
+                "looma-zervi": {
+                    "url": status["sse_url"],
+                }
+            }
+        },
+        indent=2,
+        ensure_ascii=False,
+    )
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Looma MCP Sidecar</title>
+  <style>
+    :root {{
+      --bg: #f6f3ee;
+      --ink: #1c1917;
+      --muted: #57534e;
+      --line: #e7e5e4;
+      --card: #fffdf9;
+      --accent: #0f766e;
+      --code: #292524;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: "IBM Plex Sans", "Source Han Sans SC", "Noto Sans SC", system-ui, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #d9f0ec 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #f5e6d3 0%, transparent 50%),
+        var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }}
+    main {{
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 20px 64px;
+    }}
+    h1 {{
+      font-family: "IBM Plex Serif", "Source Han Serif SC", Georgia, serif;
+      font-size: clamp(1.8rem, 4vw, 2.4rem);
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }}
+    .sub {{ color: var(--muted); margin-bottom: 28px; }}
+    .card {{
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+    }}
+    .card h2 {{
+      font-size: 0.95rem;
+      margin: 0 0 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+    }}
+    code, pre {{
+      font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.85rem;
+    }}
+    pre {{
+      background: var(--code);
+      color: #fafaf9;
+      padding: 14px 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 0;
+    }}
+    ul {{ margin: 0; padding-left: 1.2rem; }}
+    li {{ margin: 4px 0; }}
+    a {{ color: var(--accent); }}
+    .pill {{
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      background: #ccfbf1;
+      color: #115e59;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }}
+    .warn {{
+      border-left: 3px solid #d97706;
+      padding-left: 12px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <p class="pill">one MCP · many tools</p>
+    <h1>Looma MCP Sidecar</h1>
+    <p class="sub">浏览器适配层 / 运维入口。协议连接请用 MCP 客户端，不要把 <code>/sse</code> 当网页。</p>
+
+    <section class="card">
+      <h2>状态</h2>
+      <p>服务：<strong>{status["service"]}</strong> · <span class="pill">ok</span></p>
+      <p>SSE：<a href="{status["sse_url"]}"><code>{status["sse_url"]}</code></a>（EventStream，浏览器会空白/挂起）</p>
+      <p>JSON：<a href="/health"><code>/health</code></a></p>
+    </section>
+
+    <section class="card">
+      <h2>已注册工具</h2>
+      <ul>
+        {tools_li}
+      </ul>
+      <p class="warn" style="margin-top:12px">征信为聚合 <code>credit_check</code> + 少量细分（company/risk/legal），不 1:1 镜像企查查九服。</p>
+    </section>
+
+    <section class="card">
+      <h2>Cursor / MCP 客户端配置示例</h2>
+      <pre>{cursor_snippet}</pre>
+      <p class="sub" style="margin:10px 0 0">工具调用需传 Looma JWT（参数 <code>token</code>）；征信类另需 <code>credit_query</code> 授权。</p>
+    </section>
+
+    <section class="card">
+      <h2>说明</h2>
+      <p class="warn">本页是 HTTP 适配层，方便人眼查看与联调；真正的 Agent 通道是 SSE 协议流。</p>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
+@mcp.custom_route("/", methods=["GET"])
+async def browser_landing(_request: Request) -> HTMLResponse:
+    """Human-readable entry so opening :8999 is not a blank page."""
+    return HTMLResponse(_landing_html())
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def http_health(_request: Request) -> JSONResponse:
+    """HTTP health for ops / verify scripts (complements health://status)."""
+    return JSONResponse(_public_status())
+
+
+@mcp.custom_route("/sse-info", methods=["GET"])
+async def sse_info(_request: Request) -> PlainTextResponse:
+    """Plain tip if someone expects HTML on the protocol path."""
+    return PlainTextResponse(
+        "Looma MCP SSE endpoint is at /sse (text/event-stream).\n"
+        "Open http://127.0.0.1:8999/ in a browser for the landing page.\n"
+        "Health JSON: /health\n",
+        media_type="text/plain; charset=utf-8",
+    )
+
+
+# ---------------------------------------------------------------------------
+# MCP resource
 # ---------------------------------------------------------------------------
 
 @mcp.resource("health://status")
 def health_status() -> dict:
-    """Health check endpoint for CI / verify-p0-local.sh."""
-    return {
-        "status": "ok",
-        "service": "looma-mcp-sidecar",
-        "entry": f"sse://{_MCP_HOST}:{_MCP_PORT}/sse",
-        "shape": "one_mcp_many_tools",
-        "tools": TOOL_NAMES,
-        "credit_tools": ["credit_check", "credit_company", "credit_risk", "credit_legal"],
-    }
+    """Health check resource for MCP clients / CI."""
+    return _public_status()
 
 
 # ---------------------------------------------------------------------------

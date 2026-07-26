@@ -36,6 +36,10 @@ def test_tool_names_product_shape():
     health = mod.health_status()
     assert health["shape"] == "one_mcp_many_tools"
     assert set(health["tools"]) == names
+    assert "/sse" in health.get("sse_url", "")
+    html = mod._landing_html()
+    assert "Looma MCP Sidecar" in html
+    assert "credit_check" in html
 
 
 if __name__ == "__main__":
