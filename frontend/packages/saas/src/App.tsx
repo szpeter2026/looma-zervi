@@ -43,6 +43,13 @@ function FeatureGuard({ children }: { children: React.ReactNode }) {
   return <ErrorBoundary>{children}</ErrorBoundary>;
 }
 
+/** Vite `base` (e.g. `/tspace/`) → React Router basename without trailing slash. */
+function routerBasename(): string | undefined {
+  const raw = import.meta.env.BASE_URL || "/";
+  if (raw === "/") return undefined;
+  return raw.replace(/\/$/, "");
+}
+
 export default function App() {
   const tryAutoLogin = useSaasAuthStore((s) => s.tryAutoLogin);
   useSaasAnalytics();
@@ -62,7 +69,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <BrowserRouter>
+      <BrowserRouter basename={routerBasename()}>
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
@@ -72,9 +79,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<FeatureGuard><Dashboard /></FeatureGuard>} />
             <Route path="/pricing" element={<FeatureGuard><Pricing /></FeatureGuard>} />
-            {!IS_OVERSEAS && (
-              <Route path="/candidate/share/:code" element={<FeatureGuard><CandidateShare /></FeatureGuard>} />
-            )}
+            <Route path="/candidate/share/:code" element={<FeatureGuard><CandidateShare /></FeatureGuard>} />
           </Route>
 
           {/* Protected routes (需要登录的功能页) */}
@@ -86,12 +91,8 @@ export default function App() {
               <Route path="/jobs" element={<FeatureGuard><Jobs /></FeatureGuard>} />
               <Route path="/resume" element={<FeatureGuard><Resume /></FeatureGuard>} />
               <Route path="/reports" element={<FeatureGuard><Reports /></FeatureGuard>} />
-              {!IS_OVERSEAS && (
-                <>
-                  <Route path="/candidates" element={<FeatureGuard><Candidates /></FeatureGuard>} />
-                  <Route path="/candidates/:id" element={<FeatureGuard><CandidateDetail /></FeatureGuard>} />
-                </>
-              )}
+              <Route path="/candidates" element={<FeatureGuard><Candidates /></FeatureGuard>} />
+              <Route path="/candidates/:id" element={<FeatureGuard><CandidateDetail /></FeatureGuard>} />
               <Route path="/settings/consent" element={<FeatureGuard><ConsentSettings /></FeatureGuard>} />
               <Route element={<SaasAdminGuard />}>
                 <Route path="/admin" element={<FeatureGuard><AdminDashboard /></FeatureGuard>} />

@@ -1640,6 +1640,21 @@ class DatabaseManager:
                 )
         return True
 
+    def refund_quota(self, user_id: str, resource: str, date: str) -> bool:
+        """Refund 1 daily quota unit (best-effort). Returns True if decremented."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT used FROM quota_records WHERE user_id=? AND resource=? AND date=?",
+                (user_id, resource, date),
+            ).fetchone()
+            if not row or row[0] <= 0:
+                return False
+            conn.execute(
+                "UPDATE quota_records SET used=used-1 WHERE user_id=? AND resource=? AND date=? AND used>0",
+                (user_id, resource, date),
+            )
+        return True
+
     # ============================================
     # Boost pack operations (joint)
     # ============================================

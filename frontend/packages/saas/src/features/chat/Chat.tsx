@@ -6,6 +6,7 @@
  * Updated to use non-streaming API for contract consistency.
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
 import { useChatNonStreaming, type DocSource } from "./useChatNonStreaming";
@@ -18,6 +19,7 @@ function truncate(s: string, maxLen: number): string {
 }
 
 export default function Chat() {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<ChatMode>("chat");
   const api = useMemo(() => createSaasApiClient(), []);
@@ -86,6 +88,9 @@ export default function Chat() {
           </button>
         </div>
       </div>
+      <p className="text-xs mb-3 shrink-0" style={{ color: "var(--color-text-muted)" }}>
+        {t("quota.rulesHint")}
+      </p>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 pr-2">

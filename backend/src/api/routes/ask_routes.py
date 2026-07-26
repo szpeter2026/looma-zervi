@@ -18,7 +18,7 @@ from flask import Blueprint, request, jsonify, current_app, g
 from src.api.auth.decorators import require_auth, optional_auth
 from src.compliance.consent import require_consent
 from src.utils.quota import (
-    consume_with_boost, get_remaining, build_upgrade_hint,
+    consume_with_boost, refund_consumption, get_remaining, build_upgrade_hint,
     QUOTA_LIMITS, RESOURCE_ASK,
 )
 
@@ -75,9 +75,19 @@ def ask_question():
     if not query:
         return jsonify(error="bad_request", message="query required"), 400
 
-    # Quota check
     user_id = g.get("user_id", "guest-anon")
     tier = g.get("user_tier", "guest")
+
+    # Cache before quota — identical questions within TTL should not burn daily asks
+    cached = _cache_get(query)
+    if cached is not None:
+        logger.info(f"[cache HIT] {query[:50]!r}")
+        return jsonify(
+            answer=cached["answer"],
+            intent=cached["intent"],
+            intent_confidence=cached.get("intent_confidence"),
+            sources=cached["sources"],
+        )
 
     quota_result = consume_with_boost(user_id, tier, RESOURCE_ASK)
     if not quota_result["ok"]:
@@ -91,44 +101,38 @@ def ask_question():
             upgrade=upgrade,
         ), 429
 
-    # Cache check
-    cached = _cache_get(query)
-    if cached is not None:
-        logger.info(f"[cache HIT] {query[:50]!r}")
-        return jsonify(
-            answer=cached["answer"],
-            intent=cached["intent"],
-            intent_confidence=cached.get("intent_confidence"),
-            sources=cached["sources"],
-        )
-
     t0 = time.time()
     _timing: dict[str, int] = {}
 
-    # Intent parsing
-    from src.agents.central_brain import parse_intent, dispatch
-    t_intent = time.time()
-    intent_str, confidence, slots = parse_intent(query, navigator_mode=navigator_mode)
-    _timing["intent"] = int((time.time() - t_intent) * 1000)
-    logger.info(f"意图: {query[:50]!r} -> {intent_str} conf={confidence:.2f} ({_timing['intent']}ms)")
+    try:
+        # Intent parsing
+        from src.agents.central_brain import parse_intent, dispatch
+        t_intent = time.time()
+        intent_str, confidence, slots = parse_intent(query, navigator_mode=navigator_mode)
+        _timing["intent"] = int((time.time() - t_intent) * 1000)
+        logger.info(f"意图: {query[:50]!r} -> {intent_str} conf={confidence:.2f} ({_timing['intent']}ms)")
 
-    # Dispatch
-    t_dispatch = time.time()
-    context = {
-        "navigator_mode": navigator_mode,
-        "navigator_system_prompt": navigator_system_prompt,
-        "session_history": session_history,
-        "current_stage": current_stage,
-        "active_domain": active_domain,
-    }
-    result = dispatch(
-        intent=intent_str,
-        query=query,
-        context=context,
-        slots=slots,
-        _timing=_timing,
-    )
-    _timing["dispatch"] = int((time.time() - t_dispatch) * 1000)
+        # Dispatch
+        t_dispatch = time.time()
+        context = {
+            "navigator_mode": navigator_mode,
+            "navigator_system_prompt": navigator_system_prompt,
+            "session_history": session_history,
+            "current_stage": current_stage,
+            "active_domain": active_domain,
+        }
+        result = dispatch(
+            intent=intent_str,
+            query=query,
+            context=context,
+            slots=slots,
+            _timing=_timing,
+        )
+        _timing["dispatch"] = int((time.time() - t_dispatch) * 1000)
+    except Exception:
+        logger.exception("ask dispatch failed; refunding quota")
+        refund_consumption(user_id, RESOURCE_ASK, quota_result.get("source", "daily"))
+        return jsonify(error="server_error", message="问答服务暂时不可用，请稍后重试"), 500
 
     elapsed = int((time.time() - t0) * 1000)
     logger.info(f"[cache MISS] {query[:50]!r} -> {intent_str} ({elapsed}ms)")

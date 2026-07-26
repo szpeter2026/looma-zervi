@@ -30,11 +30,34 @@ export default function Candidates() {
   const [shareCode, setShareCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
   const [needsEnterprise, setNeedsEnterprise] = useState(false);
   const [tierBlocked, setTierBlocked] = useState(false);
 
   const canUseCandidates = hasMinTier(user?.tier, "supporter");
+
+  const loadCandidates = useCallback(async () => {
+    try {
+      const list = await getEnterpriseApi().candidates();
+      setCandidates(list.candidates ?? []);
+      setListError(null);
+    } catch (err) {
+      setCandidates([]);
+      if (err instanceof ApiError && err.status === 403) {
+        setTierBlocked(true);
+        setListError(null);
+        return;
+      }
+      // Keep enterprise shell; never bounce back to the create panel.
+      const detail =
+        err instanceof ApiError
+          ? (typeof err.body?.message === "string" && err.body.message) || err.message
+          : null;
+      setListError(detail || t("candidates.listLoadFailed"));
+    }
+  }, [t]);
 
   const loadData = useCallback(async () => {
     if (!canUseCandidates) {
@@ -45,23 +68,13 @@ export default function Candidates() {
 
     setLoading(true);
     setTierBlocked(false);
+    setListError(null);
     const api = getEnterpriseApi();
     try {
       const profile = await api.profile();
       setEnterprise(profile);
       setNeedsEnterprise(false);
-
-      try {
-        const list = await api.candidates();
-        setCandidates(list.candidates ?? []);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 403) {
-          setTierBlocked(true);
-          setCandidates([]);
-          return;
-        }
-        throw err;
-      }
+      await loadCandidates();
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setNeedsEnterprise(true);
@@ -72,14 +85,13 @@ export default function Candidates() {
         setEnterprise(null);
         setCandidates([]);
       } else {
-        setNeedsEnterprise(true);
-        setEnterprise(null);
-        setCandidates([]);
+        // Unknown/network errors must not force the create-enterprise panel.
+        setMessage(t("candidates.loadEnterpriseFailed"));
       }
     } finally {
       setLoading(false);
     }
-  }, [canUseCandidates]);
+  }, [canUseCandidates, loadCandidates, t]);
 
   useEffect(() => {
     void loadData();
@@ -87,12 +99,23 @@ export default function Candidates() {
 
   const handleCreateEnterprise = async () => {
     const name = user?.name || user?.email?.split("@")[0] || "我的企业";
+    setCreating(true);
+    setMessage(null);
     try {
-      await getEnterpriseApi().create({ name });
-      setMessage("企业已创建");
-      await loadData();
+      const created = await getEnterpriseApi().create({ name });
+      setEnterprise({
+        id: created.id,
+        name: created.name,
+        domain: created.domain,
+        role: (created.role === "member" ? "member" : "admin") as EnterpriseProfile["role"],
+      });
+      setNeedsEnterprise(false);
+      setMessage(t("candidates.createdSuccess"));
+      await loadCandidates();
     } catch {
-      setMessage("创建企业失败，请重试");
+      setMessage(t("candidates.createFailed"));
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -143,10 +166,11 @@ export default function Candidates() {
         </p>
         <button
           onClick={() => void handleCreateEnterprise()}
-          className="px-4 py-2 rounded-lg text-sm text-white"
+          disabled={creating}
+          className="px-4 py-2 rounded-lg text-sm text-white disabled:opacity-50"
           style={{ backgroundColor: "var(--color-primary)" }}
         >
-          {t("candidates.createEnterprise")}
+          {creating ? t("candidates.creating") : t("candidates.createEnterprise")}
         </button>
         {message && <p className="text-sm mt-3" style={{ color: "var(--color-text-muted)" }}>{message}</p>}
       </div>
@@ -201,8 +225,11 @@ export default function Candidates() {
       {message && (
         <p className="text-sm mb-4" style={{ color: "var(--color-success)" }}>{message}</p>
       )}
+      {listError && (
+        <p className="text-sm mb-4" style={{ color: "var(--color-warning)" }}>{listError}</p>
+      )}
 
-      {candidates.length === 0 ? (
+      {candidates.length === 0 && !listError ? (
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
           {t("candidates.empty")}
         </p>

@@ -47,7 +47,6 @@ export default function Sidebar() {
         path: "/candidates",
         labelKey: IS_OVERSEAS ? "nav.profile" : "nav.candidates",
         icon: "◎",
-        overseasHidden: true,
         minTier: "supporter",
       },
       { path: "/jobs", labelKey: IS_OVERSEAS ? "nav.jobsOverseas" : "nav.jobs", icon: "◈" },
@@ -80,18 +79,27 @@ export default function Sidebar() {
     : null;
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 flex flex-col z-50"
+    <aside
+      className="fixed left-0 top-0 bottom-0 flex flex-col z-50 border-r border-[var(--color-border)]"
       style={{
         width: "var(--sidebar-width)",
         backgroundColor: "var(--color-bg-sidebar)",
         color: "var(--color-text-sidebar)",
       }}
     >
-      <div className="px-5 py-5 border-b border-white/10">
-        <h1 className="text-lg font-bold tracking-wide text-white">
+      <div className="px-5 py-5 border-b border-[var(--color-border)]">
+        <h1
+          className="text-lg font-bold tracking-wide"
+          style={{ color: "var(--color-text-primary)" }}
+        >
           {brand.name}
         </h1>
-        <p className="text-xs text-white/40 mt-1">{brand.slogan}</p>
+        <p
+          className="text-xs mt-1"
+          style={{ color: "var(--color-text-sidebar-muted)" }}
+        >
+          {brand.slogan}
+        </p>
       </div>
 
       <nav className="flex-1 py-4 space-y-0.5 overflow-y-auto">
@@ -108,16 +116,28 @@ export default function Sidebar() {
                 `flex items-center gap-3 px-5 py-2.5 text-sm transition-colors no-underline
                 ${locked ? "opacity-55" : ""}
                 ${isActive
-                  ? "bg-white/10 text-white border-r-2 border-r-[var(--color-primary)]"
-                  : "text-white/60 hover:bg-white/5 hover:text-white"
+                  ? "border-r-2 border-r-[var(--color-primary)]"
+                  : "hover:bg-[var(--color-bg-sidebar-hover)]"
                 }`
               }
+              style={({ isActive }) => ({
+                color: isActive
+                  ? "var(--color-text-sidebar-active)"
+                  : "var(--color-text-sidebar)",
+                backgroundColor: isActive
+                  ? "var(--color-bg-sidebar-active)"
+                  : "transparent",
+              })}
             >
               <span className="text-base">{item.icon}</span>
               <span className="flex-1 truncate">{t(item.labelKey)}</span>
               {locked && (
                 <span
-                  className="text-[10px] px-1.5 py-0.5 rounded border border-white/20 text-white/50 shrink-0"
+                  className="text-[10px] px-1.5 py-0.5 rounded border shrink-0"
+                  style={{
+                    borderColor: "var(--color-border)",
+                    color: "var(--color-text-sidebar-muted)",
+                  }}
                   title={t("tier.lockHint")}
                 >
                   {t("tier.lockBadge")}
@@ -129,10 +149,18 @@ export default function Sidebar() {
       </nav>
 
       {user && quota && (
-        <div className="px-5 py-3 border-t border-white/10">
+        <div className="px-5 py-3 border-t border-[var(--color-border)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-white/40">{t("dashboard.todayQuota")}</span>
-            <span className="text-xs text-white/70">
+            <span
+              className="text-xs"
+              style={{ color: "var(--color-text-sidebar-muted)" }}
+            >
+              {t("dashboard.todayQuota")}
+            </span>
+            <span
+              className="text-xs"
+              style={{ color: "var(--color-text-sidebar)" }}
+            >
               {paid
                 ? t("tier.unlimited")
                 : remaining !== null && askRecord
@@ -141,7 +169,10 @@ export default function Sidebar() {
             </span>
           </div>
           {!paid && (
-            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-1.5 rounded-full overflow-hidden"
+              style={{ backgroundColor: "var(--color-bg-sidebar-hover)" }}
+            >
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{
@@ -153,18 +184,33 @@ export default function Sidebar() {
               />
             </div>
           )}
+          {!paid && (
+            <p
+              className="text-[10px] mt-1.5 leading-snug"
+              style={{ color: "var(--color-text-sidebar-muted)" }}
+            >
+              {t("dashboard.quotaRulesHint")}
+            </p>
+          )}
           {!paid && usagePercent >= 80 && (
-            <p className="text-[10px] mt-1.5 text-amber-200/80">
+            <p
+              className="text-[10px] mt-1.5"
+              style={{ color: "var(--color-warning, #f59e0b)" }}
+            >
               {t("tier.quotaNearLimit")}
             </p>
           )}
           <div className="mt-1.5 flex items-center justify-between">
-            <span className="text-xs text-white/30">
+            <span
+              className="text-xs"
+              style={{ color: "var(--color-text-sidebar-muted)" }}
+            >
               {tierLabel(quota.tier, t)}
             </span>
             <NavLink
               to="/pricing"
-              className="text-xs text-white/40 hover:text-white transition-colors no-underline"
+              className="text-xs transition-colors no-underline hover:opacity-80"
+              style={{ color: "var(--color-text-link)" }}
             >
               {paid ? t("dashboard.viewPlans") : t("dashboard.upgrade")}
             </NavLink>
@@ -173,14 +219,25 @@ export default function Sidebar() {
       )}
 
       {user && (
-        <div className="px-5 py-3 border-t border-white/10 flex items-center justify-between">
+        <div className="px-5 py-3 border-t border-[var(--color-border)] flex items-center justify-between">
           <div className="min-w-0 flex-1">
-            <p className="text-sm truncate text-white/90">{user.name || user.email}</p>
-            <p className="text-xs text-white/40 truncate">{user.email}</p>
+            <p
+              className="text-sm truncate"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              {user.name || user.email}
+            </p>
+            <p
+              className="text-xs truncate"
+              style={{ color: "var(--color-text-sidebar-muted)" }}
+            >
+              {user.email}
+            </p>
           </div>
           <button
             onClick={handleLogout}
-            className="ml-3 text-white/50 hover:text-white transition-colors bg-transparent border-none cursor-pointer text-lg leading-none p-1"
+            className="ml-3 transition-colors bg-transparent border-none cursor-pointer text-lg leading-none p-1 hover:opacity-80"
+            style={{ color: "var(--color-text-sidebar-muted)" }}
             title={t("auth.logout")}
           >
             ⏻

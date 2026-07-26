@@ -3,6 +3,7 @@
  * Owner: szbenyx
  */
 import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { isPaidTier } from "@looma/shared-core";
 import { useSaasAuthStore } from "../auth/authStore";
@@ -42,6 +43,7 @@ function tierLabel(tier: string, t: (key: string) => string) {
 export default function Dashboard() {
   const { t } = useTranslation();
   const brand = useBrand();
+  const navigate = useNavigate();
   const { user, quota, isAuthenticated, fetchQuota } = useSaasAuthStore();
   const [health, setHealth] = useState<HealthStatus | null>(null);
 
@@ -87,7 +89,7 @@ export default function Dashboard() {
   const handleQuickQuery = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       const q = (e.target as HTMLInputElement).value.trim();
-      if (q) window.location.href = `/query?q=${encodeURIComponent(q)}`;
+      if (q) navigate(`/query?q=${encodeURIComponent(q)}`);
     }
   };
 
@@ -106,15 +108,15 @@ export default function Dashboard() {
         </p>
 
         <div className="flex justify-center gap-4 mb-10">
-          <a
-            href="/register"
+          <Link
+            to="/register"
             className="px-6 py-3 rounded-lg text-white text-sm font-medium no-underline transition-opacity hover:opacity-90"
             style={{ backgroundColor: "var(--color-primary)" }}
           >
             {t("dashboard.freeRegister")}
-          </a>
-          <a
-            href="/login"
+          </Link>
+          <Link
+            to="/login"
             className="px-6 py-3 rounded-lg text-sm font-medium no-underline border transition-colors"
             style={{
               borderColor: "var(--color-primary)",
@@ -122,7 +124,7 @@ export default function Dashboard() {
             }}
           >
             {t("dashboard.hasAccountLogin")}
-          </a>
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
@@ -264,17 +266,22 @@ export default function Dashboard() {
                   </div>
                 </>
               )}
+              {!paid && (
+                <p className="text-[11px] mt-2 leading-snug" style={{ color: "var(--color-text-muted)" }}>
+                  {t("dashboard.quotaRulesHint")}
+                </p>
+              )}
               <div className="flex items-center justify-between mt-2">
                 <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
                   {tierLabel(quota.tier, t)}
                 </p>
-                <a
-                  href="/pricing"
+                <Link
+                  to="/pricing"
                   className="text-xs no-underline hover:underline"
                   style={{ color: "var(--color-primary)" }}
                 >
                   {paid ? t("dashboard.viewPlans") : t("dashboard.upgrade")}
-                </a>
+                </Link>
               </div>
             </>
           ) : (
@@ -295,8 +302,8 @@ export default function Dashboard() {
             {t("dashboard.quickActions")}
           </h3>
           <div className="space-y-2">
-            <a
-              href="/query"
+            <Link
+              to="/query"
               className="block w-full text-center px-4 py-2 text-sm rounded-md border transition-colors no-underline"
               style={{
                 borderColor: "var(--color-primary)",
@@ -304,9 +311,9 @@ export default function Dashboard() {
               }}
             >
               {t("dashboard.startQuery")}
-            </a>
-            <a
-              href="/resume"
+            </Link>
+            <Link
+              to="/resume"
               className="block w-full text-center px-4 py-2 text-sm rounded-md border transition-colors no-underline"
               style={{
                 borderColor: "var(--color-primary)",
@@ -314,9 +321,9 @@ export default function Dashboard() {
               }}
             >
               {t("dashboard.parseResume")}
-            </a>
-            <a
-              href="/jobs"
+            </Link>
+            <Link
+              to="/jobs"
               className="block w-full text-center px-4 py-2 text-sm rounded-md border transition-colors no-underline"
               style={{
                 borderColor: "var(--color-primary)",
@@ -324,7 +331,7 @@ export default function Dashboard() {
               }}
             >
               {t("dashboard.jobMatch")}
-            </a>
+            </Link>
           </div>
         </div>
       </div>

@@ -6,12 +6,10 @@
  * Uses createChatApi().ask() instead of SSE streaming.
  * Backend compatibility: matches mini-program and shared-core contract.
  */
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { ApiError, createChatApi, type DocSource as ApiDocSource } from "@looma/shared-core";
 import { createSaasApiClient } from "../../api/saasApiClient";
-import { createChatApi, type DocSource as ApiDocSource } from "@looma/shared-core";
-
-const RETRY_DELAYS = [1000, 2000, 5000];
-const MAX_RETRIES = 3;
+import { useSaasAuthStore } from "../auth/authStore";
 
 export interface DocSource {
   filename: string;
@@ -47,13 +45,31 @@ function mapSources(sources?: ApiDocSource[]): DocSource[] | undefined {
   }));
 }
 
+function errorBody(err: unknown): Record<string, any> {
+  if (err instanceof ApiError) return err.body ?? {};
+  if (err && typeof err === "object" && "body" in err) {
+    const body = (err as { body?: Record<string, any> }).body;
+    if (body && typeof body === "object") return body;
+  }
+  return {};
+}
+
+function errorStatus(err: unknown): number | undefined {
+  if (err instanceof ApiError) return err.status;
+  if (err && typeof err === "object" && "status" in err) {
+    const status = (err as { status?: number }).status;
+    return typeof status === "number" ? status : undefined;
+  }
+  return undefined;
+}
+
 export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quotaExhausted, setQuotaExhausted] = useState(false);
-  const retryCountRef = useRef(0);
-  
+  const fetchQuota = useSaasAuthStore((s) => s.fetchQuota);
+
   const apiClient = useMemo(() => createSaasApiClient(), []);
   const chatApi = useMemo(() => createChatApi(apiClient), [apiClient]);
 
@@ -63,7 +79,6 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
       setError(null);
       setQuotaExhausted(false);
       setIsLoading(true);
-      retryCountRef.current = 0;
 
       const userMsg: ChatMessage = {
         id: uid(),
@@ -94,7 +109,6 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
             })),
           });
 
-          // Update assistant message with full answer
           setMessages((prev) =>
             prev.map((m): ChatMessage =>
               m.id === assistantId
@@ -107,14 +121,17 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
             )
           );
 
+          void fetchQuota();
           setIsLoading(false);
-        } catch (err: any) {
-          const errMsg = err.message || "请求失败";
-          const errData = err.data || {};
-          
-          // Handle consent required
+        } catch (err: unknown) {
+          const status = errorStatus(err);
+          const errData = errorBody(err);
+          const errMsg =
+            (err instanceof Error && err.message) || "请求失败";
+
+          // Handle consent required (single re-attempt after consent — not a quota burn loop)
           if (
-            err.status === 403 &&
+            status === 403 &&
             errData.error === "consent_required" &&
             options.ensureAskConsent
           ) {
@@ -126,34 +143,24 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
           }
 
           // Handle quota exhausted (429)
-          if (
-            err.status === 429 &&
-            errData.error === "quota_exceeded"
-          ) {
+          if (status === 429 || errData.error === "quota_exceeded") {
             setError(errData.message || "当日配额已用尽");
             setQuotaExhausted(true);
+            void fetchQuota();
             setIsLoading(false);
             return;
           }
 
-          // Retry logic
-          if (retryCountRef.current < MAX_RETRIES) {
-            const delay = RETRY_DELAYS[retryCountRef.current] ?? 5000;
-            retryCountRef.current++;
-            setError(`请求失败，${delay / 1000}s 后重试 (${retryCountRef.current}/${MAX_RETRIES})...`);
-            await new Promise((r) => setTimeout(r, delay));
-            setError(null);
-            return attemptRequest();
-          }
-
-          setError(errMsg);
+          // Never auto-retry: each /v1/ask consumes quota server-side.
+          setError(errData.message || errMsg);
+          void fetchQuota();
           setIsLoading(false);
         }
       };
 
       await attemptRequest();
     },
-    [messages, options.mode, options.top_k, options.ensureAskConsent, chatApi]
+    [messages, options.ensureAskConsent, chatApi, fetchQuota]
   );
 
   const clear = useCallback(() => {
@@ -168,10 +175,10 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
     setQuotaExhausted(false);
   }, []);
 
-  return { 
-    messages, 
+  return {
+    messages,
     isStreaming: isLoading, // Keep same interface as useChat
-    error, 
+    error,
     quotaExhausted,
     sendStream: send, // Keep same interface as useChat
     clear,
