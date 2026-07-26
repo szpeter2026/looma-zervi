@@ -3,52 +3,54 @@
  * Stores a plain-text snapshot the user can review before matching.
  */
 import type { ParsedResume } from "@looma/shared-core";
+import { normalizeParsedResume } from "./normalizeParsedResume";
 
 export const RESUME_MATCH_TEXT_KEY = "saas-resume-match-text";
 
 export function buildResumeMatchText(resume: ParsedResume): string {
+  const r = normalizeParsedResume(resume) ?? resume;
   const parts: string[] = [];
 
-  if (resume.name) parts.push(`姓名：${resume.name}`);
-  if (resume.email) parts.push(`邮箱：${resume.email}`);
-  if (resume.phone) parts.push(`电话：${resume.phone}`);
-  if (resume.summary) parts.push(`\n摘要：\n${resume.summary}`);
+  if (r.name) parts.push(`姓名：${r.name}`);
+  if (r.email) parts.push(`邮箱：${r.email}`);
+  if (r.phone) parts.push(`电话：${r.phone}`);
+  if (r.summary) parts.push(`\n摘要：\n${r.summary}`);
 
-  if (resume.skills?.length) {
-    parts.push(`\n技能：\n${resume.skills.join("、")}`);
+  if (r.skills?.length) {
+    parts.push(`\n技能：\n${r.skills.join("、")}`);
   }
 
-  if (resume.experiences?.length) {
+  if (r.experiences?.length) {
     parts.push("\n工作经历：");
-    for (const exp of resume.experiences) {
+    for (const exp of r.experiences) {
       const period = [exp.start_date || "", exp.end_date || "至今"].filter(Boolean).join(" ~ ");
       parts.push(`- ${exp.title || ""} @ ${exp.company || ""} (${period})`);
       if (exp.description) parts.push(`  ${exp.description}`);
     }
   }
 
-  if (resume.education?.length) {
+  if (r.education?.length) {
     parts.push("\n教育背景：");
-    for (const edu of resume.education) {
+    for (const edu of r.education) {
       parts.push(
         `- ${edu.school || ""} ${edu.degree || ""} ${edu.field || ""}`.trim(),
       );
     }
   }
 
-  if (resume.projects?.length) {
+  if (r.projects?.length) {
     parts.push("\n项目：");
-    for (const p of resume.projects) {
+    for (const p of r.projects) {
       parts.push(`- ${p.name || ""}${p.description ? `：${p.description}` : ""}`);
     }
   }
 
-  if (resume.languages?.length) {
-    parts.push(`\n语言：${resume.languages.join("、")}`);
+  if (r.languages?.length) {
+    parts.push(`\n语言：${r.languages.join("、")}`);
   }
 
-  if (resume.certifications?.length) {
-    parts.push(`\n证书：${resume.certifications.join("、")}`);
+  if (r.certifications?.length) {
+    parts.push(`\n证书：${r.certifications.join("、")}`);
   }
 
   return parts.join("\n").trim();

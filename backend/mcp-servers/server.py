@@ -2,21 +2,29 @@
 """
 Looma-Zervi MCP Sidecar — MVP Temporary Adapter Layer.
 
-Provides 4 tools for internal testing:
-  - rag_query        RAG knowledge-base query with AI answer
-  - match_jobs       Resume-to-job-posting matching
-  - parse_resume     Resume text → structured JSON
-  - credit_check     Enterprise credit check via QCC (企查查) official data
+Product shape: **one Looma MCP (SSE :8999) + multiple tools**.
+QCC's nine upstream MCP streams stay behind `qcc_client` — not 1:1 mirrored.
 
-⚠  This is a **temporary** Python FastMCP adapter.  The permanent MCP
-   implementation will be Rust zervi (origin/feature/llm-provider-fallback-k6-baseline).
+Tools:
+  - rag_query         RAG knowledge-base query with AI answer
+  - match_jobs        Resume-to-job-posting matching
+  - parse_resume      Resume text → structured JSON
+  - credit_check      Aggregated enterprise credit (QCC multi-source)
+  - credit_company    Company profile only (light)
+  - credit_risk       Risk readout only
+  - credit_legal      Legal / case readout only
 
-Security: All tools require a valid looma JWT bearer token (3rd param).
+⚠  Temporary Python FastMCP adapter. Permanent path: Rust zervi.
+
+Security: tools that touch user data require a valid looma JWT (+ consent where noted).
 """
 from __future__ import annotations
 
-import json, logging, os, sys
+import logging
+import os
+import sys
 from pathlib import Path
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 BACKEND_SRC = HERE.parent / "src"
@@ -32,9 +40,22 @@ logging.basicConfig(level=logging.INFO)
 _MCP_PORT = int(os.getenv("MCP_PORT", "8999"))
 _MCP_HOST = os.getenv("MCP_HOST", "127.0.0.1")
 
+TOOL_NAMES = [
+    "rag_query",
+    "match_jobs",
+    "parse_resume",
+    "credit_check",
+    "credit_company",
+    "credit_risk",
+    "credit_legal",
+]
+
 mcp = FastMCP(
     "looma-zervi",
-    instructions="Looma-Zervi MCP Sidecar (MVP)",
+    instructions=(
+        "Looma-Zervi MCP Sidecar: one SSE entry, multiple tools. "
+        "Credit tools wrap QCC upstream via Looma qcc_client (not 1:1 QCC servers)."
+    ),
     host=_MCP_HOST,
     port=_MCP_PORT,
 )
@@ -53,6 +74,127 @@ def _auth_guard(token: str, user_id: str) -> dict:
 def _error_dict(msg: str, kind: str = "auth_error") -> dict:
     return {"error": kind, "message": msg}
 
+
+def _require_credit_consent(uid: str) -> dict | None:
+    """Return error dict if credit_query consent missing; None if ok / skipped."""
+    try:
+        from src.compliance.consent import get_consent_manager
+        cm = get_consent_manager()
+        if not cm.check(uid, "credit_query"):
+            return _error_dict(
+                "Consent required: credit_query (请先授权企业风险查询)",
+                "consent_required",
+            )
+    except Exception as e:
+        logger.warning(f"Consent check skipped (DB unavailable): {e}")
+    return None
+
+
+def _company_dict(c: Any) -> dict:
+    return {
+        "name": c.company_name,
+        "legal_person": c.legal_person,
+        "registered_capital": c.registered_capital,
+        "established_date": c.established_date,
+        "credit_code": c.credit_code,
+        "status": c.status,
+        "industry": c.industry,
+        "address": c.address,
+        "business_scope": c.business_scope,
+    }
+
+
+def _run_credit(
+    company_name: str,
+    token: str,
+    user_id: str,
+    *,
+    include_risk: bool = False,
+    include_operation: bool = False,
+    include_executives: bool = False,
+    include_ipr: bool = False,
+    include_history: bool = False,
+    include_legal_cases: bool = False,
+    include_documents: bool = False,
+    mode: str = "custom",
+) -> dict:
+    """Shared credit path: auth → consent → qcc_client → shaped response."""
+    try:
+        payload = _auth_guard(token, user_id)
+    except MCPAuthError as e:
+        return _error_dict(str(e))
+
+    denied = _require_credit_consent(payload["sub"])
+    if denied:
+        return denied
+
+    name = (company_name or "").strip()
+    if not name:
+        return _error_dict("company_name required", "bad_request")
+
+    try:
+        from src.credit.qcc_client import (
+            check_company_credit,
+            format_credit_summary,
+            QccMcpError,
+        )
+
+        report = check_company_credit(
+            company_name=name,
+            include_risk=include_risk,
+            include_operation=include_operation,
+            include_executives=include_executives,
+            include_ipr=include_ipr,
+            include_history=include_history,
+            include_legal_cases=include_legal_cases,
+            include_documents=include_documents,
+        )
+
+        if not report.company.company_name:
+            return _error_dict(f"Company not found: {name}", "not_found")
+
+        out: dict[str, Any] = {
+            "source": "qcc",
+            "mode": mode,
+            "company": _company_dict(report.company),
+        }
+
+        if include_risk:
+            out["risk"] = {
+                "level": report.risk.risk_level,
+                "summary": report.risk.summary,
+                "count": len(report.risk.risk_items),
+                "items": report.risk.risk_items[:20],
+            }
+        if include_operation:
+            out["operation"] = {
+                "summary": report.operation.summary,
+                "key_financials": report.operation.key_financials,
+                "annual_reports": report.operation.annual_reports[:5],
+            }
+        if include_executives:
+            out["executives"] = report.executives[:15]
+        if include_ipr:
+            out["ipr"] = report.ipr[:15]
+        if include_history:
+            out["history"] = report.history[:15]
+        if include_legal_cases:
+            out["legal_cases"] = report.legal_cases[:15]
+        if include_documents:
+            out["documents"] = report.documents[:10]
+
+        # Human summary when enough signals exist
+        if include_risk or include_operation or include_executives:
+            out["summary"] = format_credit_summary(report)
+
+        return out
+
+    except QccMcpError as e:
+        return _error_dict(f"QCC service error: {e}", "qcc_unavailable")
+    except ImportError as e:
+        return _error_dict(f"Credit module unavailable: {e}", "module_error")
+
+
 # ---------------------------------------------------------------------------
 # Health check resource
 # ---------------------------------------------------------------------------
@@ -63,11 +205,15 @@ def health_status() -> dict:
     return {
         "status": "ok",
         "service": "looma-mcp-sidecar",
-        "tools": ["rag_query", "match_jobs", "parse_resume", "credit_check"],
+        "entry": f"sse://{_MCP_HOST}:{_MCP_PORT}/sse",
+        "shape": "one_mcp_many_tools",
+        "tools": TOOL_NAMES,
+        "credit_tools": ["credit_check", "credit_company", "credit_risk", "credit_legal"],
     }
 
+
 # ---------------------------------------------------------------------------
-# Tools
+# Core tools
 # ---------------------------------------------------------------------------
 
 @mcp.tool(
@@ -75,19 +221,7 @@ def health_status() -> dict:
     description="RAG knowledge base query with AI answer (requires JWT token)",
 )
 def rag_query(question: str, token: str = "", user_id: str = "", n_results: int = 3) -> dict:
-    """Query the RAG knowledge base and return an AI-generated answer.
-
-    Parameters
-    ----------
-    question : str
-        Natural-language query string.
-    token : str
-        Looma JWT bearer token (required).
-    user_id : str
-        Authenticated user id (optional, cross-checked against token).
-    n_results : int
-        Number of ChromaDB chunks to retrieve (default 3).
-    """
+    """Query the RAG knowledge base and return an AI-generated answer."""
     try:
         _auth_guard(token, user_id)
     except MCPAuthError as e:
@@ -115,19 +249,7 @@ def rag_query(question: str, token: str = "", user_id: str = "", n_results: int 
     description="Match resume text against job postings (requires JWT token)",
 )
 def match_jobs(resume_text: str, token: str = "", user_id: str = "", top_k: int = 10) -> dict:
-    """Match a resume against available job postings.
-
-    Parameters
-    ----------
-    resume_text : str
-        Full text of the candidate's resume.
-    token : str
-        Looma JWT bearer token (required).
-    user_id : str
-        Authenticated user id (optional, cross-checked against token).
-    top_k : int
-        Max top matches to return from the scored list (default 10).
-    """
+    """Match a resume against available job postings."""
     try:
         _auth_guard(token, user_id)
     except MCPAuthError as e:
@@ -147,29 +269,21 @@ def match_jobs(resume_text: str, token: str = "", user_id: str = "", top_k: int 
     description="Parse resume text into structured JSON (requires JWT token + consent)",
 )
 def parse_resume(resume_text: str, token: str = "", user_id: str = "") -> dict:
-    """Parse unstructured resume text into structured JSON fields.
-
-    Parameters
-    ----------
-    resume_text : str
-        Full text of the candidate's resume.
-    token : str
-        Looma JWT bearer token (required).
-    user_id : str
-        Authenticated user id (optional, cross-checked against token).
-    """
+    """Parse unstructured resume text into structured JSON fields."""
     try:
         payload = _auth_guard(token, user_id)
     except MCPAuthError as e:
         return _error_dict(str(e))
 
-    # Consent gate: align with resume_upload consent enforcement
     uid = payload["sub"]
     try:
         from src.compliance.consent import get_consent_manager
         cm = get_consent_manager()
-        if not cm.check(uid, "resume_upload"):
-            return _error_dict("Consent required: resume_upload (请先授权简历上传)", "consent_required")
+        if not cm.check(uid, "resume_upload") and not cm.check(uid, "jobseeker_core"):
+            return _error_dict(
+                "Consent required: jobseeker_core / resume_upload",
+                "consent_required",
+            )
     except Exception as e:
         logger.warning(f"Consent check skipped (DB unavailable): {e}")
 
@@ -182,92 +296,77 @@ def parse_resume(resume_text: str, token: str = "", user_id: str = "") -> dict:
         return {"extracted": {}, "error": str(e)}
 
 
+# ---------------------------------------------------------------------------
+# Credit tools — one aggregate + a few focused (not 1:1 QCC MCP mirror)
+# ---------------------------------------------------------------------------
+
 @mcp.tool(
     name="credit_check",
-    description="Enterprise credit check via QCC (企查查) official data — company info, risk, operation, executives (requires JWT token + consent)",
+    description=(
+        "Aggregated enterprise credit via Looma→QCC: company + risk + operation + executives; "
+        "set detail=true for IPR/history/legal/documents (JWT + credit_query consent)"
+    ),
 )
 def credit_check(company_name: str, token: str = "", user_id: str = "", detail: bool = False) -> dict:
-    """Check enterprise credit using QCC (企查查) official MCP data source.
+    """Aggregated credit report. Prefer this for HR screening; use focused tools for light reads."""
+    return _run_credit(
+        company_name,
+        token,
+        user_id,
+        include_risk=True,
+        include_operation=True,
+        include_executives=True,
+        include_ipr=detail,
+        include_history=detail,
+        include_legal_cases=detail,
+        include_documents=detail,
+        mode="full" if detail else "basic",
+    )
 
-    Parameters
-    ----------
-    company_name : str
-        Full company name to look up (e.g. "深圳市腾讯计算机系统有限公司").
-    token : str
-        Looma JWT bearer token (required).
-    user_id : str
-        Authenticated user id (optional, cross-checked against token).
-    detail : bool
-        If True, fetch all categories (IPR, history, legal cases, documents).
-        Default False returns basic report (company + risk + operation + executives).
-    """
-    try:
-        payload = _auth_guard(token, user_id)
-    except MCPAuthError as e:
-        return _error_dict(str(e))
 
-    # Consent gate
-    uid = payload["sub"]
-    try:
-        from src.compliance.consent import get_consent_manager
-        cm = get_consent_manager()
-        if not cm.check(uid, "credit_query"):
-            return _error_dict("Consent required: credit_query (请先授权征信查询)", "consent_required")
-    except Exception as e:
-        logger.warning(f"Consent check skipped (DB unavailable): {e}")
+@mcp.tool(
+    name="credit_company",
+    description="Company profile only (工商基本信息) via Looma→QCC (JWT + credit_query consent)",
+)
+def credit_company(company_name: str, token: str = "", user_id: str = "") -> dict:
+    """Light lookup: company registration profile without risk/legal pulls."""
+    return _run_credit(
+        company_name,
+        token,
+        user_id,
+        mode="company",
+    )
 
-    try:
-        from src.credit.qcc_client import (
-            check_company_credit,
-            format_credit_summary,
-            QccMcpError,
-        )
 
-        report = check_company_credit(
-            company_name=company_name,
-            include_risk=True,
-            include_operation=True,
-            include_executives=True,
-            include_ipr=detail,
-            include_history=detail,
-            include_legal_cases=detail,
-            include_documents=detail,
-        )
+@mcp.tool(
+    name="credit_risk",
+    description="Enterprise risk readout only via Looma→QCC (JWT + credit_query consent)",
+)
+def credit_risk(company_name: str, token: str = "", user_id: str = "") -> dict:
+    """Focused risk check — cheaper/faster than full credit_check when only risk is needed."""
+    return _run_credit(
+        company_name,
+        token,
+        user_id,
+        include_risk=True,
+        mode="risk",
+    )
 
-        if not report.company.company_name:
-            return _error_dict(f"Company not found: {company_name}", "not_found")
 
-        c = report.company
-        return {
-            "source": "qcc",
-            "company": {
-                "name": c.company_name,
-                "legal_person": c.legal_person,
-                "registered_capital": c.registered_capital,
-                "established_date": c.established_date,
-                "credit_code": c.credit_code,
-                "status": c.status,
-                "industry": c.industry,
-                "address": c.address,
-                "business_scope": c.business_scope,
-            },
-            "risk": {
-                "level": report.risk.risk_level,
-                "summary": report.risk.summary,
-                "count": len(report.risk.risk_items),
-                "items": report.risk.risk_items[:10],
-            },
-            "operation": {
-                "summary": report.operation.summary,
-            },
-            "executives": report.executives[:10],
-            "summary": format_credit_summary(report),
-        }
+@mcp.tool(
+    name="credit_legal",
+    description="Enterprise legal/case readout only via Looma→QCC (JWT + credit_query consent)",
+)
+def credit_legal(company_name: str, token: str = "", user_id: str = "") -> dict:
+    """Focused legal/case check for diligence without pulling full credit bundle."""
+    return _run_credit(
+        company_name,
+        token,
+        user_id,
+        include_legal_cases=True,
+        mode="legal",
+    )
 
-    except QccMcpError as e:
-        return _error_dict(f"QCC service error: {e}", "qcc_unavailable")
-    except ImportError as e:
-        return _error_dict(f"Credit module unavailable: {e}", "module_error")
 
 # ---------------------------------------------------------------------------
 # Entrypoint
@@ -279,5 +378,10 @@ if __name__ == "__main__":
         from dotenv import load_dotenv
 
         load_dotenv(env_file)
-    logger.info(f"Looma MCP Sidecar on {_MCP_HOST}:{_MCP_PORT} (SSE /sse)")
+    logger.info(
+        "Looma MCP Sidecar on %s:%s (SSE /sse) tools=%s",
+        _MCP_HOST,
+        _MCP_PORT,
+        ",".join(TOOL_NAMES),
+    )
     mcp.run(transport="sse")

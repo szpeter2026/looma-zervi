@@ -375,6 +375,7 @@ class MatchReportManager:
             "company_name": row["company_name"],
             "location": row.get("location") or "",
             "salary_range": row.get("salary_range") or "",
+            "jd_snapshot": row.get("jd_snapshot") or "",
             "overall_score": row.get("overall_score") or 0,
             "background_match": row.get("background_match") or 0,
             "skills_overlap": row.get("skills_overlap") or 0,

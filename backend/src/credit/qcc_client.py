@@ -44,10 +44,32 @@ QCC_BASE_URLS: dict[str, str] = {
     "document":      "https://agent.qcc.com/mcp/document/stream",
 }
 
-QCC_AUTH_TOKEN = os.getenv("QCC_AUTH_TOKEN", "")
-
 QCC_TIMEOUT = 30.0  # seconds per call
 QCC_MAX_RETRIES = 2
+
+
+def _resolve_auth_token() -> str:
+    """Read QCC token at call time (not import time) and normalize Bearer prefix.
+
+    Docker injects env_file only on container create/recreate; import-time
+    os.getenv() would freeze an empty token across workers.
+    """
+    raw = (os.getenv("QCC_AUTH_TOKEN") or "").strip().strip('"').strip("'")
+    if not raw:
+        try:
+            from src.config import Config
+            raw = (getattr(Config, "QCC_AUTH_TOKEN", "") or "").strip()
+        except Exception:
+            raw = ""
+    if not raw:
+        return ""
+    if raw.lower().startswith("bearer "):
+        return raw
+    return f"Bearer {raw}"
+
+
+# Back-compat alias (may be empty at import; prefer _resolve_auth_token())
+QCC_AUTH_TOKEN = os.getenv("QCC_AUTH_TOKEN", "")
 
 # ── Data types ─────────────────────────────────────────────────────────────
 
@@ -315,8 +337,13 @@ class QccMcpSession:
 class QccSessionManager:
     """Manages lazy-initialized MCP sessions for all QCC services."""
 
-    def __init__(self, auth_token: str = QCC_AUTH_TOKEN):
-        self.auth_token = auth_token
+    def __init__(self, auth_token: str | None = None):
+        self.auth_token = (auth_token if auth_token is not None else _resolve_auth_token()).strip()
+        if not self.auth_token:
+            raise QccMcpError(
+                "QCC_AUTH_TOKEN 未配置或为空。请写入 backend/.env 后 "
+                "docker compose up -d --force-recreate backend"
+            )
         self._sessions: dict[str, QccMcpSession] = {}
         self._lock = threading.Lock()
 
@@ -356,8 +383,9 @@ _session_manager: Optional[QccSessionManager] = None
 
 def _get_manager() -> QccSessionManager:
     global _session_manager
-    if _session_manager is None:
-        _session_manager = QccSessionManager()
+    token = _resolve_auth_token()
+    if _session_manager is None or _session_manager.auth_token != token:
+        _session_manager = QccSessionManager(auth_token=token)
     return _session_manager
 
 

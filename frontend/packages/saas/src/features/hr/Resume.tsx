@@ -13,6 +13,7 @@ import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
 import QuotaExhaustedModal from "../../brand/components/QuotaExhaustedModal";
 import { buildResumeMatchText, saveResumeMatchText } from "./resumeMatchBridge";
+import { normalizeParsedResume } from "./normalizeParsedResume";
 
 export default function Resume() {
   const { t } = useTranslation();
@@ -37,7 +38,7 @@ export default function Resume() {
   };
 
   const handleUpload = async (file: File) => {
-    const allowed = await ensureConsent("resume_upload");
+    const allowed = await ensureConsent("jobseeker_core");
     if (!allowed) {
       setMsg("需要授权后才能上传简历");
       return;
@@ -48,7 +49,8 @@ export default function Resume() {
     try {
       const result = await resumeApi.upload(file) as any;
       if (result.extracted) {
-        setResume(result.extracted);
+        const normalized = normalizeParsedResume(result.extracted);
+        setResume(normalized ?? result.extracted);
         setMsg("简历解析完成");
       } else if (result.error) {
         setMsg(result.error);
@@ -60,7 +62,7 @@ export default function Resume() {
       }
     } catch (err: unknown) {
       const apiErr = err instanceof ApiError ? err : null;
-      if (apiErr?.status === 422) {
+      if (apiErr?.status === 422 || apiErr?.status === 503) {
         setMsg(apiErr.body?.message || "文档解析失败，请检查文件格式或文件是否损坏");
       } else if (apiErr?.status === 400) {
         setMsg(apiErr.body?.message || "不支持的文件格式，请上传 PDF 或 Word 文件");
@@ -74,6 +76,8 @@ export default function Resume() {
         setMsg("今日简历解析配额已用尽，请明天再试或升级套餐");
       } else if (err instanceof Error && err.message === "request_timeout") {
         setMsg("请求超时，请检查网络或稍后重试");
+      } else if (apiErr?.body?.message) {
+        setMsg(String(apiErr.body.message));
       } else {
         setMsg("解析失败，请检查文件格式");
       }

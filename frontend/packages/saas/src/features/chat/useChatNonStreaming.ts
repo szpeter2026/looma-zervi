@@ -27,7 +27,6 @@ export interface ChatMessage {
 
 interface UseChatNonStreamingOptions {
   mode?: "chat" | "deepseek" | "fast";
-  top_k?: number;
   /** Pre-check / retry when backend returns consent_required */
   ensureAskConsent?: () => Promise<boolean>;
 }
@@ -101,12 +100,19 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
 
       const attemptRequest = async (): Promise<void> => {
         try {
+          const mode = options.mode ?? "chat";
+          // 对话模式带多轮；深度带少量上下文；快速不带历史以降低延迟
+          const historyLimit = mode === "chat" ? 10 : mode === "deepseek" ? 4 : 0;
           const response = await chatApi.ask({
             query,
-            session_history: messages.slice(-10).map((m) => ({
-              role: m.role,
-              content: m.content,
-            })),
+            mode,
+            session_history:
+              historyLimit > 0
+                ? messages.slice(-historyLimit).map((m) => ({
+                    role: m.role,
+                    content: m.content,
+                  }))
+                : undefined,
           });
 
           setMessages((prev) =>
@@ -160,7 +166,7 @@ export function useChatNonStreaming(options: UseChatNonStreamingOptions = {}) {
 
       await attemptRequest();
     },
-    [messages, options.ensureAskConsent, chatApi, fetchQuota]
+    [messages, options.mode, options.ensureAskConsent, chatApi, fetchQuota]
   );
 
   const clear = useCallback(() => {

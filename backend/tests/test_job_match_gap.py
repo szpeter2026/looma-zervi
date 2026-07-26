@@ -49,8 +49,29 @@ def test_missing_skills_derived_from_gap():
     assert out["missing_skills"] == ["K8s"]
 
 
+def test_improvement_plan_derived_when_llm_omits():
+    out = _sanitize_scores(
+        {
+            "overall": 70,
+            "summary": "技能接近，缺分布式经验",
+            "gap_analysis": [
+                {
+                    "skill": "分布式事务",
+                    "suggestion": "完成 Saga Demo",
+                    "estimated_effort": "2周",
+                    "priority": "high",
+                }
+            ],
+            "improvement_plan": "",
+        }
+    )
+    assert "提升路径" in out["improvement_plan"]
+    assert "分布式事务" in out["improvement_plan"]
+    assert "Saga" in out["improvement_plan"]
+
+
 def test_default_score_has_gap_defaults():
     d = _default_score()
     assert d["missing_skills"] == []
     assert d["gap_analysis"] == []
-    assert d["improvement_plan"] == ""
+    assert "提升路径" in d["improvement_plan"]

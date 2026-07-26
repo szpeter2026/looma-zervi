@@ -6,6 +6,7 @@
  * Updated to use non-streaming API for contract consistency.
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useConsent } from "../../compliance/useConsent";
@@ -20,6 +21,7 @@ function truncate(s: string, maxLen: number): string {
 
 export default function Chat() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<ChatMode>("chat");
   const api = useMemo(() => createSaasApiClient(), []);
@@ -34,6 +36,7 @@ export default function Chat() {
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const autoSentRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -47,6 +50,27 @@ export default function Chat() {
     setInput("");
     sendStream(q);
   }, [input, isStreaming, sendStream, ensureConsent]);
+
+  // Dashboard quick-ask: /query?q=... → auto-send once
+  useEffect(() => {
+    const q = (searchParams.get("q") || "").trim();
+    if (!q || autoSentRef.current || isStreaming) return;
+    autoSentRef.current = true;
+    setInput(q);
+    void (async () => {
+      const allowed = await ensureConsent("ask_rag");
+      if (!allowed) {
+        autoSentRef.current = false;
+        return;
+      }
+      setInput("");
+      sendStream(q);
+      // Clear query param so refresh does not re-send
+      const next = new URLSearchParams(searchParams);
+      next.delete("q");
+      setSearchParams(next, { replace: true });
+    })();
+  }, [searchParams, setSearchParams, ensureConsent, sendStream, isStreaming]);
 
   return (
     <>
@@ -64,17 +88,25 @@ export default function Chat() {
             className="flex rounded-md overflow-hidden border text-xs"
             style={{ borderColor: "#e0e0e0" }}
           >
-            {(["chat", "deepseek", "fast"] as ChatMode[]).map((m) => (
+            {(
+              [
+                { id: "chat", label: "对话", tip: "多轮上下文，适合追问" },
+                { id: "deepseek", label: "深度", tip: "更多检索 + 较长推理" },
+                { id: "fast", label: "快速", tip: "少检索 + 低温度短答" },
+              ] as const
+            ).map((m) => (
               <button
-                key={m}
-                onClick={() => setMode(m)}
+                key={m.id}
+                type="button"
+                title={m.tip}
+                onClick={() => setMode(m.id)}
                 className="px-3 py-1.5 border-none cursor-pointer transition-colors"
                 style={{
-                  backgroundColor: mode === m ? "var(--color-primary)" : "transparent",
-                  color: mode === m ? "#fff" : "var(--color-text-secondary)",
+                  backgroundColor: mode === m.id ? "var(--color-primary)" : "transparent",
+                  color: mode === m.id ? "#fff" : "var(--color-text-secondary)",
                 }}
               >
-                {m === "chat" ? "对话" : m === "deepseek" ? "深度" : "快速"}
+                {m.label}
               </button>
             ))}
           </div>

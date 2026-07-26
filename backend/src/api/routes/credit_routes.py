@@ -148,7 +148,7 @@ def _build_qcc_credit_response(report: QccCreditReport) -> dict:
 
 @credit_bp.route("/analyze", methods=["POST"])
 @require_auth
-@require_consent("credit_analyze")
+@require_consent("credit_query")
 def analyze():
     """Parse raw credit / company info text via LLM.
 

@@ -17,12 +17,21 @@ def run_document_analysis(doc_type: str, text: str) -> dict | None:
     """
     prompts = {
         "resume": (
-            "你是一个简历解析专家。从以下文本中提取结构化信息，输出 JSON 格式："
-            "{\"name\": \"...\", \"email\": \"...\", \"phone\": \"...\", "
-            "\"education\": [{\"school\": \"...\", \"degree\": \"...\", \"year\": \"...\"}], "
-            "\"experience\": [{\"company\": \"...\", \"role\": \"...\", \"duration\": \"...\", \"description\": \"...\"}], "
-            "\"skills\": [\"...\"], \"summary\": \"...\"}"
-            "\n\n简历文本：\n{text}"
+            "你是一个简历解析专家。从以下文本中提取结构化信息，只输出 JSON，不要解释。\n"
+            "字段必须使用以下键名（与前端一致）：\n"
+            "{\n"
+            '  "name": "...",\n'
+            '  "email": "...",\n'
+            '  "phone": "...",\n'
+            '  "summary": "...",\n'
+            '  "skills": ["..."],\n'
+            '  "experiences": [{"company":"...","title":"...","start_date":"...","end_date":"...","description":"..."}],\n'
+            '  "education": [{"school":"...","degree":"...","field":"...","start_date":"...","end_date":"..."}],\n'
+            '  "projects": [{"name":"...","description":"..."}],\n'
+            '  "languages": ["..."],\n'
+            '  "certifications": ["..."]\n'
+            "}\n"
+            "\n简历文本：\n{text}"
         ),
         "credit": (
             "你是一个征信分析专家。从以下信用报告文本中提取关键信息，输出 JSON 格式："
@@ -56,7 +65,8 @@ def run_document_analysis(doc_type: str, text: str) -> dict | None:
         logger.warning(f"Unknown doc_type: {doc_type}")
         return None
 
-    prompt = prompt_template.format(text=text[:4000])
+    # Do not use str.format — prompt templates embed JSON braces like {"name": ...}
+    prompt = prompt_template.replace("{text}", text[:4000], 1)
 
     try:
         from src.agents.central_brain import _call_llm
@@ -69,6 +79,11 @@ def run_document_analysis(doc_type: str, text: str) -> dict | None:
             m = re.search(r"```(?:json)?\s*([\s\S]*?)```", resp)
             if m:
                 resp = m.group(1).strip()
+        # Tolerate leading/trailing prose around JSON
+        if not resp.startswith("{"):
+            m = re.search(r"\{[\s\S]*\}", resp)
+            if m:
+                resp = m.group(0)
         return json.loads(resp)
     except Exception as e:
         logger.error(f"Document analysis failed for {doc_type}: {e}")

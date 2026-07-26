@@ -18,6 +18,7 @@ export interface MatchReportItem {
   company_name: string;
   location: string;
   salary_range: string;
+  jd_snapshot: string;
   overall_score: number;
   background_match: number;
   skills_overlap: number;

@@ -113,6 +113,8 @@ payment.v1.json      「我付了什么档」— 商业，不替代信任
 
 训练数据来自**已标注的记忆体**，不是来自竞品公开数据或纯图拓扑。
 
+> **工程可替换性（职位匹配 ≠ Trust v2，但同构端口）：** 见 [INFERENCE_MATCH_SCORER_REPLACEABILITY.md](./INFERENCE_MATCH_SCORER_REPLACEABILITY.md)。Trust 评分端口登记为该文件 M4，不阻塞匹配 M0–M3。
+
 ---
 
 ## 7. 工程 P0（认可修正后的优先序）

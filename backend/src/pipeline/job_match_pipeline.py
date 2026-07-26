@@ -60,7 +60,8 @@ def _score_resume_vs_job(resume_text: str, job_info: dict) -> dict:
         "- gap_analysis: 技能差距分析数组（0-5项），每项含 "
         "skill / current_level / required_level / gap / suggestion / "
         "estimated_effort / priority(high|medium|low)\n"
-        "- improvement_plan: 针对该职位的个性化提升计划（Markdown 短文，可为空字符串）\n\n"
+        "- improvement_plan: 必填。针对该职位的个性化提升计划 Markdown 短文"
+        "（至少 3 条可执行步骤，结合 gap_analysis；禁止空字符串）\n\n"
         "输出格式：\n"
         "{\n"
         '  "overall": 85,\n'
@@ -83,11 +84,15 @@ def _score_resume_vs_job(resume_text: str, job_info: dict) -> dict:
         '"suggestion":"学习2PC/TCC/Saga并完成Demo",'
         '"estimated_effort":"2-4周","priority":"high"}\n'
         "  ],\n"
-        '  "improvement_plan": "### 提升路径\\n1. ..."\n'
+        '  "improvement_plan": "### 提升路径\\n'
+        '1. **分布式事务**（高优先，2-4周）：完成 TCC/Saga Demo 并写入简历\\n'
+        '2. **系统设计**（中优先）：补齐高并发案例\\n'
+        '3. **作品沉淀**：用项目量化成果准备面试故事"\n'
         "}\n\n"
+        "重要：JSON 必须包含非空的 improvement_plan 字段。\n\n"
         f"【简历内容】\n{resume_text[:4000]}\n\n"
         f"【职位描述】\n{jd_text[:4000]}\n\n"
-        "请输出 JSON："
+        "请输出完整 JSON（含 improvement_plan）："
     )
 
     try:
@@ -134,6 +139,44 @@ def _sanitize_gap_item(item: object) -> dict | None:
     }
 
 
+_PRIORITY_LABEL = {"high": "高", "medium": "中", "low": "低"}
+
+
+def _derive_improvement_plan(
+    gap_analysis: list[dict],
+    missing_skills: list[str],
+    summary: str,
+) -> str:
+    """Build a Markdown plan when LLM omits or truncates improvement_plan."""
+    lines = ["### 提升路径"]
+    if summary:
+        lines.append(f"> {summary}")
+        lines.append("")
+
+    ordered = sorted(
+        gap_analysis,
+        key=lambda g: {"high": 0, "medium": 1, "low": 2}.get(g.get("priority", "medium"), 1),
+    )
+    if ordered:
+        for i, g in enumerate(ordered[:5], 1):
+            skill = g.get("skill") or "关键能力"
+            pri = _PRIORITY_LABEL.get(g.get("priority", "medium"), "中")
+            effort = g.get("estimated_effort") or "按周推进"
+            suggestion = g.get("suggestion") or g.get("gap") or "针对岗位要求补齐实践与作品"
+            lines.append(f"{i}. **{skill}**（优先：{pri}，周期：{effort}）：{suggestion}")
+    elif missing_skills:
+        for i, skill in enumerate(missing_skills[:5], 1):
+            lines.append(f"{i}. **{skill}**：对照 JD 补齐学习路径，并形成可展示的项目/案例。")
+    else:
+        lines.append("1. 对照职位要求梳理技能差距，优先补齐核心硬技能。")
+        lines.append("2. 用 1–2 个可量化项目沉淀作品，写入简历与面试故事。")
+        lines.append("3. 针对目标公司准备岗位相关问题与案例表达。")
+
+    lines.append("")
+    lines.append("完成上述步骤后，可再次匹配该职位以复查提升效果。")
+    return "\n".join(lines).strip()[:2000]
+
+
 def _sanitize_scores(raw: dict) -> dict:
     """Clamp all score fields to valid ranges and fill in defaults."""
     def _clamp(val, lo, hi, default=None):
@@ -161,9 +204,14 @@ def _sanitize_scores(raw: dict) -> dict:
     if not missing_skills and gap_analysis:
         missing_skills = [g["skill"] for g in gap_analysis]
 
+    summary = raw.get("summary", "") if isinstance(raw.get("summary"), str) else ""
+
     improvement_plan = raw.get("improvement_plan")
     if not isinstance(improvement_plan, str):
         improvement_plan = ""
+    improvement_plan = improvement_plan.strip()
+    if not improvement_plan:
+        improvement_plan = _derive_improvement_plan(gap_analysis, missing_skills, summary)
 
     return {
         "overall":                _clamp(raw.get("overall"), 0, 100, 50),
@@ -176,17 +224,18 @@ def _sanitize_scores(raw: dict) -> dict:
         "salary_match":            _clamp(raw.get("salary_match"), 0, 10, 5),
         "location_match":          _clamp(raw.get("location_match"), 0, 10, 5),
         "culture_workload_match":  _clamp(raw.get("culture_workload_match"), 0, 10, 5),
-        "summary":                 raw.get("summary", "") if isinstance(raw.get("summary"), str) else "",
+        "summary":                 summary,
         "keywords":                [str(k) for k in keywords if str(k).strip()][:8],
         "fit_bullets":             [str(b) for b in fit_bullets if str(b).strip()][:5],
         "missing_skills":          missing_skills,
         "gap_analysis":            gap_analysis,
-        "improvement_plan":        improvement_plan.strip()[:2000],
+        "improvement_plan":        improvement_plan[:2000],
     }
 
 
 def _default_score() -> dict:
     """Fallback score when LLM fails."""
+    summary = "AI 评分暂不可用"
     return {
         "overall": 50,
         "background_match": 5,
@@ -198,12 +247,12 @@ def _default_score() -> dict:
         "salary_match": 5,
         "location_match": 5,
         "culture_workload_match": 5,
-        "summary": "AI 评分暂不可用",
+        "summary": summary,
         "keywords": [],
         "fit_bullets": [],
         "missing_skills": [],
         "gap_analysis": [],
-        "improvement_plan": "",
+        "improvement_plan": _derive_improvement_plan([], [], summary),
     }
 
 
@@ -250,12 +299,15 @@ def run_job_match_pipeline(
         score = _score_resume_vs_job(resume_text, job)
 
         # Build the match result combining job info + scores + derived display fields
+        jd_text = str(job.get("description") or "")[:4000]
         match = {
             "job_id": job.get("id", ""),
             "title": job.get("title", ""),
             "company": job.get("company", ""),
             "location": job.get("location", ""),
             "salary_range": job.get("salary_range", ""),
+            "description": jd_text,
+            "jd_snapshot": jd_text,
             # Multi-dimension scores (from Tatha's model)
             "scores": score,
             # Legacy display fields (backward compatible with frontend)

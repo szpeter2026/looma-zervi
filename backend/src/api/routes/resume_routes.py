@@ -20,7 +20,14 @@ from flask import Blueprint, request, jsonify, current_app, g
 
 from src.api.auth.decorators import require_auth, optional_auth
 from src.compliance.consent import require_consent
-from src.utils.quota import consume_with_boost, QUOTA_LIMITS, RESOURCE_RESUME_PARSE, get_remaining, build_upgrade_hint
+from src.utils.quota import (
+    consume_with_boost,
+    refund_consumption,
+    QUOTA_LIMITS,
+    RESOURCE_RESUME_PARSE,
+    get_remaining,
+    build_upgrade_hint,
+)
 
 logger = logging.getLogger("looma.resume")
 resume_bp = Blueprint("resume", __name__)
@@ -77,7 +84,7 @@ def _quota_exceeded_response(tier: str):
 
 @resume_bp.route("/parse", methods=["POST"])
 @optional_auth
-@require_consent("resume_parse")
+@require_consent("jobseeker_core")
 def parse_resume():
     """Parse resume text to structured data."""
     data = request.get_json() or {}
@@ -110,7 +117,7 @@ def parse_resume():
 
 @resume_bp.route("/upload", methods=["POST"])
 @optional_auth
-@require_consent("resume_upload")
+@require_consent("jobseeker_core")
 def upload_resume():
     """Upload resume file (PDF/DOCX/Word) for AI parsing.
 
@@ -160,9 +167,20 @@ def upload_resume():
         )
     except Exception as e:
         logger.error(f"MarkItDown conversion failed for {filename}: {e}")
-        return jsonify(error="convert_failed", message=f"文档解析失败（{filename} 格式未识别或文件损坏）"), 422
+        refund_consumption(user_id, RESOURCE_RESUME_PARSE, quota_result.get("source", "daily"))
+        err_text = str(e)
+        if "dependencies needed to read" in err_text or "MissingDependency" in err_text:
+            return jsonify(
+                error="convert_failed",
+                message="服务端缺少文档解析依赖，请联系管理员（PDF/DOCX 转换组件未安装）",
+            ), 503
+        return jsonify(
+            error="convert_failed",
+            message=f"文档解析失败（{filename} 格式未识别或文件损坏）",
+        ), 422
 
     if not markdown or not markdown.strip():
+        refund_consumption(user_id, RESOURCE_RESUME_PARSE, quota_result.get("source", "daily"))
         return jsonify(error="convert_failed", message="文档内容为空，无法提取文字"), 422
 
     # Step 2: LLM structured extraction
@@ -217,7 +235,7 @@ def upload_resume():
 
 @resume_bp.route("/improve", methods=["POST"])
 @optional_auth
-@require_consent("resume_parse")
+@require_consent("jobseeker_core")
 def improve_resume():
     """Generate AI-powered improvement suggestions for a resume.
 

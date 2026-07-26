@@ -69,6 +69,7 @@ interface ParsedJobData {
   salary_range?: string;
   description?: string;
   requirements?: string[];
+  responsibilities?: string[];
   tags?: string[];
 }
 
@@ -110,11 +111,13 @@ export default function Jobs() {
   // Credit check state (Tripod leg 3)
   const [creditResults, setCreditResults] = useState<Record<string, CreditAnalysis | null>>({});
   const [creditExtended, setCreditExtended] = useState<Record<string, CreditExtended | null>>({});
+  const [creditSources, setCreditSources] = useState<Record<string, string>>({});
   const [creditLoading, setCreditLoading] = useState<Record<string, boolean>>({});
 
   // Upload state
   const [uploading, setUploading] = useState(false);
   const [parsedJob, setParsedJob] = useState<ParsedJobData | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jdText, setJdText] = useState("");
   const [parsing, setParsing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -158,6 +161,7 @@ export default function Jobs() {
       const result = await jobsApi.upload(file) as any;
       if (result.parsed) {
         setParsedJob(result.parsed);
+        if (result.job_id) setActiveJobId(result.job_id);
         setMsg(t("jobs.uploadDone"));
         loadJobs(); // Refresh job list
         // Auto-fill JD text for preview
@@ -201,6 +205,7 @@ export default function Jobs() {
       const result = await jobsApi.parse(jdText) as any;
       if (result.parsed) {
         setParsedJob(result.parsed);
+        if (result.job_id) setActiveJobId(result.job_id);
         setMsg(t("jobs.parseTextDone"));
         loadJobs();
       } else {
@@ -220,27 +225,73 @@ export default function Jobs() {
 
   // ── Job Match ──
 
+  const buildAdhocJobDescription = (): string => {
+    if (jdText.trim()) return jdText.trim();
+    if (!parsedJob) return "";
+    const parts: string[] = [];
+    if (parsedJob.title) parts.push(`职位：${parsedJob.title}`);
+    if (parsedJob.company) parts.push(`公司：${parsedJob.company}`);
+    if (parsedJob.location) parts.push(`地点：${parsedJob.location}`);
+    if (parsedJob.salary_range) parts.push(`薪资：${parsedJob.salary_range}`);
+    if (parsedJob.description) parts.push(parsedJob.description);
+    if (parsedJob.requirements?.length) {
+      parts.push(`要求：\n${parsedJob.requirements.map((r) => `- ${r}`).join("\n")}`);
+    }
+    if (parsedJob.responsibilities?.length) {
+      parts.push(`职责：\n${parsedJob.responsibilities.map((r) => `- ${r}`).join("\n")}`);
+    }
+    return parts.join("\n").trim();
+  };
+
   const handleMatch = async (jobId?: string) => {
     if (!resumeText.trim()) {
       setMsg(t("jobs.emptyResume"));
       return;
     }
-    const allowed = await ensureConsent("job_match");
+    const allowed = await ensureConsent("jobseeker_core");
     if (!allowed) {
       setMsg(t("jobs.consentRequired"));
       return;
     }
     setMatching(true);
     setMsg(null);
+    setMsgOk(false);
     try {
-      const payload: any = { resume_text: resumeText };
-      if (jobId) payload.job_id = jobId;
+      const payload: {
+        resume_text: string;
+        job_id?: string;
+        job_description?: string;
+        job_title?: string;
+        job_company?: string;
+        job_location?: string;
+        job_salary_range?: string;
+      } = { resume_text: resumeText };
+
+      const targetJobId = jobId || activeJobId || undefined;
+      if (targetJobId) {
+        payload.job_id = targetJobId;
+      } else {
+        const adhoc = buildAdhocJobDescription();
+        if (adhoc) {
+          payload.job_description = adhoc;
+          if (parsedJob?.title) payload.job_title = parsedJob.title;
+          if (parsedJob?.company) payload.job_company = parsedJob.company;
+          if (parsedJob?.location) payload.job_location = parsedJob.location;
+          if (parsedJob?.salary_range) payload.job_salary_range = parsedJob.salary_range;
+        }
+      }
+
       const res = await jobsApi.match(payload) as any;
-      setMatches(res.matches);
+      setMatches(res.matches ?? []);
+      if (!res.matches?.length) {
+        setMsg(t("jobs.matchEmpty"));
+      }
     } catch (err) {
       if (isQuotaExceeded(err)) {
         setQuotaExhausted(true);
         setMsg(null);
+      } else if (err instanceof ApiError && err.body?.message) {
+        setMsg(String(err.body.message));
       } else {
         setMsg(t("jobs.matchFailed"));
       }
@@ -251,7 +302,7 @@ export default function Jobs() {
 
   const handleSaveReport = async () => {
     if (!matches?.length) return;
-    const allowed = await ensureConsent("report_generate");
+    const allowed = await ensureConsent("jobseeker_core");
     if (!allowed) {
       setMsgOk(false);
       setMsg(t("jobs.reportConsentRequired"));
@@ -260,9 +311,25 @@ export default function Jobs() {
     setSavingReport(true);
     setMsg(null);
     try {
+      // Attach in-session credit results so report items persist credit_snapshot
+      const matchesWithCredit = matches.map((m) => {
+        const company = m.company || "";
+        const credit = company ? creditResults[company] : null;
+        const extended = company ? creditExtended[company] : null;
+        if (!credit && !extended) return m;
+        return {
+          ...m,
+          credit_snapshot: {
+            extracted: credit ?? null,
+            extended: extended ?? null,
+            checked_at: new Date().toISOString(),
+            source: creditSources[company] || "session",
+          },
+        };
+      });
       const report = await matchReportsApi.create({
         resume_text: resumeText,
-        matches,
+        matches: matchesWithCredit,
       });
       setMsgOk(true);
       setMsg(t("jobs.reportSaved"));
@@ -271,6 +338,8 @@ export default function Jobs() {
       setMsgOk(false);
       if (err instanceof ApiError && err.status === 403) {
         setMsg(t("jobs.reportConsentRequired"));
+      } else if (err instanceof ApiError && err.body?.message) {
+        setMsg(String(err.body.message));
       } else {
         setMsg(t("jobs.reportSaveFailed"));
       }
@@ -294,6 +363,9 @@ export default function Jobs() {
       setCreditResults((prev) => ({ ...prev, [companyName]: result.extracted }));
       if (result.extended) {
         setCreditExtended((prev) => ({ ...prev, [companyName]: result.extended }));
+      }
+      if (result.source) {
+        setCreditSources((prev) => ({ ...prev, [companyName]: String(result.source) }));
       }
     } catch {
       setCreditResults((prev) => ({
@@ -1180,7 +1252,12 @@ export default function Jobs() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => setTab("browse")}
+                  onClick={() => {
+                    setTab("browse");
+                    if (resumeText.trim()) {
+                      void handleMatch(activeJobId || undefined);
+                    }
+                  }}
                   className="px-3 py-1.5 rounded-lg text-sm text-white border-none cursor-pointer"
                   style={{ backgroundColor: "var(--color-primary)" }}
                 >

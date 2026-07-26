@@ -65,6 +65,7 @@ export type {
 export type {
   ChatMessage,
   DocSource,
+  AskMode,
   AskRequest,
   AskResponse,
   StreamCallbacks,
@@ -338,6 +339,7 @@ export {
 
 export type {
   ConsentScope,
+  PrimaryConsentScope,
   ConsentRecord,
   ConsentStatusResponse,
   ConsentGrantResponse,
@@ -348,6 +350,10 @@ export type {
 export {
   CONSENT_SCOPE_LABELS,
   CONSENT_SCOPE_DESCRIPTIONS,
+  CONSENT_PRIMARY_TIERS,
+  CONSENT_PACKAGES,
+  CONSENT_SCOPE_TO_PACKAGE,
+  resolveConsentPromptScope,
 } from "./constants/compliance";
 
 export {

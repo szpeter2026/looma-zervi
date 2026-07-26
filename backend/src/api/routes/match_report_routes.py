@@ -30,7 +30,7 @@ def _manager() -> MatchReportManager:
 @match_report_bp.route("", methods=["POST"])
 @match_report_bp.route("/", methods=["POST"])
 @require_auth
-@require_consent("report_generate")
+@require_consent("jobseeker_core")
 def create_match_report():
     body = request.get_json(silent=True) or {}
     matches = body.get("matches")

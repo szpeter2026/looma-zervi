@@ -46,6 +46,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user, quota, isAuthenticated, fetchQuota } = useSaasAuthStore();
   const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [healthLoading, setHealthLoading] = useState(true);
+  const [quickQuery, setQuickQuery] = useState("");
 
   const featureCards = useMemo(
     () => [
@@ -61,23 +63,26 @@ export default function Dashboard() {
   }, [isAuthenticated, fetchQuota]);
 
   useEffect(() => {
+    // Prefer same-origin absolute `/health` (Vite proxy). If VITE_API_BASE is set,
+    // use that host — never resolve relative to `/tspace/` base.
     const base = API_BASE ? API_BASE.replace(/\/$/, "") : "";
-    // 本地开发无后端时不发起请求，避免控制台 500 错误
-    if (import.meta.env.DEV && !API_BASE && !import.meta.env.VITE_API_BASE) {
-      return;
-    }
-    fetch(`${base}/health`)
-      .then((r) => {
-        if (!r.ok) {
-          // 静默处理服务不可用
-          return null;
-        }
+    const healthUrl = base ? `${base}/health` : "/health";
+    setHealthLoading(true);
+    fetch(healthUrl)
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const ct = r.headers.get("content-type") || "";
+        if (!ct.includes("application/json")) return null;
         return r.json();
       })
-      .then((data) => data && setHealth(normalizeHealth(data)))
+      .then((data) => {
+        if (data) setHealth(normalizeHealth(data));
+        else setHealth({ status: "degraded", version: "v1", uptime_seconds: 0 });
+      })
       .catch(() => {
-        // 网络错误静默处理
-      });
+        setHealth({ status: "degraded", version: "v1", uptime_seconds: 0 });
+      })
+      .finally(() => setHealthLoading(false));
   }, []);
 
   const askRecord = quota?.records?.find((r) => r.resource === "ask");
@@ -86,16 +91,22 @@ export default function Dashboard() {
     ? Math.round((askRecord.used / askRecord.daily_limit) * 100)
     : 0;
 
-  const handleQuickQuery = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      const q = (e.target as HTMLInputElement).value.trim();
-      if (q) navigate(`/query?q=${encodeURIComponent(q)}`);
-    }
+  const submitQuickQuery = () => {
+    const q = quickQuery.trim();
+    if (!q) return;
+    navigate(`/query?q=${encodeURIComponent(q)}`);
   };
 
-  const healthLabel = health?.status === "healthy"
-    ? t("dashboard.systemHealthy")
-    : t("dashboard.systemDegraded");
+  const handleQuickQuery = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") submitQuickQuery();
+  };
+
+  const healthLabel = healthLoading
+    ? t("dashboard.systemChecking")
+    : health?.status === "healthy"
+      ? t("dashboard.systemHealthy")
+      : t("dashboard.systemDegraded");
+  const healthOk = !healthLoading && health?.status === "healthy";
 
   if (!isAuthenticated) {
     return (
@@ -148,18 +159,25 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {health && (
+        {(health || healthLoading) && (
           <div className="flex items-center justify-center gap-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
             <span
               className="inline-block w-2 h-2 rounded-full"
               style={{
-                backgroundColor:
-                  health.status === "healthy" ? "var(--color-success)" : "var(--color-warning)",
+                backgroundColor: healthOk
+                  ? "var(--color-success)"
+                  : healthLoading
+                    ? "var(--color-text-muted)"
+                    : "var(--color-warning)",
               }}
             />
             <span>{t("dashboard.systemLabel")} {healthLabel}</span>
-            <span>·</span>
-            <span>v{health.version}</span>
+            {health?.version && (
+              <>
+                <span>·</span>
+                <span>v{health.version}</span>
+              </>
+            )}
           </div>
         )}
 
@@ -194,15 +212,21 @@ export default function Dashboard() {
             <span
               className="inline-block w-2.5 h-2.5 rounded-full"
               style={{
-                backgroundColor:
-                  health?.status === "healthy" ? "var(--color-success)" : "var(--color-warning)",
+                backgroundColor: healthLoading
+                  ? "var(--color-text-muted)"
+                  : healthOk
+                    ? "var(--color-success)"
+                    : "var(--color-warning)",
               }}
             />
             <span
               className="font-medium text-sm"
               style={{
-                color:
-                  health?.status === "healthy" ? "var(--color-success)" : "var(--color-warning)",
+                color: healthLoading
+                  ? "var(--color-text-muted)"
+                  : healthOk
+                    ? "var(--color-success)"
+                    : "var(--color-warning)",
               }}
             >
               {healthLabel}
@@ -349,6 +373,8 @@ export default function Dashboard() {
         <div className="flex gap-2">
           <input
             type="text"
+            value={quickQuery}
+            onChange={(e) => setQuickQuery(e.target.value)}
             placeholder={t("dashboard.quickQueryPlaceholder")}
             className="flex-1 px-4 py-2.5 text-sm rounded-lg border outline-none transition-colors"
             style={{
@@ -364,7 +390,10 @@ export default function Dashboard() {
             }}
           />
           <button
-            className="px-5 py-2.5 text-sm rounded-lg text-white cursor-pointer border-none transition-colors"
+            type="button"
+            onClick={submitQuickQuery}
+            disabled={!quickQuery.trim()}
+            className="px-5 py-2.5 text-sm rounded-lg text-white cursor-pointer border-none transition-colors disabled:opacity-50"
             style={{ backgroundColor: "var(--color-primary)" }}
           >
             {t("dashboard.ask")}

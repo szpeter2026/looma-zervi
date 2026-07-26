@@ -39,7 +39,8 @@ services:
       - ../backend:/app
       - backend-data:/app/data
       - chroma-data:/app/chroma_data
-      - poetry-data:/app/poetry_data
+      # 本地诗词向量库（宿主机 data/poetry_full → 容器内 /app/poetry_data）
+      - ../data/poetry_full:/app/poetry_data:ro
       - ../data/chroma_models:/root/.cache/chroma/onnx_models
     depends_on:
       - redis
@@ -81,7 +82,6 @@ services:
 volumes:
   backend-data:
   chroma-data:
-  poetry-data:
   redis-data:
 
 networks:

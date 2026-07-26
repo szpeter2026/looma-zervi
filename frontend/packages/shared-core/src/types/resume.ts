@@ -71,6 +71,9 @@ export interface JobMatchItem {
   company: string;
   location: string;
   salary_range: string;
+  /** JD text used for scoring (persisted as jd_snapshot on save) */
+  description?: string;
+  jd_snapshot?: string;
   /** Multi-dimension scores (来自 Tatha 评分引擎 11 维度) */
   scores: JobMatchScore;
   /** 一句话匹配摘要 */
@@ -80,6 +83,8 @@ export interface JobMatchItem {
   fit_bullets?: string[];
   gap_analysis?: GapItem[];
   improvement_plan?: string;
+  /** Attached at report-save time from in-session credit check */
+  credit_snapshot?: Record<string, unknown>;
 }
 
 export interface JobMatchRequest {

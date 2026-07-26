@@ -25,6 +25,7 @@ def create_app(env="development"):
     from src.api.routes.jobs_routes import jobs_bp
     from src.api.routes.resume_routes import resume_bp
     from src.api.routes.reports_routes import reports_bp
+    from src.api.routes.match_report_routes import match_report_bp
     from src.api.routes.referral_routes import referral_bp
     from src.api.routes.credit_routes import credit_bp
     from src.api.routes.quota_routes import quota_bp
@@ -33,6 +34,7 @@ def create_app(env="development"):
     from src.api.routes.narrative_routes import narrative_bp
     from src.api.routes.compliance_routes import compliance_bp
     from src.api.routes.analytics_routes import analytics_bp
+    from src.api.routes.admin_routes import admin_bp
     from src.api.routes.social_routes import social_bp  # 六度分隔社交图谱
     from src.api.routes.trust_routes import trust_bp    # Trust Agent 信任证明
 
@@ -44,6 +46,7 @@ def create_app(env="development"):
     app.register_blueprint(jobs_bp, url_prefix="/v1/jobs")
     app.register_blueprint(resume_bp, url_prefix="/v1/resume")
     app.register_blueprint(reports_bp, url_prefix="/v1/reports")
+    app.register_blueprint(match_report_bp, url_prefix="/v1/match-reports")
     app.register_blueprint(referral_bp, url_prefix="/v1/referral")
     app.register_blueprint(credit_bp, url_prefix="/v1/credit")
     app.register_blueprint(compliance_bp, url_prefix="/v1/compliance")
@@ -52,13 +55,37 @@ def create_app(env="development"):
     app.register_blueprint(poetry_bp, url_prefix="/v1/poetry")
     app.register_blueprint(narrative_bp, url_prefix="/v1/narrative")
     app.register_blueprint(analytics_bp, url_prefix="/v1")
+    app.register_blueprint(admin_bp, url_prefix="/v1")  # /v1/admin/*
     app.register_blueprint(social_bp, url_prefix="/v1/social")  # 六度分隔社交图谱
     app.register_blueprint(trust_bp, url_prefix="/v1/trust")    # Trust Agent 信任证明
 
     # --- Health check ---
     @app.route("/health", methods=["GET"])
     def health():
-        return jsonify(status="ok", service="looma-backend")
+        import os
+
+        llm_order = (
+            app.config.get("LLM_PROVIDER_ORDER")
+            or os.getenv("LLM_PROVIDER_ORDER")
+            or "deepseek"
+        )
+        primary_llm = str(llm_order).split(",")[0].strip().lower() or "unknown"
+        has_deepseek = bool((app.config.get("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or "").strip())
+        has_openai = bool((app.config.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip())
+        llm_ready = (
+            (primary_llm == "deepseek" and has_deepseek)
+            or (primary_llm == "openai" and has_openai)
+            or primary_llm == "ollama"
+            or has_deepseek
+            or has_openai
+        )
+        return jsonify(
+            status="ok" if llm_ready else "degraded",
+            service="looma-backend",
+            version="v1",
+            llm_provider=primary_llm,
+            llm_configured=llm_ready,
+        )
 
     # --- Root: API info (so visiting localhost:5200 in browser is helpful) ---
     @app.route("/", methods=["GET"])
