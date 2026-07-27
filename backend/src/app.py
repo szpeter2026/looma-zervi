@@ -64,14 +64,33 @@ def create_app(env="development"):
     def health():
         import os
 
-        llm_order = (
+        llm_order_raw = (
             app.config.get("LLM_PROVIDER_ORDER")
             or os.getenv("LLM_PROVIDER_ORDER")
             or "deepseek"
         )
-        primary_llm = str(llm_order).split(",")[0].strip().lower() or "unknown"
-        has_deepseek = bool((app.config.get("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or "").strip())
-        has_openai = bool((app.config.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip())
+        llm_order = [
+            p.strip().lower()
+            for p in str(llm_order_raw).split(",")
+            if p.strip()
+        ] or ["deepseek"]
+        primary_llm = llm_order[0]
+
+        has_deepseek = bool(
+            (app.config.get("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or "").strip()
+        )
+        has_openai = bool(
+            (app.config.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
+        )
+        # Ollama needs no cloud key; treat as configured when present in the fallback order
+        has_ollama = "ollama" in llm_order
+        has_qcc = bool(
+            (app.config.get("QCC_AUTH_TOKEN") or os.getenv("QCC_AUTH_TOKEN") or "").strip()
+        )
+        qcc_enabled = str(
+            app.config.get("QCC_ENABLED", os.getenv("QCC_ENABLED", "true"))
+        ).lower() in ("1", "true", "yes", "on")
+
         llm_ready = (
             (primary_llm == "deepseek" and has_deepseek)
             or (primary_llm == "openai" and has_openai)
@@ -84,7 +103,15 @@ def create_app(env="development"):
             service="looma-backend",
             version="v1",
             llm_provider=primary_llm,
+            llm_provider_order=llm_order,
             llm_configured=llm_ready,
+            # Booleans only — never expose key material
+            providers_configured={
+                "openai": has_openai,
+                "deepseek": has_deepseek,
+                "ollama": has_ollama,
+            },
+            qcc_configured=has_qcc and qcc_enabled,
         )
 
     # --- Root: API info (so visiting localhost:5200 in browser is helpful) ---
