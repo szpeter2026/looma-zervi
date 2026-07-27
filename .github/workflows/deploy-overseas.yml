@@ -1,12 +1,18 @@
 # ============================================================
-# Deploy Overseas — tag overseas-* → Vultr 新加坡（仅 tag 触发，避免与分支 push 双跑）
+# Deploy Overseas — tag overseas-* → Vultr 新加坡（仅 tag 触发）
 #
 # 目标机: 139.180.184.25 · genz.ltd + tspace.genz.ltd + api.genz.ltd
 #
-# 触发: git tag overseas-v1.4.3 && git push github overseas-v1.4.3
+# 触发: git tag overseas-v1.4.3 && git push origin overseas-v1.4.3
 #       或 Actions 页 workflow_dispatch 手动部署
-# 注意: 不要同时 push release/overseas 分支 + overseas-* tag，会触发两次。
-#       分支合并后只推 tag 即可；分支 push 不再触发本 workflow。
+#
+# 发版建议（避免 Actions 列表出现两次）:
+#   1. 先 push 分支提交: git push origin release/overseas
+#   2. 再只 push tag:   git push origin overseas-vX.Y.Z
+#   分支 push 不会跑本部署（on.tags only）；但若 workflow YAML 有语法错误，
+#   GitHub 仍可能为「校验失败」各记一条 0-job run。
+#   正确做法: 分支上先保证 workflow 可解析，再打 tag；或一次只推 tag
+#   （tag 指向的 commit 需已在远端）。
 #
 # Secrets 任选一组（overseas-v1.3 成功部署用的是 VULTR_*）:
 #   VULTR_SSH_HOST / VULTR_SSH_USER / VULTR_SSH_PRIVATE_KEY / VULTR_JWT_SECRET
@@ -216,26 +222,18 @@ jobs:
           set_kv() {
             local key="\$1" val="\$2"
             [ -n "\${val}" ] || return 0
-            # Avoid sed replacement metacharacters (\&, \t, \n, …) corrupting URLs
-            # e.g. GNU sed turns "\t" into TAB and can mangle https://tspace.genz.ltd
-            python3 - "\$key" "\$val" "\${ENV_FILE}" <<'PY'
-import sys
-from pathlib import Path
-key, val, path = sys.argv[1], sys.argv[2], Path(sys.argv[3])
-text = path.read_text() if path.exists() else ""
-lines = text.splitlines()
-prefix = f"{key}="
-out, found = [], False
-for line in lines:
-    if line.startswith(prefix):
-        out.append(prefix + val)
-        found = True
-    else:
-        out.append(line)
-if not found:
-    out.append(prefix + val)
-path.write_text("\n".join(out) + ("\n" if out else ""))
-PY
+            # Use awk (not sed) so URLs like https://tspace.genz.ltd are not mangled.
+            # Do not nest python heredocs here — they break Actions YAML parsing (L222).
+            if grep -q "^\${key}=" "\${ENV_FILE}"; then
+              awk -v key="\${key}" -v val="\${val}" '
+                BEGIN { done=0 }
+                index(\$0, key "=")==1 { print key "=" val; done=1; next }
+                { print }
+                END { if (!done) print key "=" val }
+              ' "\${ENV_FILE}" > "\${ENV_FILE}.tmp" && mv "\${ENV_FILE}.tmp" "\${ENV_FILE}"
+            else
+              echo "\${key}=\${val}" >> "\${ENV_FILE}"
+            fi
           }
 
           set_kv FLASK_PORT 5200
