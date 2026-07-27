@@ -198,7 +198,7 @@ jobs:
               'CHROMA_PORT=8000' \
               'RATE_LIMIT_STORAGE_URI=redis://redis:6379/1' \
               'DEPLOY_REGION=SG' \
-              "CORS_ORIGINS=https://\${DOMAIN},https://www.\${DOMAIN},https://\${TSPACE_HOST},https://\${API_HOST},https://app.\${DOMAIN}" \
+              "CORS_ORIGINS=https://\${DOMAIN},https://www.\${DOMAIN},https://\${TSPACE_HOST},https://\${API_HOST},https://app.\${DOMAIN},https://tspace.szbolent.cn,http://localhost:5173,http://localhost:5174,http://localhost:3000" \
               "GOOGLE_REDIRECT_URI=https://\${API_HOST}/v1/auth/google/callback" \
               "GOOGLE_CLIENT_ID=${{ secrets.ENV_GOOGLE_CLIENT_ID }}" \
               "GOOGLE_CLIENT_SECRET=${{ secrets.ENV_GOOGLE_CLIENT_SECRET }}" \
@@ -216,11 +216,26 @@ jobs:
           set_kv() {
             local key="\$1" val="\$2"
             [ -n "\${val}" ] || return 0
-            if grep -q "^\${key}=" "\${ENV_FILE}"; then
-              sed -i "s|^\${key}=.*|\${key}=\${val}|" "\${ENV_FILE}"
-            else
-              echo "\${key}=\${val}" >> "\${ENV_FILE}"
-            fi
+            # Avoid sed replacement metacharacters (\&, \t, \n, …) corrupting URLs
+            # e.g. GNU sed turns "\t" into TAB and can mangle https://tspace.genz.ltd
+            python3 - "\$key" "\$val" "\${ENV_FILE}" <<'PY'
+import sys
+from pathlib import Path
+key, val, path = sys.argv[1], sys.argv[2], Path(sys.argv[3])
+text = path.read_text() if path.exists() else ""
+lines = text.splitlines()
+prefix = f"{key}="
+out, found = [], False
+for line in lines:
+    if line.startswith(prefix):
+        out.append(prefix + val)
+        found = True
+    else:
+        out.append(line)
+if not found:
+    out.append(prefix + val)
+path.write_text("\n".join(out) + ("\n" if out else ""))
+PY
           }
 
           set_kv FLASK_PORT 5200
@@ -231,7 +246,7 @@ jobs:
           set_kv CHROMA_PORT 8000
           set_kv RATE_LIMIT_STORAGE_URI redis://redis:6379/1
           set_kv DEPLOY_REGION SG
-          set_kv CORS_ORIGINS "https://\${DOMAIN},https://www.\${DOMAIN},https://\${TSPACE_HOST},https://\${API_HOST},https://app.\${DOMAIN}"
+          set_kv CORS_ORIGINS "https://\${DOMAIN},https://www.\${DOMAIN},https://\${TSPACE_HOST},https://\${API_HOST},https://app.\${DOMAIN},https://tspace.szbolent.cn,http://localhost:5173,http://localhost:5174,http://localhost:3000"
           set_kv GOOGLE_REDIRECT_URI "https://\${API_HOST}/v1/auth/google/callback"
           set_kv JWT_SECRET "${{ env.ENV_JWT_SECRET }}"
           set_kv DEEPSEEK_API_KEY "${{ secrets.VULTR_DEEPSEEK_API_KEY || secrets.ENV_DEEPSEEK_API_KEY }}"
