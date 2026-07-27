@@ -12,8 +12,10 @@ Integrates 9 QCC MCP services via SSE-based JSON-RPC 2.0:
   - qcc-legal-case   : 司法案件
   - qcc-document     : 企业文书
 
-Protocol: MCP over SSE (Server-Sent Events) via JSON-RPC 2.0.
-Each service endpoint serves both the SSE stream and JSON-RPC calls.
+Protocol: MCP Streamable HTTP — POST JSON-RPC to each service ``/stream`` URL.
+Responses are SSE ``event: message`` or application/json. Optional ``Mcp-Session-Id``.
+Overseas SG should set ``QCC_MCP_BASE_URL`` to a China reverse proxy that can
+reach ``agent.qcc.com`` (see ``deploy/nginx/qcc-gateway.conf``).
 """
 from __future__ import annotations
 
@@ -32,17 +34,35 @@ logger = logging.getLogger("looma.qcc_client")
 
 # ── Configuration ──────────────────────────────────────────────────────────
 
-QCC_BASE_URLS: dict[str, str] = {
-    "company":       "https://agent.qcc.com/mcp/company/stream",
-    "risk":          "https://agent.qcc.com/mcp/risk/stream",
-    "ipr":           "https://agent.qcc.com/mcp/ipr/stream",
-    "operation":     "https://agent.qcc.com/mcp/operation/stream",
-    "executive":     "https://agent.qcc.com/mcp/executive/stream",
-    "history":       "https://agent.qcc.com/mcp/history/stream",
-    "legal_regulation": "https://agent.qcc.com/mcp/regulation/stream",
-    "legal_case":    "https://agent.qcc.com/mcp/case/stream",
-    "document":      "https://agent.qcc.com/mcp/document/stream",
+# Official QCC MCP root. Overseas SG may set QCC_MCP_BASE_URL to a China
+# reverse-proxy (e.g. http://1.14.202.161:8998/mcp) that can reach agent.qcc.com.
+_DEFAULT_QCC_MCP_BASE = "https://agent.qcc.com/mcp"
+
+_QCC_SERVICE_PATHS: dict[str, str] = {
+    "company": "company/stream",
+    "risk": "risk/stream",
+    "ipr": "ipr/stream",
+    "operation": "operation/stream",
+    "executive": "executive/stream",
+    "history": "history/stream",
+    "legal_regulation": "regulation/stream",
+    "legal_case": "case/stream",
+    "document": "document/stream",
 }
+
+
+def _mcp_base_url() -> str:
+    return (os.getenv("QCC_MCP_BASE_URL") or _DEFAULT_QCC_MCP_BASE).strip().rstrip("/")
+
+
+def get_qcc_base_urls() -> dict[str, str]:
+    """Resolve per-service SSE stream URLs (honours QCC_MCP_BASE_URL)."""
+    base = _mcp_base_url()
+    return {name: f"{base}/{path}" for name, path in _QCC_SERVICE_PATHS.items()}
+
+
+# Back-compat: default official URLs (import-time). Prefer get_qcc_base_urls().
+QCC_BASE_URLS: dict[str, str] = get_qcc_base_urls()
 
 QCC_TIMEOUT = 30.0  # seconds per call
 QCC_MAX_RETRIES = 2
@@ -127,14 +147,41 @@ class QccMcpError(Exception):
     pass
 
 
-class QccMcpSession:
-    """Lightweight MCP SSE client for a single QCC service endpoint.
+def _extract_session_id_from_endpoint(endpoint_url: str) -> str | None:
+    """Parse session id from MCP SSE endpoint event data (URL or path)."""
+    from urllib.parse import parse_qs, urlparse
 
-    MCP over SSE flow:
-    1. GET /stream → establish SSE connection, receive sessionId via endpoint event
-    2. POST /stream?sessionId=... with JSON-RPC initialize
-    3. POST /stream?sessionId=... with JSON-RPC tools/list
-    4. POST /stream?sessionId=... with JSON-RPC tools/call
+    query = parse_qs(urlparse(endpoint_url).query)
+    for key in ("session_id", "sessionId"):
+        vals = query.get(key)
+        if vals and vals[0]:
+            return vals[0]
+    return None
+
+
+def _parse_sse_event_block(block: str) -> tuple[str | None, str | None]:
+    """Return (event_name, data) from one SSE event block."""
+    event_name: str | None = None
+    data_lines: list[str] = []
+    for line in block.split("\n"):
+        if line.startswith("event:"):
+            event_name = line[6:].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[5:].lstrip())
+    if not data_lines:
+        return event_name, None
+    return event_name, "\n".join(data_lines)
+
+
+class QccMcpSession:
+    """MCP Streamable HTTP client for one QCC service endpoint.
+
+    Current agent.qcc.com transport:
+      POST /mcp/<svc>/stream  with JSON-RPC (initialize / tools/list / tools/call)
+      Response is SSE ``event: message`` or plain JSON; optional ``Mcp-Session-Id``.
+
+    Legacy GET SSE handshake (event: endpoint → /messages/) returns HTTP 405
+    「请求方式异常」and is no longer used.
     """
 
     def __init__(self, service_name: str, url: str, auth_token: str, timeout: float = QCC_TIMEOUT):
@@ -146,173 +193,184 @@ class QccMcpSession:
         self._tools: list[dict] = []
         self._initialized = False
         self._lock = threading.Lock()
-
-    # ── Session management ──
+        self._rpc_id = 0
 
     def connect(self) -> str:
-        """Establish SSE connection and retrieve session ID.
+        """Back-compat alias: ensure streamable-HTTP session is initialized."""
+        self.ensure_ready()
+        return self._session_id or "streamable-http"
 
-        Returns the session ID string.
-        """
-        if self._session_id:
-            return self._session_id
+    def ensure_ready(self) -> None:
+        """Initialize MCP session once (thread-safe)."""
+        with self._lock:
+            if self._initialized:
+                return
+            self._post_rpc(
+                "initialize",
+                {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "looma-zervi", "version": "1.0.0"},
+                },
+                is_notification=False,
+            )
+            try:
+                self._post_rpc("notifications/initialized", {}, is_notification=True)
+            except QccMcpError as e:
+                logger.debug("[%s] notifications/initialized ignored: %s", self.service_name, e)
+            self._initialized = True
+            logger.info(
+                "[%s] MCP streamable-HTTP ready session=%s",
+                self.service_name,
+                (self._session_id or "-")[:16],
+            )
 
-        headers = {
-            "Authorization": self.auth_token,
-            "Accept": "text/event-stream",
-        }
+    def _next_id(self) -> int:
+        self._rpc_id += 1
+        return self._rpc_id
+
+    def _parse_rpc_response(self, resp: requests.Response) -> dict:
+        """Parse JSON or SSE JSON-RPC body into the result object."""
+        sid = (
+            resp.headers.get("Mcp-Session-Id")
+            or resp.headers.get("mcp-session-id")
+            or resp.headers.get("X-Session-Id")
+        )
+        if sid:
+            self._session_id = sid
+
+        content_type = (resp.headers.get("Content-Type") or "").lower()
+        text = resp.text or ""
+
+        def _from_obj(data: dict) -> dict:
+            if "error" in data:
+                err = data["error"]
+                msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
+                raise QccMcpError(f"[{self.service_name}] RPC error: {msg}")
+            if "result" in data:
+                result = data["result"]
+                return result if isinstance(result, dict) else {"value": result}
+            return data
+
+        if "application/json" in content_type and not text.lstrip().startswith(("event:", "data:")):
+            return _from_obj(resp.json())
+
+        if "text/event-stream" in content_type or text.lstrip().startswith(("event:", "data:")):
+            for block in re.split(r"\n\n+", text):
+                _event_name, data_str = _parse_sse_event_block(block)
+                if not data_str:
+                    continue
+                try:
+                    data = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(data, dict) and ("result" in data or "error" in data or "jsonrpc" in data):
+                    return _from_obj(data)
 
         try:
-            resp = requests.get(self.url, headers=headers, timeout=self.timeout, stream=True)
-            resp.raise_for_status()
+            return _from_obj(resp.json())
+        except (json.JSONDecodeError, ValueError, QccMcpError):
+            if text.strip():
+                return {"_raw": text}
+            raise QccMcpError(f"[{self.service_name}] Empty RPC response")
 
-            # Read SSE events until we get the endpoint/sessionId event
-            session_id = None
-            buffer = ""
-            for chunk in resp.iter_content(chunk_size=1, decode_unicode=True):
-                if chunk is None:
-                    continue
-                text = chunk if isinstance(chunk, str) else chunk.decode("utf-8", errors="replace")
-                buffer += text
+    def _post_rpc(
+        self,
+        method: str,
+        params: dict | None = None,
+        *,
+        is_notification: bool = False,
+    ) -> dict:
+        """POST JSON-RPC to the stream URL (streamable HTTP)."""
+        if is_notification:
+            payload: dict[str, Any] = {
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params or {},
+            }
+        else:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": self._next_id(),
+                "method": method,
+                "params": params or {},
+            }
 
-                # Parse SSE events from buffer
-                while "\n\n" in buffer:
-                    event_str, buffer = buffer.split("\n\n", 1)
-                    for line in event_str.split("\n"):
-                        if line.startswith("data: "):
-                            data_str = line[6:]
-                            try:
-                                data = json.loads(data_str)
-                            except json.JSONDecodeError:
-                                continue
-                            # MCP SSE may deliver session in endpoint event
-                            if isinstance(data, dict) and "sessionId" in data:
-                                session_id = data["sessionId"]
-                                break
-                    if session_id:
-                        break
-                if session_id:
-                    break
-
-            resp.close()
-
-            if not session_id:
-                # Fallback: try to extract sessionId from response headers
-                session_id = resp.headers.get("X-Session-Id") or resp.headers.get("Mcp-Session-Id")
-
-            if not session_id:
-                raise QccMcpError(f"[{self.service_name}] Failed to obtain SSE session ID")
-
-            self._session_id = session_id
-            logger.info(f"[{self.service_name}] SSE session established: {session_id[:12]}...")
-            return session_id
-
-        except requests.RequestException as e:
-            raise QccMcpError(f"[{self.service_name}] SSE connect failed: {e}") from e
-
-    def _rpc_call(self, method: str, params: dict | None = None) -> dict:
-        """Send a JSON-RPC 2.0 call via POST and return the result.
-
-        MCP uses POST to the same URL with query param ?sessionId=xxx.
-        The response is SSE-streamed but for JSON-RPC the result is in
-        the SSE data field.
-        """
-        if not self._session_id:
-            self.connect()
-
-        payload = {
-            "jsonrpc": "2.0",
-            "id": int(time.time() * 1000),
-            "method": method,
-            "params": params or {},
-        }
-
-        post_url = f"{self.url}?sessionId={self._session_id}"
         headers = {
             "Authorization": self.auth_token,
             "Content-Type": "application/json",
             "Accept": "text/event-stream, application/json",
         }
+        if self._session_id:
+            headers["Mcp-Session-Id"] = self._session_id
 
+        last_err: Exception | None = None
         for attempt in range(QCC_MAX_RETRIES + 1):
             try:
                 resp = requests.post(
-                    post_url,
+                    self.url,
                     json=payload,
                     headers=headers,
                     timeout=self.timeout,
                 )
+                # Capture session id even on some error responses
+                sid = (
+                    resp.headers.get("Mcp-Session-Id")
+                    or resp.headers.get("mcp-session-id")
+                )
+                if sid:
+                    self._session_id = sid
+                    headers["Mcp-Session-Id"] = sid
+
+                if is_notification:
+                    if resp.status_code in (200, 202, 204):
+                        return {}
+                    # Some servers ack notifications with empty body / 200 SSE
+                    if resp.status_code < 400:
+                        return {}
+                    resp.raise_for_status()
+                    return {}
+
                 resp.raise_for_status()
+                return self._parse_rpc_response(resp)
 
-                content_type = resp.headers.get("Content-Type", "")
-
-                # If JSON response directly
-                if "application/json" in content_type:
-                    result = resp.json()
-                    if "error" in result:
-                        raise QccMcpError(
-                            f"[{self.service_name}] RPC error: {result['error'].get('message', str(result['error']))}"
-                        )
-                    return result.get("result", result)
-
-                # If SSE response, parse the data
-                if "text/event-stream" in content_type:
-                    text = resp.text
-                    # Extract data from SSE
-                    for line in text.split("\n"):
-                        if line.startswith("data: "):
-                            data_str = line[6:]
-                            try:
-                                data = json.loads(data_str)
-                                if isinstance(data, dict):
-                                    if "error" in data:
-                                        raise QccMcpError(
-                                            f"[{self.service_name}] RPC error: {data['error'].get('message', str(data['error']))}"
-                                        )
-                                    if "result" in data:
-                                        return data["result"]
-                                    return data
-                            except json.JSONDecodeError:
-                                continue
-
-                # Fallback: try JSON parse of entire body
-                try:
-                    result = resp.json()
-                    if "error" in result:
-                        raise QccMcpError(
-                            f"[{self.service_name}] RPC error: {result['error'].get('message', str(result['error']))}"
-                        )
-                    return result.get("result", result)
-                except (json.JSONDecodeError, ValueError):
-                    pass
-
-                # Return raw text as fallback
-                return {"_raw": text}
-
+            except QccMcpError:
+                raise
             except requests.RequestException as e:
+                last_err = e
                 if attempt < QCC_MAX_RETRIES:
-                    logger.warning(f"[{self.service_name}] RPC retry {attempt + 1}/{QCC_MAX_RETRIES}: {e}")
+                    logger.warning(
+                        "[%s] RPC retry %s/%s %s: %s",
+                        self.service_name,
+                        attempt + 1,
+                        QCC_MAX_RETRIES,
+                        method,
+                        e,
+                    )
                     time.sleep(1)
-                    # Re-establish session on retry
+                    # Soft reset session on transport failure
+                    self._initialized = False
                     self._session_id = None
-                    self.connect()
+                    headers.pop("Mcp-Session-Id", None)
                     continue
-                raise QccMcpError(f"[{self.service_name}] RPC call '{method}' failed: {e}") from e
+                raise QccMcpError(
+                    f"[{self.service_name}] RPC call '{method}' failed: {e}"
+                ) from e
 
-        raise QccMcpError(f"[{self.service_name}] RPC call '{method}' exceeded max retries")
+        raise QccMcpError(
+            f"[{self.service_name}] RPC call '{method}' failed: {last_err}"
+        )
 
-    # ── MCP Protocol Methods ──
+    def _rpc_call(self, method: str, params: dict | None = None) -> dict:
+        """Public RPC helper used by initialize / list_tools / call_tool."""
+        if method != "initialize":
+            self.ensure_ready()
+        return self._post_rpc(method, params, is_notification=False)
 
     def initialize(self) -> dict:
         """Send MCP initialize request."""
-        return self._rpc_call("initialize", {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {
-                "name": "looma-zervi",
-                "version": "1.0.0",
-            },
-        })
+        self.ensure_ready()
+        return {"protocolVersion": "2024-11-05", "sessionId": self._session_id}
 
     def list_tools(self) -> list[dict]:
         """List available tools on this service."""
@@ -348,13 +406,14 @@ class QccSessionManager:
         self._lock = threading.Lock()
 
     def _get_session(self, service: str) -> QccMcpSession:
-        if service not in QCC_BASE_URLS:
+        urls = get_qcc_base_urls()
+        if service not in urls:
             raise QccMcpError(f"Unknown QCC service: {service}")
         with self._lock:
             if service not in self._sessions:
                 self._sessions[service] = QccMcpSession(
                     service_name=service,
-                    url=QCC_BASE_URLS[service],
+                    url=urls[service],
                     auth_token=self.auth_token,
                 )
             return self._sessions[service]
@@ -392,58 +451,101 @@ def _get_manager() -> QccSessionManager:
 def _find_search_tool(session: QccMcpSession) -> dict | None:
     """Find the best search/query tool from a service's tool list."""
     tools = session.list_tools()
-    # Priority: tools with 'search' or 'query' in name, or the first tool
-    for t in tools:
-        name = t.get("name", "").lower()
-        if "search" in name or "query" in name or "get" in name:
-            return t
-    return tools[0] if tools else None
+    if not tools:
+        return None
+
+    preferred = (
+        "get_company_by_query",
+        "get_company_profile",
+        "get_company_registration_info",
+        "company_search",
+        "search_company",
+    )
+    by_name = {t.get("name", ""): t for t in tools}
+    for name in preferred:
+        if name in by_name:
+            return by_name[name]
+
+    company_keys = ("searchKey", "keyword", "query", "companyName", "company_name", "name")
+
+    def _score(tool: dict) -> int:
+        name = (tool.get("name") or "").lower()
+        props = ((tool.get("inputSchema") or {}).get("properties") or {})
+        score = 0
+        if any(k in props for k in company_keys):
+            score += 10
+        if "personName" in props and not any(k in props for k in company_keys):
+            score -= 20  # person-only tools break company credit lookup
+        if "search" in name or "query" in name or "company" in name:
+            score += 5
+        return score
+
+    ranked = sorted(tools, key=_score, reverse=True)
+    if _score(ranked[0]) > 0:
+        return ranked[0]
+    return None
+
+
+def _fix_mojibake(text: str) -> str:
+    """Repair UTF-8 text that was wrongly decoded as latin-1 (QCC SSE quirk)."""
+    if not isinstance(text, str) or not text:
+        return text
+    if any("\u4e00" <= c <= "\u9fff" for c in text):
+        return text
+    try:
+        repaired = text.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
+    if any("\u4e00" <= c <= "\u9fff" for c in repaired):
+        return repaired
+    return text
 
 
 def _search_company_by_name(company_name: str) -> dict:
-    """Search company basic info via qcc-company service."""
+    """Search company basic info via qcc-company service.
+
+    Prefer registration info (richer fields); fall back to by_query / profile.
+    """
     mgr = _get_manager()
     session = mgr._get_session("company")
+    tools = {t.get("name", ""): t for t in session.list_tools()}
+
+    preferred = (
+        "get_company_registration_info",
+        "get_company_profile",
+        "get_company_by_query",
+    )
+    last_err: Exception | None = None
+    for name in preferred:
+        tool = tools.get(name)
+        if not tool:
+            continue
+        try:
+            return session.call_tool(name, _build_search_args(tool, company_name))
+        except Exception as e:
+            last_err = e
+            logger.warning("[company] tool %s failed: %s", name, e)
 
     tool = _find_search_tool(session)
     if not tool:
-        raise QccMcpError("[company] No search tool available")
-
-    tool_name = tool["name"]
-    # Build arguments based on tool's input schema
-    input_schema = tool.get("inputSchema", {})
-    props = input_schema.get("properties", {})
-
-    args: dict[str, Any] = {}
-    if "companyName" in props or "company_name" in props:
-        key = "companyName" if "companyName" in props else "company_name"
-        args[key] = company_name
-    elif "keyword" in props:
-        args["keyword"] = company_name
-    elif "name" in props:
-        args["name"] = company_name
-    else:
-        # Generic fallback: pass company name as first recognized param
-        args = {"keyword": company_name}
-
-    return session.call_tool(tool_name, args)
+        raise QccMcpError("[company] No search tool available") from last_err
+    return session.call_tool(tool["name"], _build_search_args(tool, company_name))
 
 
 def _parse_company_result(result: dict) -> QccCompanyInfo:
     """Parse raw QCC company result into structured QccCompanyInfo."""
-    # Handle nested content from MCP tool responses
     content = result
     if isinstance(result, dict):
-        # MCP tools/call returns content array
         if "content" in result:
             items = result["content"]
             if isinstance(items, list) and items:
                 for item in items:
                     if isinstance(item, dict) and item.get("type") == "text":
+                        raw_text = _fix_mojibake(item.get("text", "") or "")
                         try:
-                            content = json.loads(item.get("text", "{}"))
+                            content = json.loads(raw_text)
                         except json.JSONDecodeError:
-                            content = {"raw_text": item.get("text", "")}
+                            content = {"raw_text": raw_text}
                         break
                     elif isinstance(item, dict):
                         content = item
@@ -452,17 +554,44 @@ def _parse_company_result(result: dict) -> QccCompanyInfo:
     if not isinstance(content, dict):
         content = {}
 
+    # get_company_by_query nests fields under 企业信息
+    nested = content.get("企业信息")
+    if isinstance(nested, dict):
+        merged = {**content, **nested}
+    else:
+        merged = content
+
+    def pick(*keys: str) -> str:
+        for k in keys:
+            v = merged.get(k)
+            if v is not None and str(v).strip():
+                return str(v).strip()
+        return ""
+
     return QccCompanyInfo(
-        company_name=content.get("companyName") or content.get("company_name") or content.get("name", ""),
-        legal_person=content.get("legalPerson") or content.get("legal_person") or content.get("legalPersonName", ""),
-        registered_capital=content.get("registeredCapital") or content.get("registered_capital") or content.get("regCapital", ""),
-        established_date=content.get("establishedDate") or content.get("established_date") or content.get("estiblishTime", ""),
-        credit_code=content.get("creditCode") or content.get("credit_code") or content.get("unifiedSocialCreditCode", ""),
-        status=content.get("status") or content.get("companyStatus") or content.get("regStatus", ""),
-        industry=content.get("industry") or content.get("industryName", ""),
-        address=content.get("address") or content.get("regLocation", ""),
-        business_scope=content.get("businessScope") or content.get("scope", ""),
-        raw=content,
+        company_name=pick(
+            "companyName", "company_name", "name", "企业名称", "企业名"
+        ),
+        legal_person=pick(
+            "legalPerson", "legal_person", "legalPersonName", "法定代表人", "法人"
+        ),
+        registered_capital=pick(
+            "registeredCapital", "registered_capital", "regCapital", "注册资本"
+        ),
+        established_date=pick(
+            "establishedDate", "established_date", "estiblishTime", "成立日期"
+        ),
+        credit_code=pick(
+            "creditCode",
+            "credit_code",
+            "unifiedSocialCreditCode",
+            "统一社会信用代码",
+        ),
+        status=pick("status", "companyStatus", "regStatus", "登记状态", "经营状态"),
+        industry=pick("industry", "industryName", "企查查行业", "行业"),
+        address=pick("address", "regLocation", "注册地址", "企业地址"),
+        business_scope=pick("businessScope", "scope", "经营范围", "简介"),
+        raw=merged if isinstance(merged, dict) else content,
     )
 
 
@@ -505,36 +634,71 @@ def _search_operation(company_name: str) -> QccOperationInfo:
     )
 
 
-def _search_service(service_name: str, company_name: str) -> list[dict]:
+def _search_service(
+    service_name: str,
+    company_name: str,
+    *,
+    person_name: str | None = None,
+) -> list[dict]:
     """Generic search on any QCC service, returns list of result dicts."""
     mgr = _get_manager()
     session = mgr._get_session(service_name)
     tool = _find_search_tool(session)
     if not tool:
-        logger.warning(f"[{service_name}] No search tool available")
+        logger.warning(f"[{service_name}] No suitable search tool available")
+        return []
+
+    required = ((tool.get("inputSchema") or {}).get("required") or [])
+    if "personName" in required and not (person_name or "").strip():
+        logger.info("[%s] skip: tool requires personName", service_name)
         return []
 
     tool_name = tool["name"]
-    result = session.call_tool(tool_name, _build_search_args(tool, company_name))
+    result = session.call_tool(
+        tool_name,
+        _build_search_args(tool, company_name, person_name=person_name),
+    )
     items = _extract_content(result)
     return items if isinstance(items, list) else [items] if items else []
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def _build_search_args(tool: dict, company_name: str) -> dict[str, Any]:
-    """Build search arguments matching the tool's input schema."""
-    input_schema = tool.get("inputSchema", {})
-    props = input_schema.get("properties", {})
-
+def _build_search_args(
+    tool: dict,
+    company_name: str,
+    *,
+    person_name: str | None = None,
+) -> dict[str, Any]:
+    """Build search arguments matching the tool's inputSchema."""
+    input_schema = tool.get("inputSchema", {}) or {}
+    props = input_schema.get("properties", {}) or {}
     args: dict[str, Any] = {}
-    for key in ("companyName", "company_name", "keyword", "name", "enterpriseName"):
+
+    for key in (
+        "searchKey",
+        "keyword",
+        "query",
+        "companyName",
+        "company_name",
+        "name",
+        "enterpriseName",
+        "keyWord",
+        "search_key",
+    ):
         if key in props:
             args[key] = company_name
-            return args
+            break
 
-    # Fallback
-    args["keyword"] = company_name
+    if "personName" in props and (person_name or "").strip():
+        args["personName"] = person_name.strip()
+
+    if not args:
+        required = input_schema.get("required") or []
+        if required and isinstance(required[0], str):
+            args[required[0]] = company_name
+        else:
+            args["searchKey"] = company_name
     return args
 
 
@@ -549,10 +713,11 @@ def _extract_content(result: dict) -> Any:
             parsed = []
             for item in items:
                 if isinstance(item, dict) and item.get("type") == "text":
+                    raw_text = _fix_mojibake(item.get("text", "") or "")
                     try:
-                        parsed.append(json.loads(item.get("text", "{}")))
+                        parsed.append(json.loads(raw_text))
                     except json.JSONDecodeError:
-                        parsed.append({"text": item.get("text", "")})
+                        parsed.append({"text": raw_text})
                 elif isinstance(item, dict):
                     parsed.append(item)
             return parsed if parsed else items
@@ -705,10 +870,14 @@ def check_company_credit(
         except QccMcpError as e:
             logger.warning(f"[QCC] Operation search failed (non-fatal): {e}")
 
-    # 4. Executives
+    # 4. Executives (QCC executive tools require personName + searchKey)
     if include_executives:
         try:
-            report.executives = _search_service("executive", resolved_name)
+            report.executives = _search_service(
+                "executive",
+                resolved_name,
+                person_name=report.company.legal_person or None,
+            )
             logger.info(f"[QCC] Executives fetched: {len(report.executives)} persons")
         except QccMcpError as e:
             logger.warning(f"[QCC] Executive search failed (non-fatal): {e}")

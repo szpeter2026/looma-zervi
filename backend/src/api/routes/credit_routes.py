@@ -82,13 +82,32 @@ def _qcc_is_configured() -> bool:
 def _sanitize_qcc_error(exc: Exception) -> str:
     """Human-readable QCC failure class without leaking tokens."""
     msg = str(exc)
+    low = msg.lower()
     if "QCC_AUTH_TOKEN" in msg or "未配置" in msg or "为空" in msg:
         return "token_missing"
-    if "401" in msg or "Unauthorized" in msg.lower():
+    if "401" in msg or "unauthorized" in low:
         return "unauthorized"
-    if "timeout" in msg.lower() or "Timeout" in msg:
+    if "405" in msg or "请求方式异常" in msg:
+        return "protocol_error"
+    if "timeout" in low:
         return "timeout"
-    if "connect" in msg.lower() or "SSE" in msg:
+    # Protocol / handshake issues (often misread as network)
+    if (
+        "endpoint handshake" in low
+        or "failed to obtain sse session id" in low
+        or "origin mismatch" in low
+        or "no search tool" in low
+    ):
+        return "protocol_error"
+    # True transport failures
+    if (
+        "sse connect failed" in low
+        or "connection refused" in low
+        or "name or service not known" in low
+        or "nodename nor servname" in low
+        or "max retries exceeded" in low
+        or "network is unreachable" in low
+    ):
         return "unreachable"
     return "upstream_error"
 
