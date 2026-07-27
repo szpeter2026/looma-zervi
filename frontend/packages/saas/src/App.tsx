@@ -4,7 +4,8 @@
  *
  * Routes:
  *   /           - Dashboard
- *   /trust      - Trust profile (attestation cards)
+ *   /trust      - Trust profile (attestation cards + share codes)
+ *   /verify     - Public attestation verify via share_code
  *   /query      - RAG knowledge base chat
  *   /jobs       - Position matching
  *   /resume     - Resume parsing
@@ -36,6 +37,7 @@ import Candidates from "./features/candidates/Candidates";
 import CandidateDetail from "./features/candidates/CandidateDetail";
 import ConsentSettings from "./features/settings/ConsentSettings";
 import TrustProfile from "./features/trust/TrustProfile";
+import TrustVerify from "./features/trust/TrustVerify";
 import AdminDashboard from "./features/admin/AdminDashboard";
 import { useSaasAnalytics } from "./analytics/useSaasAnalytics";
 import { IS_OVERSEAS } from "./config/region";
@@ -81,6 +83,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<FeatureGuard><Dashboard /></FeatureGuard>} />
             <Route path="/pricing" element={<FeatureGuard><Pricing /></FeatureGuard>} />
+            <Route path="/verify" element={<FeatureGuard><TrustVerify /></FeatureGuard>} />
             <Route path="/candidate/share/:code" element={<FeatureGuard><CandidateShare /></FeatureGuard>} />
           </Route>
 

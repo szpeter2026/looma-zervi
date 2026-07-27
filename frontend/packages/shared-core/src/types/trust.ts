@@ -85,6 +85,9 @@ export interface TrustVerifyResponse {
   owner_id?: string;
   scope?: string[];
   remaining_access_count?: number;
+  candidate_alias?: string;
+  verified_at?: string;
+  share_code_scope?: string[];
 }
 
 export interface TrustAuditLogEntry {
