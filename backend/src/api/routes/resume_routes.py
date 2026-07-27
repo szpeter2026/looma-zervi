@@ -197,9 +197,17 @@ def upload_resume():
             error=f"结构化提取失败: {e}",
         ), 200
 
+    if not extracted:
+        logger.warning(f"LLM returned empty result for resume upload, filename={filename}, markdown_len={len(markdown)}")
+        return jsonify(
+            extracted=None,
+            markdown=markdown,
+            filename=filename,
+            error="简历结构化解析失败: AI 未能返回有效的解析结果，请检查简历文件是否清晰可读，或尝试粘贴简历文本。",
+        ), 200
+
     # ── Trust Bridge: record upload resume trust ──
-    if extracted:
-        _record_resume_trust(user_id, extracted)
+    _record_resume_trust(user_id, extracted)
 
     # Step 3: Persist to DB
     resume_id = None

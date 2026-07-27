@@ -99,6 +99,7 @@ export default function Jobs() {
   const [batchCreditBusy, setBatchCreditBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [msgOk, setMsgOk] = useState(false);
+  const [msgHint, setMsgHint] = useState<string | null>(null); // "resume_not_jd" etc.
   const [quotaExhausted, setQuotaExhausted] = useState(false);
 
   const matchRecord = quota?.records?.find((r) => r.resource === "job_match");
@@ -157,6 +158,7 @@ export default function Jobs() {
   const handleFileUpload = async (file: File) => {
     setUploading(true);
     setMsg(null);
+    setMsgHint(null);
     try {
       const result = await jobsApi.upload(file) as any;
       if (result.parsed) {
@@ -168,6 +170,9 @@ export default function Jobs() {
         setJdText(result.markdown || "");
       } else if (result.error) {
         setMsg(result.error);
+        if (result.hint === "resume_not_jd") {
+          setMsgHint("resume_not_jd");
+        }
       } else {
         setMsg(t("jobs.uploadPartial"));
       }
@@ -1104,6 +1109,22 @@ export default function Jobs() {
       {/* ── Upload Tab: JD File + Text ── */}
       {tab === "upload" && (
         <div className="space-y-6">
+          {/* Hint: JD only, not resume */}
+          <div
+            className="rounded-lg px-4 py-3 text-xs"
+            style={{
+              backgroundColor: "#fff7ed",
+              border: "1px solid #fed7aa",
+              color: "#9a3412",
+            }}
+          >
+            <strong>提示：</strong>此处上传的是<strong>职位描述 (JD)</strong> 文件，用于招聘匹配。
+            如需上传简历，请前往{" "}
+            <Link to="/resume" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
+              简历解析页面
+            </Link>。
+          </div>
+
           {/* File drop zone */}
           <div
             ref={dropRef}
@@ -1180,9 +1201,18 @@ export default function Jobs() {
           </div>
 
           {msg && (
-            <p className="text-sm text-center" style={{ color: "var(--color-danger)" }}>
-              {msg}
-            </p>
+            <div className="text-sm text-center" style={{ color: "var(--color-danger)" }}>
+              <p>{msg}</p>
+              {msgHint === "resume_not_jd" && (
+                <Link
+                  to="/resume"
+                  className="inline-block mt-2 px-4 py-1.5 rounded-lg text-white text-sm no-underline hover:opacity-90 transition-opacity"
+                  style={{ backgroundColor: "var(--color-primary)" }}
+                >
+                  前往简历解析页面上传简历 →
+                </Link>
+              )}
+            </div>
           )}
 
           {/* Parsed result preview */}

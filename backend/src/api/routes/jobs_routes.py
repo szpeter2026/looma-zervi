@@ -264,21 +264,30 @@ def upload_job():
             error=f"结构化提取失败: {e}",
         ), 200
 
+    if not parsed:
+        logger.warning(f"LLM returned empty result for job upload, filename={filename}, markdown_len={len(markdown)}")
+        return jsonify(
+            parsed=None,
+            markdown=markdown,
+            filename=filename,
+            error="结构化提取失败: LLM 未能返回有效的 JD 解析结果，请确认上传的是职位描述文件（非简历）。如需上传简历请使用「简历解析」功能。",
+            hint="resume_not_jd",
+        ), 200
+
     # Step 3: Persist to DB (stable job_id in metadata)
     job_id = None
     try:
         path_key = f"upload/{uuid.uuid4().hex}/{filename}"
         job_id = _persist_job(
             user_id=user_id,
-            title=(parsed.get("title") if parsed else None) or filename,
+            title=parsed.get("title") or filename,
             file_path=path_key,
             file_size=len(content),
             parsed=parsed,
             markdown=markdown,
             source="upload",
         )
-        if parsed is not None:
-            parsed = {**parsed, "id": job_id, "source": parsed.get("source") or "upload"}
+        parsed = {**parsed, "id": job_id, "source": parsed.get("source") or "upload"}
     except Exception as e:
         logger.warning(f"Failed to persist job: {e}")
 
