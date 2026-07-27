@@ -253,8 +253,18 @@ def upload_job():
 
     # Step 2: LLM structured extraction
     try:
-        from src.agents.document_agents import run_document_analysis
+        from src.agents.document_agents import DocumentAnalysisError, run_document_analysis
+
         parsed = run_document_analysis("job", markdown)
+    except DocumentAnalysisError as e:
+        logger.error(f"Job extraction {e.code}: {e.message}")
+        return jsonify(
+            parsed=None,
+            markdown=markdown,
+            filename=filename,
+            error=e.message,
+            hint="resume_not_jd" if e.code == "parse_failed" else e.code,
+        ), 200
     except Exception as e:
         logger.error(f"LLM extraction failed for job: {e}")
         return jsonify(

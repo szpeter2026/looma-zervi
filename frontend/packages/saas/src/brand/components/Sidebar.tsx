@@ -40,6 +40,7 @@ export default function Sidebar() {
   const navItems: NavItem[] = useMemo(() => {
     const items: NavItem[] = [
       { path: "/", labelKey: "nav.dashboard", icon: "◉" },
+      { path: "/trust", labelKey: "nav.trust", icon: "✦" },
       { path: "/query", labelKey: "nav.query", icon: "◈" },
       { path: "/poetry", labelKey: "nav.poetry", icon: "◇" },
       { path: "/poetry/challenge", labelKey: "nav.challenge", icon: "✧", mainlandHidden: true },

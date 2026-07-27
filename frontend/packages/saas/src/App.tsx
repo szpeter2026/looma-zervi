@@ -4,6 +4,7 @@
  *
  * Routes:
  *   /           - Dashboard
+ *   /trust      - Trust profile (attestation cards)
  *   /query      - RAG knowledge base chat
  *   /jobs       - Position matching
  *   /resume     - Resume parsing
@@ -34,6 +35,7 @@ import CandidateShare from "./features/candidates/CandidateShare";
 import Candidates from "./features/candidates/Candidates";
 import CandidateDetail from "./features/candidates/CandidateDetail";
 import ConsentSettings from "./features/settings/ConsentSettings";
+import TrustProfile from "./features/trust/TrustProfile";
 import AdminDashboard from "./features/admin/AdminDashboard";
 import { useSaasAnalytics } from "./analytics/useSaasAnalytics";
 import { IS_OVERSEAS } from "./config/region";
@@ -91,6 +93,7 @@ export default function App() {
               <Route path="/jobs" element={<FeatureGuard><Jobs /></FeatureGuard>} />
               <Route path="/resume" element={<FeatureGuard><Resume /></FeatureGuard>} />
               <Route path="/reports" element={<FeatureGuard><Reports /></FeatureGuard>} />
+              <Route path="/trust" element={<FeatureGuard><TrustProfile /></FeatureGuard>} />
               <Route path="/candidates" element={<FeatureGuard><Candidates /></FeatureGuard>} />
               <Route path="/candidates/:id" element={<FeatureGuard><CandidateDetail /></FeatureGuard>} />
               <Route path="/settings/consent" element={<FeatureGuard><ConsentSettings /></FeatureGuard>} />

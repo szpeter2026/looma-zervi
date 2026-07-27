@@ -38,7 +38,48 @@
     "resume": "简历解析",
     "reports": "报告中心",
     "consent": "隐私授权",
+    "trust": "信任档案",
     "admin": "管理看板"
+  },
+  "trust": {
+    "title": "我的信任档案",
+    "subtitle": "由真实行为记忆生成的可验证声明——不是分数，而是可追溯的证据。",
+    "loading": "加载中…",
+    "count": "{{count}} 条声明",
+    "refresh": "重新评估",
+    "refreshing": "评估中…",
+    "loadFailed": "无法加载信任档案",
+    "refreshFailed": "重新评估失败",
+    "empty": "还没有声明卡。上传简历并完成职位匹配后点「重新评估」；或在 PlanetX 完成人格测评/舰队闯关，可生成更强声明。",
+    "ctaJobs": "去做职位匹配 →",
+    "ctaResume": "上传简历 →",
+    "confidenceHint": "置信度 {{pct}}%",
+    "evidence": "证据：{{type}}",
+    "issued": "签发：{{date}}",
+    "signed": "已签名",
+    "noScoreNote": "我们不输出用户可见的信任总分。声明是否成立，由证据与验证状态说明。",
+    "claim": {
+      "identity": "身份与自我认知",
+      "collaboration": "协作",
+      "communication": "沟通",
+      "influence": "影响与传播"
+    },
+    "status": {
+      "verified": "已验证",
+      "verified_by_authority": "权威验证",
+      "weak": "弱证据",
+      "unverified": "未验证"
+    },
+    "evidenceType": {
+      "quiz": "人格测评",
+      "fleet_consensus": "舰队共识",
+      "dialogue_analysis": "对话分析",
+      "share_signal": "分享信号",
+      "credential": "权威凭证",
+      "match_scan": "匹配扫描",
+      "resume": "简历行为",
+      "fleet": "舰队共在"
+    }
   },
   "dashboard": {
     "freeRegister": "免费注册",

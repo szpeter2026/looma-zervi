@@ -133,6 +133,15 @@ export const API_ROUTES = {
   ANALYTICS_FUNNEL: "/v1/analytics/funnel",
   FEEDBACK_MICRO: "/v1/feedback/micro",
 
+  // Trust protocol (attestation cards + share_code verify)
+  TRUST_ATTESTATIONS: "/v1/trust/attestations",
+  TRUST_REFRESH: "/v1/trust/refresh",
+  TRUST_SHARE_CODE: "/v1/trust/share-code",
+  TRUST_SHARE_CODES: "/v1/trust/share-codes",
+  TRUST_AUDIT_LOG: "/v1/trust/audit-log",
+  TRUST_VERIFY: "/v1/trust/verify",
+  TRUST_PUBLIC_KEY: "/v1/trust/.well-known/public-key",
+
   // Compliance (PIPL consent gate)
   COMPLIANCE_CONSENT_GRANT: "/v1/compliance/consent/grant",
   COMPLIANCE_CONSENT_REVOKE: "/v1/compliance/consent/revoke",

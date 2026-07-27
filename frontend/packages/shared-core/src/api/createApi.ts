@@ -63,6 +63,16 @@ import type {
   ReportSharing,
   ShareMatchReportRequest,
 } from "../types/matchReport";
+import type {
+  CreateShareCodeRequest,
+  CreateShareCodeResponse,
+  TrustAttestationsResponse,
+  TrustAuditLogResponse,
+  TrustPublicKeyResponse,
+  TrustShareCodesResponse,
+  TrustVerifyRequest,
+  TrustVerifyResponse,
+} from "../types/trust";
 import { API_ROUTES } from "../constants/routes";
 
 // ============================================================
@@ -455,6 +465,41 @@ export function createMatchReportsApi(client: ApiClient) {
       client.delete<ReportSharing>(
         `${API_ROUTES.MATCH_REPORTS}/${id}/share/${sharingId}`,
       ),
+  };
+}
+
+// ============================================================
+// Trust API (attestation cards + share_code verify)
+// ============================================================
+export function createTrustApi(client: ApiClient) {
+  return {
+    listAttestations: () =>
+      client.get<TrustAttestationsResponse>(API_ROUTES.TRUST_ATTESTATIONS),
+
+    refresh: () =>
+      client.post<TrustAttestationsResponse>(API_ROUTES.TRUST_REFRESH),
+
+    createShareCode: (payload?: CreateShareCodeRequest) =>
+      client.post<CreateShareCodeResponse>(API_ROUTES.TRUST_SHARE_CODE, payload ?? {}),
+
+    listShareCodes: () =>
+      client.get<TrustShareCodesResponse>(API_ROUTES.TRUST_SHARE_CODES),
+
+    revokeShareCode: (codeId: string) =>
+      client.delete<{ message: string }>(`${API_ROUTES.TRUST_SHARE_CODE}/${codeId}`),
+
+    auditLog: (limit?: number) => {
+      const q = limit != null ? `?limit=${limit}` : "";
+      return client.get<TrustAuditLogResponse>(`${API_ROUTES.TRUST_AUDIT_LOG}${q}`);
+    },
+
+    /** Public — no JWT; authorised via share_code */
+    verify: (payload: TrustVerifyRequest) =>
+      client.post<TrustVerifyResponse>(API_ROUTES.TRUST_VERIFY, payload),
+
+    /** Public — Ed25519 PEM for offline signature checks */
+    publicKey: () =>
+      client.get<TrustPublicKeyResponse>(API_ROUTES.TRUST_PUBLIC_KEY),
   };
 }
 

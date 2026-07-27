@@ -185,8 +185,18 @@ def upload_resume():
 
     # Step 2: LLM structured extraction
     try:
-        from src.agents.document_agents import run_document_analysis
+        from src.agents.document_agents import DocumentAnalysisError, run_document_analysis
+
         extracted = run_document_analysis("resume", markdown)
+    except DocumentAnalysisError as e:
+        logger.error(f"Resume extraction {e.code}: {e.message}")
+        return jsonify(
+            extracted=None,
+            markdown=markdown,
+            filename=filename,
+            error=e.message,
+            hint=e.code,
+        ), 200
     except Exception as e:
         logger.error(f"LLM extraction failed: {e}")
         # Return markdown only if extraction fails
@@ -204,6 +214,7 @@ def upload_resume():
             markdown=markdown,
             filename=filename,
             error="简历结构化解析失败: AI 未能返回有效的解析结果，请检查简历文件是否清晰可读，或尝试粘贴简历文本。",
+            hint="parse_failed",
         ), 200
 
     # ── Trust Bridge: record upload resume trust ──

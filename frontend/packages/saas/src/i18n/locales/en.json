@@ -38,7 +38,48 @@
     "resume": "Resume Optimizer",
     "reports": "Growth Reports",
     "consent": "Privacy & Consent",
+    "trust": "Trust Profile",
     "admin": "Admin Panel"
+  },
+  "trust": {
+    "title": "My Trust Profile",
+    "subtitle": "Verifiable claims from real behavior memory — evidence, not a score.",
+    "loading": "Loading…",
+    "count": "{{count}} claim(s)",
+    "refresh": "Re-evaluate",
+    "refreshing": "Evaluating…",
+    "loadFailed": "Could not load trust profile",
+    "refreshFailed": "Re-evaluation failed",
+    "empty": "No attestation cards yet. Upload a resume, run a job match, then tap Re-evaluate — or complete PlanetX quiz/fleet for stronger claims.",
+    "ctaJobs": "Match opportunities →",
+    "ctaResume": "Upload resume →",
+    "confidenceHint": "{{pct}}% confidence",
+    "evidence": "Evidence: {{type}}",
+    "issued": "Issued: {{date}}",
+    "signed": "Signed",
+    "noScoreNote": "We do not show a user-facing trust score. Claims stand on evidence and verification status.",
+    "claim": {
+      "identity": "Identity",
+      "collaboration": "Collaboration",
+      "communication": "Communication",
+      "influence": "Influence"
+    },
+    "status": {
+      "verified": "Verified",
+      "verified_by_authority": "Authority verified",
+      "weak": "Weak evidence",
+      "unverified": "Unverified"
+    },
+    "evidenceType": {
+      "quiz": "Personality quiz",
+      "fleet_consensus": "Fleet consensus",
+      "dialogue_analysis": "Dialogue analysis",
+      "share_signal": "Share signal",
+      "credential": "Credential",
+      "match_scan": "Match scan",
+      "resume": "Resume activity",
+      "fleet": "Fleet co-presence"
+    }
   },
   "dashboard": {
     "freeRegister": "Sign up free",

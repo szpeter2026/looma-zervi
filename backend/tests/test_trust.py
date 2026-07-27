@@ -117,6 +117,31 @@ class TestAttestationFlow:
         resp = client.get("/v1/trust/attestations")
         assert resp.status_code == 401
 
+    def test_resume_match_bridge_mints_weak_identity(self, client):
+        """T-space resume/match memories alone should mint weak identity (not empty)."""
+        token, uid = _register(client, "trust_bridge@test.com", "Bridge")
+        db = client.application._db
+        db.insert_trust_memory(
+            user_id=uid,
+            session_type="resume",
+            session_id="resume-1",
+            memory_content={"skills_claimed": ["Python"]},
+        )
+        db.insert_trust_memory(
+            user_id=uid,
+            session_type="match",
+            session_id="match-1",
+            memory_content={"top_score": 80},
+        )
+        refresh = client.post("/v1/trust/refresh", headers=_headers(token))
+        assert refresh.status_code == 200
+        assert refresh.get_json()["total"] >= 1
+        resp = client.get("/v1/trust/attestations", headers=_headers(token))
+        data = resp.get_json()
+        identity = next(a for a in data["attestations"] if a["claim_type"] == "identity")
+        assert identity["verification_status"] == "weak"
+        assert identity["evidence_type"] == "resume"
+
     def test_refresh_requires_auth(self, client):
         """Unauthenticated POST refresh should return 401."""
         resp = client.post("/v1/trust/refresh")

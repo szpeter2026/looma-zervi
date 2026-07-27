@@ -31,6 +31,7 @@ export {
   createJobsApi,
   createReportsApi,
   createMatchReportsApi,
+  createTrustApi,
   createPaymentApi,
   createQuotaApi,
   createNarrativeApi,
@@ -213,6 +214,23 @@ export type {
   ShareDimension,
   ShareMatchReportRequest,
 } from "./types/matchReport";
+
+export type {
+  TrustClaimType,
+  TrustEvidenceType,
+  TrustVerificationStatus,
+  TrustAttestation,
+  TrustAttestationsResponse,
+  CreateShareCodeRequest,
+  CreateShareCodeResponse,
+  TrustShareCode,
+  TrustShareCodesResponse,
+  TrustVerifyRequest,
+  TrustVerifyResponse,
+  TrustAuditLogEntry,
+  TrustAuditLogResponse,
+  TrustPublicKeyResponse,
+} from "./types/trust";
 
 export type {
   PaymentPlan,

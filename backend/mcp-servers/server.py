@@ -460,11 +460,15 @@ def parse_resume(resume_text: str, token: str = "", user_id: str = "") -> dict:
         logger.warning(f"Consent check skipped (DB unavailable): {e}")
 
     try:
-        from src.agents.document_agents import run_document_analysis
+        from src.agents.document_agents import DocumentAnalysisError, run_document_analysis
 
         extracted = run_document_analysis("resume", resume_text)
         return {"extracted": extracted}
+    except DocumentAnalysisError as e:
+        return {"extracted": {}, "error": e.message, "hint": e.code}
     except ImportError as e:
+        return {"extracted": {}, "error": str(e)}
+    except Exception as e:
         return {"extracted": {}, "error": str(e)}
 
 
