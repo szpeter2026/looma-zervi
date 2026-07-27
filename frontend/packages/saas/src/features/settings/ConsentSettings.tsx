@@ -40,7 +40,7 @@ function ScopeCard({
   revoking: boolean;
   onRevoke: () => void;
   hint?: string;
-  covered?: string[];
+  covered?: ConsentScope[];
 }) {
   return (
     <div
