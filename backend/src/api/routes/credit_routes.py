@@ -62,33 +62,106 @@ def _credit_cache_set(company_name: str, result: dict) -> None:
 
 # ---- Helpers ----
 
+def _qcc_is_configured() -> bool:
+    """True when QCC is enabled and auth token is non-empty (no secret leaked)."""
+    import os
+    from flask import current_app
+
+    enabled = str(
+        current_app.config.get("QCC_ENABLED", os.getenv("QCC_ENABLED", "true"))
+    ).lower() in ("1", "true", "yes", "on")
+    if not enabled:
+        return False
+    try:
+        from src.credit.qcc_client import _resolve_auth_token
+        return bool(_resolve_auth_token())
+    except Exception:
+        return bool((os.getenv("QCC_AUTH_TOKEN") or "").strip())
+
+
+def _sanitize_qcc_error(exc: Exception) -> str:
+    """Human-readable QCC failure class without leaking tokens."""
+    msg = str(exc)
+    if "QCC_AUTH_TOKEN" in msg or "未配置" in msg or "为空" in msg:
+        return "token_missing"
+    if "401" in msg or "Unauthorized" in msg.lower():
+        return "unauthorized"
+    if "timeout" in msg.lower() or "Timeout" in msg:
+        return "timeout"
+    if "connect" in msg.lower() or "SSE" in msg:
+        return "unreachable"
+    return "upstream_error"
+
+
+def _extract_json_object(text: str) -> dict | None:
+    """Parse a JSON object from raw LLM output (fences / prose wrapper OK)."""
+    if not text:
+        return None
+    resp = text.strip()
+    if "```" in resp:
+        m = re.search(r"```(?:json)?\s*([\s\S]*?)```", resp)
+        if m:
+            resp = m.group(1).strip()
+    try:
+        data = json.loads(resp)
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        pass
+    # Fall back: first balanced {...} block
+    start = resp.find("{")
+    end = resp.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            data = json.loads(resp[start : end + 1])
+            return data if isinstance(data, dict) else None
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
 def _parse_credit_text(text: str) -> dict | None:
-    """LLM-powered credit text extraction: entity_name, report_type, summary."""
+    """LLM-powered credit text extraction: entity_name, report_type, summary.
+
+    Uses a strict JSON-only extractor prompt (not PlanetX navigator persona)
+    and low temperature so conversational wrappers are less likely.
+    """
     prompt = (
-        "你是一个企业征信评估专家。根据以下文本，提取并评估该企业的信用状况，"
-        "输出 JSON 格式：\n"
-        "{{\n"
-        '  "entity_name": "企业名称",\n'
-        '  "report_type": "报告类型（如：企业信用报告/经营风险评估/工商信息摘要）",\n'
-        '  "summary": "信用评估摘要（200字以内，包含经营状态、风险提示、信用等级评估）"\n'
-        "}}\n\n"
-        "只输出 JSON，不要任何解释或前缀。\n\n"
+        "你是结构化数据提取器，不是聊天助手，禁止自我介绍或扮演导航员。\n"
+        "根据以下文本评估企业信用，只输出一个 JSON 对象，不要 Markdown，不要解释。\n"
+        "字段：\n"
+        '- "entity_name": 企业名称字符串\n'
+        '- "report_type": 报告类型字符串（如：企业信用报告/经营风险评估/工商信息摘要）\n'
+        '- "summary": 信用评估摘要字符串（200字以内，含经营状态、风险提示）\n\n'
+        "示例：{\"entity_name\":\"示例科技有限公司\",\"report_type\":\"经营风险评估\","
+        "\"summary\":\"存续经营，行业地位稳定，未见重大公开风险。\"}\n\n"
         f"待评估文本：\n{text[:4000]}"
     )
 
     try:
-        response = _call_llm(prompt)
+        response = _call_llm(prompt, temperature=0.1, max_tokens=600)
         if not response:
             return None
-        resp = response.strip()
-        if "```" in resp:
-            m = re.search(r"```(?:json)?\s*([\s\S]*?)```", resp)
-            if m:
-                resp = m.group(1).strip()
-        return json.loads(resp)
+        data = _extract_json_object(response)
+        if not data:
+            logger.error("Credit parse failed: no JSON object in LLM response")
+            return None
+        # Normalize required keys
+        return {
+            "entity_name": str(data.get("entity_name") or "").strip(),
+            "report_type": str(data.get("report_type") or "企业信用评估").strip(),
+            "summary": str(data.get("summary") or "").strip(),
+        }
     except Exception as e:
         logger.error(f"Credit parse failed: {e}")
         return None
+
+
+def _credit_diagnostics(qcc_error: str | None = None) -> dict:
+    """Attach safe diagnostics for probe scripts."""
+    out = {"qcc_configured": _qcc_is_configured()}
+    if qcc_error:
+        out["qcc_error"] = qcc_error
+    return out
 
 
 def _build_qcc_credit_response(report: QccCreditReport) -> dict:
@@ -144,6 +217,7 @@ def _build_qcc_credit_response(report: QccCreditReport) -> dict:
     return {"extracted": extracted, "extended": extended}
 
 
+
 # ---- Routes ----
 
 @credit_bp.route("/analyze", methods=["POST"])
@@ -161,10 +235,14 @@ def analyze():
         return jsonify(error="missing_text", message="请提供征信/企业信息文本"), 400
 
     extracted = _parse_credit_text(text)
-    if not extracted:
-        return jsonify(error="parse_failed", message="征信解析失败，请检查文本内容或重试"), 422
+    if not extracted or not extracted.get("summary"):
+        return jsonify(
+            error="parse_failed",
+            message="征信解析失败，请检查文本内容或重试",
+            **_credit_diagnostics(),
+        ), 422
 
-    return jsonify(extracted=extracted)
+    return jsonify(extracted=extracted, source="llm", **_credit_diagnostics())
 
 
 @credit_bp.route("/check-company", methods=["POST"])
@@ -182,7 +260,9 @@ def check_company():
 
     Returns: { "extracted": { entity_name, report_type, summary },
                "extended": { company, risk, operation, executives, ... },
-               "source": "qcc" | "llm" }
+               "source": "qcc" | "llm",
+               "qcc_configured": bool,
+               "qcc_error"?: str }
     """
     body = request.get_json(silent=True) or {}
     company_name = (body.get("company_name") or "").strip()
@@ -194,10 +274,12 @@ def check_company():
         logger.info(f"[Credit] cache hit for '{company_name}'")
         payload = dict(cached)
         payload["cached"] = True
+        payload.update(_credit_diagnostics(payload.get("qcc_error")))
         return jsonify(payload)
 
     location = (body.get("location") or "").strip()
     industry = (body.get("industry") or "").strip()
+    qcc_error: str | None = None
 
     # ── Primary: QCC official data source ──
     try:
@@ -219,13 +301,20 @@ def check_company():
             )
             response = _build_qcc_credit_response(report)
             response["source"] = "qcc"
+            response.update(_credit_diagnostics())
             _credit_cache_set(company_name, response)
             return jsonify(response)
+        qcc_error = "not_found"
 
     except QccMcpError as e:
-        logger.warning(f"[Credit] QCC unavailable for '{company_name}', falling back to LLM: {e}")
+        qcc_error = _sanitize_qcc_error(e)
+        logger.warning(
+            f"[Credit] QCC unavailable for '{company_name}' ({qcc_error}), "
+            f"falling back to LLM: {e}"
+        )
 
     except Exception as e:
+        qcc_error = "unexpected"
         logger.error(f"[Credit] QCC unexpected error for '{company_name}': {e}")
 
     # ── Fallback: LLM-based evaluation (legacy) ──
@@ -241,8 +330,12 @@ def check_company():
     )
 
     extracted = _parse_credit_text(query)
-    if not extracted:
-        return jsonify(error="parse_failed", message=f"无法评估 {company_name}，请稍后重试"), 422
+    if not extracted or not extracted.get("summary"):
+        return jsonify(
+            error="parse_failed",
+            message=f"无法评估 {company_name}，请稍后重试",
+            **_credit_diagnostics(qcc_error),
+        ), 422
 
     # Ensure the entity_name matches the requested company
     if not extracted.get("entity_name"):
@@ -255,6 +348,7 @@ def check_company():
             "⚠️ 正式数据源暂不可用，当前为 AI 训练知识评估。"
             "本评估基于大语言模型训练数据，不可作为正式征信/风控依据。"
         ),
+        **_credit_diagnostics(qcc_error),
     }
     _credit_cache_set(company_name, response)
     return jsonify(response)
@@ -291,10 +385,15 @@ def check_company_detail():
         )
 
         if not report.company.company_name:
-            return jsonify(error="not_found", message=f"未找到企业 '{company_name}' 的信息"), 404
+            return jsonify(
+                error="not_found",
+                message=f"未找到企业 '{company_name}' 的信息",
+                **_credit_diagnostics("not_found"),
+            ), 404
 
         response = _build_qcc_credit_response(report)
         response["source"] = "qcc"
+        response.update(_credit_diagnostics())
 
         # Add full extended data for detail view
         response["extended"]["ipr"] = report.ipr
@@ -305,9 +404,18 @@ def check_company_detail():
         return jsonify(response)
 
     except QccMcpError as e:
+        qcc_error = _sanitize_qcc_error(e)
         logger.error(f"[Credit] QCC detail failed for '{company_name}': {e}")
-        return jsonify(error="qcc_unavailable", message=f"企查查服务暂不可用: {e}"), 503
+        return jsonify(
+            error="qcc_unavailable",
+            message="企查查服务暂不可用",
+            **_credit_diagnostics(qcc_error),
+        ), 503
 
     except Exception as e:
         logger.error(f"[Credit] QCC detail unexpected error: {e}")
-        return jsonify(error="internal_error", message="征信查询服务异常，请稍后重试"), 500
+        return jsonify(
+            error="internal_error",
+            message="征信查询服务异常，请稍后重试",
+            **_credit_diagnostics("unexpected"),
+        ), 500
