@@ -70,6 +70,34 @@ def _record_resume_trust(user_id: str, parsed: dict):
     except Exception as e:
         logger.warning("trust_bridge: resume trust recording skipped for %s: %s", user_id, e)
 
+
+def _record_resume_timeline(user_id: str, parsed: dict, *, channel: str, file_ext: str = "", raw_chars: int = 0):
+    """Best-effort timeline resume_ingest (no full text)."""
+    if user_id == "guest-anon":
+        return
+    try:
+        from src.db.manager import DatabaseManager
+        from src.timeline.events import record_resume_ingest
+
+        db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
+        db = DatabaseManager(db_path)
+        skills = parsed.get("skills") or parsed.get("tech_stack") or []
+        if isinstance(skills, str):
+            skills = [s.strip() for s in skills.split(",") if s.strip()]
+        record_resume_ingest(
+            db,
+            user_id,
+            source_ref=f"resume_parse_{user_id}",
+            channel=channel,
+            skills_count=len(skills) if isinstance(skills, list) else 0,
+            years=str(parsed.get("years_of_experience") or ""),
+            degree=str(parsed.get("highest_degree") or ""),
+            file_ext=file_ext,
+            raw_chars=raw_chars,
+        )
+    except Exception as e:
+        logger.warning("timeline: resume_ingest skipped for %s: %s", user_id, e)
+
 _SHA_TZ = timezone(timedelta(hours=8))
 
 
@@ -109,6 +137,7 @@ def parse_resume():
 
         # ── Trust Bridge: record skills_claimed from resume ──
         _record_resume_trust(user_id, result)
+        _record_resume_timeline(user_id, result, channel="parse", raw_chars=len(text))
 
         return jsonify(extracted=result)
     except Exception as e:
@@ -219,6 +248,16 @@ def upload_resume():
 
     # ── Trust Bridge: record upload resume trust ──
     _record_resume_trust(user_id, extracted)
+    ext = ""
+    if filename and "." in filename:
+        ext = filename.rsplit(".", 1)[-1].lower()[:10]
+    _record_resume_timeline(
+        user_id,
+        extracted,
+        channel="upload",
+        file_ext=ext,
+        raw_chars=len(markdown or ""),
+    )
 
     # Step 3: Persist to DB
     resume_id = None

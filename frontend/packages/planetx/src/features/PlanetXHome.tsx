@@ -10,6 +10,7 @@ import HubScreen from './hub/HubScreen'
 import QuizScreen from './quiz/QuizScreen'
 import ResultScreen from './result/ResultScreen'
 import MatchScreen from './match/MatchScreen'
+import TimelineScreen from './timeline/TimelineScreen'
 
 /**
  * PlanetX 星际人格测试 — 主入口
@@ -40,6 +41,7 @@ export default function PlanetXHome() {
     quiz: <QuizScreen />,
     result: <ResultScreen />,
     match: <MatchScreen />,
+    timeline: <TimelineScreen />,
   }[screen]
 
   return (

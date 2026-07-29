@@ -73,6 +73,13 @@ import type {
   TrustVerifyRequest,
   TrustVerifyResponse,
 } from "../types/trust";
+import type {
+  CreateTimelineEventRequest,
+  TimelineBackfillResponse,
+  TimelineGrowthResponse,
+  TimelineListResponse,
+  TimelineEvent,
+} from "../types/timeline";
 import { API_ROUTES } from "../constants/routes";
 
 // ============================================================
@@ -734,3 +741,34 @@ export function createComplianceApi(client: ApiClient) {
       ),
   };
 }
+
+// ============================================================
+// Timeline API (career behaviour time-series)
+// ============================================================
+export function createTimelineApi(client: ApiClient) {
+  return {
+    list: (params?: { cursor?: string; limit?: number; kind?: string; since?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.cursor) q.set("cursor", params.cursor);
+      if (params?.limit != null) q.set("limit", String(params.limit));
+      if (params?.kind) q.set("kind", params.kind);
+      if (params?.since) q.set("since", params.since);
+      const qs = q.toString();
+      return client.get<TimelineListResponse>(
+        qs ? `${API_ROUTES.TIMELINE}?${qs}` : API_ROUTES.TIMELINE,
+      );
+    },
+
+    createEvent: (payload: CreateTimelineEventRequest) =>
+      client.post<TimelineEvent>(API_ROUTES.TIMELINE_EVENTS, payload),
+
+    deleteEvent: (eventId: string) =>
+      client.delete<{ ok: boolean; id: string }>(`${API_ROUTES.TIMELINE_EVENTS}/${eventId}`),
+
+    growth: () => client.get<TimelineGrowthResponse>(API_ROUTES.TIMELINE_GROWTH),
+
+    backfill: () =>
+      client.post<TimelineBackfillResponse>(API_ROUTES.TIMELINE_BACKFILL),
+  };
+}
+

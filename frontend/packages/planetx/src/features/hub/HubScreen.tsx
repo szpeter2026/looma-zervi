@@ -17,7 +17,7 @@ export default function HubScreen() {
   const missions: {
     id: MissionId; icon: string; name: string; reward: string; xp: number; requires?: MissionId
   }[] = [
-    { id: 'personality', icon: '🔮', name: '星际人格测试', reward: '+50 XP · 解锁专属星球身份', xp: 50 },
+    { id: 'personality', icon: '🔮', name: '人格冷启动测评', reward: '+50 XP · 生成初始假设（将随行为更新）', xp: 50 },
     { id: 'team', icon: '🤝', name: '组建3人舰队', reward: '+80 XP · 解锁隐藏星图', xp: 80, requires: 'personality' },
     { id: 'match', icon: '🎯', name: '首次星际匹配', reward: '+40 XP · 获得匹配星图', xp: 40, requires: 'team' },
     { id: 'share', icon: '📡', name: '发送星际信号', reward: '+30 XP · 邀请好友获得额外能量', xp: 30, requires: 'personality' },
@@ -49,6 +49,29 @@ export default function HubScreen() {
 
       {/* XP Bar */}
       <XPBar level={level} xp={xp} xpToNext={xpToNext} />
+
+      <button
+        type="button"
+        onClick={() => setScreen('timeline')}
+        style={{
+          width: '100%',
+          marginBottom: 12,
+          padding: '12px 14px',
+          borderRadius: 12,
+          border: '1px solid rgba(200,255,80,0.3)',
+          background: 'rgba(200,255,80,0.08)',
+          color: 'var(--px-color-accent)',
+          fontWeight: 700,
+          fontSize: 13,
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        🌀 职业时间线 · 看见行为在长
+        <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--px-color-text-muted)', marginTop: 4 }}>
+          签到 / 记项目 / 测评假设都会沉淀在这里
+        </span>
+      </button>
 
       {/* Nav Tabs */}
       <div style={{ display: 'flex', gap: '4px', background: 'var(--px-color-bg-card)', borderRadius: '12px', padding: '4px', marginBottom: '16px' }}>
@@ -146,8 +169,28 @@ export default function HubScreen() {
               {personalityType?.name ?? '未测试'}
             </div>
             <div style={{ fontSize: '12px', color: 'var(--px-color-text-muted)' }}>
-              {personalityType?.tagline ?? '完成人格测试获取你的星际身份'}
+              {personalityType
+                ? '初始假设 · 将随行为沉淀更新'
+                : '完成人格冷启动测评，生成初始假设'}
             </div>
+            {personalityType && (
+              <button
+                type="button"
+                onClick={() => setScreen('timeline')}
+                style={{
+                  marginTop: 10,
+                  padding: '6px 12px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(200,255,80,0.25)',
+                  background: 'transparent',
+                  color: 'var(--px-color-accent)',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                查看时间线 →
+              </button>
+            )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             {[

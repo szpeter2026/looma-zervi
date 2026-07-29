@@ -13,7 +13,6 @@ from src.api.auth.decorators import require_auth
 from src.timeline.constants import EVENT_KIND_MANUAL
 from src.timeline.events import (
     compute_growth_stub,
-    record_quiz_hypothesis,
     sanitize_payload,
     serialize_timeline_row,
 )
@@ -136,26 +135,15 @@ def get_growth():
 @timeline_bp.route("/bridge/backfill", methods=["POST"])
 @require_auth
 def bridge_backfill():
-    """Idempotent: project existing quiz personality into timeline."""
-    db = _get_db()
-    profile = db.get_game_profile(g.user_id) or {}
-    personality_type = (profile.get("personality_type") or "").strip()
-    written = []
-    if personality_type:
-        record_quiz_hypothesis(
-            db,
-            g.user_id,
-            personality_type,
-            personality_detail=profile.get("personality_detail"),
-            source_ref=f"profile_sync_{g.user_id}",
-        )
-        written.extend(["quiz_completed", "initial_hypothesis"])
+    """Idempotent: project quiz / share / match / resume into timeline."""
+    from src.timeline.events import backfill_user_timeline
 
-    # Future: match_reports / share_codes / resume — E1.2+
+    db = _get_db()
+    written = backfill_user_timeline(db, g.user_id)
     count = db.count_timeline_events(g.user_id)
     return jsonify(
         ok=True,
         written_kinds=written,
         event_count=count,
-        note="phase1 backfill covers quiz hypothesis only; match/share/resume follow in E1.2+",
+        note="phase1 backfill: quiz + share_codes + profile_share + match_reports + resume memories",
     )

@@ -40,6 +40,7 @@ export {
   createAnalyticsApi,
   createComplianceApi,
   createAdminApi,
+  createTimelineApi,
 } from "./api/createApi";
 
 // Types
@@ -231,6 +232,19 @@ export type {
   TrustAuditLogResponse,
   TrustPublicKeyResponse,
 } from "./types/trust";
+
+export type {
+  TimelineEvent,
+  TimelineEventKind,
+  TimelineListResponse,
+  CreateTimelineEventRequest,
+  TimelineGrowthResponse,
+  TimelineGrowthDimension,
+  TimelineBackfillResponse,
+  TimelineSignalQuality,
+  TimelineWeightRole,
+  TimelineVisibility,
+} from "./types/timeline";
 
 export type {
   PaymentPlan,

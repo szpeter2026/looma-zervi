@@ -198,3 +198,245 @@ def compute_growth_stub(db, user_id: str) -> dict:
         ],
         "version": "growth_stub_v0",
     }
+
+
+def record_share_authorized(
+    db,
+    user_id: str,
+    *,
+    source_ref: str,
+    channel: str,
+    scope: list | None = None,
+    reused: bool = False,
+    occurred_at: str | None = None,
+) -> dict | None:
+    """Timeline node when user authorises sharing profile/attestations."""
+    prefix = "sc_" if channel == "trust_verify" else "px_"
+    return record_timeline_event(
+        db,
+        user_id,
+        "share_authorized",
+        "share",
+        source_ref=source_ref,
+        title="授权分享画像",
+        summary="你向信任方开放了画像可见权限",
+        payload={
+            "share_code_prefix": prefix,
+            "scope": scope or [],
+            "channel": channel,
+            "reused": bool(reused),
+        },
+        signal_quality="observed",
+        confidence=0.85,
+        weight_role="evidence",
+        visibility="private",
+        occurred_at=occurred_at,
+    )
+
+
+def record_match_scan(
+    db,
+    user_id: str,
+    *,
+    report_id: str,
+    total_jobs: int = 0,
+    max_score: float | None = None,
+    avg_score: float | None = None,
+    pipeline_version: str = "",
+    has_resume_id: bool = False,
+    occurred_at: str | None = None,
+) -> dict | None:
+    """Timeline node when a match report is saved (completed)."""
+    return record_timeline_event(
+        db,
+        user_id,
+        "match_scan",
+        "match",
+        source_ref=report_id,
+        title="完成职位匹配扫描",
+        summary=f"扫描 {total_jobs} 个岗位" if total_jobs else "保存匹配报告",
+        payload={
+            "total_jobs": total_jobs,
+            "max_score": max_score,
+            "avg_score": avg_score,
+            "pipeline_version": pipeline_version or "",
+            "has_resume_id": bool(has_resume_id),
+        },
+        signal_quality="observed",
+        confidence=0.8,
+        weight_role="evidence",
+        visibility="private",
+        occurred_at=occurred_at,
+    )
+
+
+def record_resume_ingest(
+    db,
+    user_id: str,
+    *,
+    source_ref: str,
+    channel: str,
+    skills_count: int = 0,
+    years: str = "",
+    degree: str = "",
+    file_ext: str = "",
+    raw_chars: int = 0,
+    occurred_at: str | None = None,
+) -> dict | None:
+    """Timeline node after resume parse/upload (no full text)."""
+    if user_id == "guest-anon":
+        return None
+    return record_timeline_event(
+        db,
+        user_id,
+        "resume_ingest",
+        "resume",
+        source_ref=source_ref,
+        title="沉淀简历摘要",
+        summary="从简历提取结构化摘要（正文不入库时间线）",
+        payload={
+            "channel": channel,
+            "skills_count": skills_count,
+            "years": years or "",
+            "degree": degree or "",
+            "file_ext": file_ext or "",
+            "raw_chars": raw_chars,
+        },
+        signal_quality="observed",
+        confidence=0.7,
+        weight_role="evidence",
+        visibility="private",
+        occurred_at=occurred_at,
+    )
+
+
+def backfill_user_timeline(db, user_id: str) -> list[str]:
+    """Idempotent backfill from quiz / share / match / resume sources."""
+    written: list[str] = []
+    profile = db.get_game_profile(user_id) or {}
+    personality_type = (profile.get("personality_type") or "").strip()
+    if personality_type:
+        record_quiz_hypothesis(
+            db,
+            user_id,
+            personality_type,
+            personality_detail=profile.get("personality_detail"),
+            source_ref=f"profile_sync_{user_id}",
+        )
+        written.extend(["quiz_completed", "initial_hypothesis"])
+
+    # Trust share_codes
+    try:
+        with db.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT id, scope, created_at FROM share_codes
+                   WHERE owner_id = ? AND status != 'revoked'""",
+                (user_id,),
+            ).fetchall()
+        for r in rows:
+            scope = r["scope"]
+            if isinstance(scope, str):
+                import json
+                try:
+                    scope = json.loads(scope)
+                except (json.JSONDecodeError, TypeError):
+                    scope = []
+            record_share_authorized(
+                db,
+                user_id,
+                source_ref=r["id"],
+                channel="trust_verify",
+                scope=scope if isinstance(scope, list) else [],
+                occurred_at=r["created_at"],
+            )
+            written.append("share_authorized")
+    except Exception as e:
+        logger.warning("backfill share_codes failed: %s", e)
+
+    # Referral profile_share invite codes
+    try:
+        with db.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT id, created_at FROM invite_codes
+                   WHERE created_by = ? AND tier_grant = 'profile_share'""",
+                (user_id,),
+            ).fetchall()
+        for r in rows:
+            record_share_authorized(
+                db,
+                user_id,
+                source_ref=r["id"],
+                channel="profile_share",
+                scope=["profile_share"],
+                occurred_at=r["created_at"],
+            )
+            written.append("share_authorized")
+    except Exception as e:
+        logger.warning("backfill invite_codes failed: %s", e)
+
+    # Completed match reports
+    try:
+        with db.get_conn() as conn:
+            rows = conn.execute(
+                """SELECT id, metadata, resume_id, created_at FROM match_reports
+                   WHERE user_id = ? AND status = 'completed'""",
+                (user_id,),
+            ).fetchall()
+        import json
+        for r in rows:
+            meta = r["metadata"] or "{}"
+            if isinstance(meta, str):
+                try:
+                    meta = json.loads(meta)
+                except (json.JSONDecodeError, TypeError):
+                    meta = {}
+            record_match_scan(
+                db,
+                user_id,
+                report_id=r["id"],
+                total_jobs=int(meta.get("total_jobs") or 0),
+                max_score=meta.get("max_score"),
+                avg_score=meta.get("avg_score"),
+                pipeline_version=str(meta.get("pipeline_version") or ""),
+                has_resume_id=bool(r["resume_id"]),
+                occurred_at=r["created_at"],
+            )
+            written.append("match_scan")
+    except Exception as e:
+        logger.warning("backfill match_reports failed: %s", e)
+
+    # Resume trust memories as ingest proxies
+    try:
+        memories = db.get_trust_memories(user_id, session_type="resume", limit=20)
+        for m in memories:
+            content = m.get("memory_content") or "{}"
+            if isinstance(content, str):
+                import json
+                try:
+                    content = json.loads(content)
+                except (json.JSONDecodeError, TypeError):
+                    content = {}
+            skills = content.get("skills_claimed") or []
+            record_resume_ingest(
+                db,
+                user_id,
+                source_ref=m.get("session_id") or m.get("id"),
+                channel="trust_memory",
+                skills_count=len(skills) if isinstance(skills, list) else 0,
+                years=str(content.get("years") or ""),
+                degree=str(content.get("education") or ""),
+                occurred_at=m.get("created_at"),
+            )
+            written.append("resume_ingest")
+    except Exception as e:
+        logger.warning("backfill resume memories failed: %s", e)
+
+    # unique preserve order
+    seen = set()
+    out = []
+    for k in written:
+        if k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+

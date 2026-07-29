@@ -64,6 +64,29 @@ def create_match_report():
         resource_id=report["id"],
         metadata={"total_jobs": report.get("metadata", {}).get("total_jobs", 0)},
     )
+
+    try:
+        from src.timeline.events import record_match_scan
+        meta = report.get("metadata") or {}
+        if isinstance(meta, str):
+            import json
+            try:
+                meta = json.loads(meta)
+            except (json.JSONDecodeError, TypeError):
+                meta = {}
+        record_match_scan(
+            current_app._db,
+            g.user_id,
+            report_id=report["id"],
+            total_jobs=int(meta.get("total_jobs") or len(matches)),
+            max_score=meta.get("max_score"),
+            avg_score=meta.get("avg_score"),
+            pipeline_version=str(meta.get("pipeline_version") or ""),
+            has_resume_id=bool(resume_id),
+        )
+    except Exception as e:
+        logger.warning("timeline: match_scan skipped for %s: %s", g.user_id, e)
+
     return jsonify(report), 201
 
 

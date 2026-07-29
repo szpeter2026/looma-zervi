@@ -77,18 +77,39 @@ def create_code():
                     source="server",
                     properties={"reused": True},
                 )
+                try:
+                    from src.timeline.events import record_share_authorized
+                    with db.get_conn() as conn:
+                        row = conn.execute(
+                            """SELECT id FROM invite_codes
+                               WHERE created_by = ? AND tier_grant = ? AND code = ?
+                               ORDER BY created_at DESC LIMIT 1""",
+                            (g.user_id, PROFILE_SHARE_GRANT, code),
+                        ).fetchone()
+                    if row:
+                        record_share_authorized(
+                            db,
+                            g.user_id,
+                            source_ref=dict(row)["id"],
+                            channel="profile_share",
+                            scope=["profile_share"],
+                            reused=True,
+                        )
+                except Exception:
+                    pass
                 return jsonify(code=code, purpose=purpose, tier_grant=tier_grant), 200
         except Exception:
             pass
 
     code = str(uuid.uuid4())[:8].upper()
+    invite_id = str(uuid.uuid4())
 
     try:
         with db.get_conn() as conn:
             conn.execute(
                 """INSERT INTO invite_codes (id, code, created_by, tier_grant)
                    VALUES (?, ?, ?, ?)""",
-                (str(uuid.uuid4()), code, g.user_id, tier_grant),
+                (invite_id, code, g.user_id, tier_grant),
             )
         if purpose == "profile_share":
             log_product_event(
@@ -99,6 +120,17 @@ def create_code():
                 share_code=code,
                 source="server",
             )
+            try:
+                from src.timeline.events import record_share_authorized
+                record_share_authorized(
+                    db,
+                    g.user_id,
+                    source_ref=invite_id,
+                    channel="profile_share",
+                    scope=["profile_share"],
+                )
+            except Exception:
+                pass
         return jsonify(code=code, purpose=purpose, tier_grant=tier_grant), 201
     except Exception as e:
         return jsonify(error="create_failed", message=str(e)), 500

@@ -133,6 +133,12 @@ export const API_ROUTES = {
   ANALYTICS_FUNNEL: "/v1/analytics/funnel",
   FEEDBACK_MICRO: "/v1/feedback/micro",
 
+  // Career timeline (behaviour time-series)
+  TIMELINE: "/v1/timeline",
+  TIMELINE_EVENTS: "/v1/timeline/events",
+  TIMELINE_GROWTH: "/v1/timeline/growth",
+  TIMELINE_BACKFILL: "/v1/timeline/bridge/backfill",
+
   // Trust protocol (attestation cards + share_code verify)
   TRUST_ATTESTATIONS: "/v1/trust/attestations",
   TRUST_REFRESH: "/v1/trust/refresh",
