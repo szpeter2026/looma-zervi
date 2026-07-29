@@ -152,3 +152,37 @@ def test_trust_share_code_writes_timeline(client):
     items = [i for i in listing.get_json()["items"] if i["event_kind"] == "share_authorized"]
     assert items
     assert items[0]["payload"].get("channel") == "trust_verify"
+
+
+def test_profile_view_timeline_l1_empty_and_with_checkin(client):
+    """Share page exposes L1 summary; empty stays honest; check_in adds thickness."""
+    token = _register(client, "tl_l1@test.com")
+    # quiz only → thin (no behaviour thickness yet)
+    assert client.post(
+        "/v1/game/profile-sync",
+        headers=_auth(token),
+        json={"personality_type": "超新星领航员", "personality_detail": "{}"},
+    ).status_code == 200
+    share = client.post(
+        "/v1/referral/create",
+        headers=_auth(token),
+        json={"purpose": "profile_share"},
+    )
+    assert share.status_code in (200, 201)
+    code = share.get_json()["code"]
+    view = client.get(f"/v1/referral/profile-view/{code}").get_json()
+    l1 = view["timeline_l1"]
+    assert l1["has_thickness"] is False
+    assert l1["confidence"] in ("thin", "empty", "building")
+    assert "不足" in l1["message"] or "假设" in l1["message"]
+
+    # add check_in → thickness
+    assert client.post(
+        "/v1/timeline/events",
+        headers=_auth(token),
+        json={"event_kind": "check_in", "title": "签到", "payload": {"mood": "focused"}},
+    ).status_code == 201
+    view2 = client.get(f"/v1/referral/profile-view/{code}").get_json()
+    l1b = view2["timeline_l1"]
+    assert l1b["has_thickness"] is True
+    assert l1b["check_in_count"] >= 1

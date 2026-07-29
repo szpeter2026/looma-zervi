@@ -13,6 +13,7 @@ import {
 import { createSaasApiClient } from "../../api/saasApiClient";
 import { useSaasAuthStore } from "../auth/authStore";
 import TierGatePanel from "../../brand/components/TierGatePanel";
+import TimelineL1Card from "./TimelineL1Card";
 
 export default function CandidateDetail() {
   const { t } = useTranslation();
@@ -128,6 +129,8 @@ export default function CandidateDetail() {
           </p>
         )}
       </div>
+
+      <TimelineL1Card summary={candidate.timeline_l1} />
 
       {!hasMinTier(user?.tier, "pro") && (
         <Link

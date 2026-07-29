@@ -271,6 +271,20 @@ def profile_view(code: str):
             properties={"personality_type": profile.get("personality_type")},
         )
 
+        timeline_l1 = {}
+        try:
+            from src.timeline.events import build_timeline_l1_summary
+            timeline_l1 = build_timeline_l1_summary(db, creator_id)
+        except Exception:
+            timeline_l1 = {
+                "level": "l1",
+                "event_count": 0,
+                "has_thickness": False,
+                "confidence": "empty",
+                "message": "尚无足够行为沉淀，画像厚度不足",
+                "recent_labels": [],
+            }
+
         return jsonify(
             share_code=code,
             user_id=creator_id,
@@ -279,6 +293,7 @@ def profile_view(code: str):
             personality_detail=detail,
             xp=profile.get("xp", 0),
             level=profile.get("level", 1),
+            timeline_l1=timeline_l1,
         )
     except Exception as e:
         return jsonify(error="view_failed", message=str(e)), 500

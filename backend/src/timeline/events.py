@@ -440,3 +440,79 @@ def backfill_user_timeline(db, user_id: str) -> list[str]:
             out.append(k)
     return out
 
+
+# Kinds safe to surface as L1 aggregate labels (no private payloads)
+_L1_KIND_LABELS = {
+    "initial_hypothesis": "初始假设",
+    "quiz_completed": "完成测评",
+    "project_record": "项目记录",
+    "check_in": "每周签到",
+    "share_authorized": "授权分享",
+    "match_scan": "匹配扫描",
+    "resume_ingest": "简历沉淀",
+    "interaction_log": "对话沉淀",
+}
+
+
+def build_timeline_l1_summary(db, user_id: str) -> dict:
+    """Public/HR-safe L1 thickness summary — aggregates only, no private payloads.
+
+    Used by profile-view (share link) and enterprise candidate detail.
+    """
+    events = db.list_timeline_events(user_id, limit=100)
+    active = [e for e in events if e.get("status") == "active"]
+    n = len(active)
+    kinds = [e.get("event_kind") for e in active]
+    behavior_kinds = {
+        "project_record",
+        "check_in",
+        "match_scan",
+        "resume_ingest",
+        "interaction_log",
+        "fleet_co_presence",
+    }
+    evidence_behavior = [e for e in active if e.get("event_kind") in behavior_kinds]
+    project_count = sum(1 for k in kinds if k == "project_record")
+    check_in_count = sum(1 for k in kinds if k == "check_in")
+    has_thickness = len(evidence_behavior) >= 1
+
+    last_active_at = None
+    if active:
+        last_active_at = active[0].get("occurred_at") or active[0].get("recorded_at")
+
+    recent_labels = []
+    seen = set()
+    for e in active[:5]:
+        kind = e.get("event_kind") or ""
+        label = _L1_KIND_LABELS.get(kind, kind)
+        if label and label not in seen:
+            seen.add(label)
+            recent_labels.append(label)
+
+    if n == 0:
+        message = "尚无足够行为沉淀，画像厚度不足"
+        confidence = "empty"
+    elif not has_thickness:
+        message = "目前主要是冷启动测评假设，行为沉淀仍不足"
+        confidence = "thin"
+    elif n < 5:
+        message = "已有初步行为节点，画像仍在浮现中"
+        confidence = "building"
+    else:
+        message = "行为时间线正在变厚"
+        confidence = "building"
+
+    return {
+        "level": "l1",
+        "event_count": n,
+        "evidence_count": len(evidence_behavior),
+        "project_count": project_count,
+        "check_in_count": check_in_count,
+        "has_thickness": has_thickness,
+        "hypothesis_present": "initial_hypothesis" in kinds,
+        "confidence": confidence,
+        "message": message,
+        "last_active_at": last_active_at,
+        "recent_labels": recent_labels,
+    }
+
