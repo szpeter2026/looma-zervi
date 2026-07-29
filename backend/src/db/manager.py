@@ -843,6 +843,41 @@ CREATE TABLE IF NOT EXISTS verification_audit_log (
 CREATE INDEX IF NOT EXISTS idx_verification_audit_owner ON verification_audit_log(owner_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_verification_audit_code ON verification_audit_log(share_code);
 
+-- ============================================
+-- Timeline: career time-series (product surface)
+-- See docs/TIMELINE_EVENT_MODEL.md · contracts/timeline.v1.json
+-- Not product_events (funnel) · Not narrative_events (game) · Not trust_memories (evidence raw)
+-- ============================================
+CREATE TABLE IF NOT EXISTS timeline_events (
+    id                TEXT PRIMARY KEY,
+    user_id           TEXT NOT NULL,
+    event_kind        TEXT NOT NULL,
+    occurred_at       TEXT NOT NULL,
+    recorded_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    source_system     TEXT NOT NULL,
+    source_ref        TEXT DEFAULT '',
+    title             TEXT DEFAULT '',
+    summary           TEXT DEFAULT '',
+    payload_json      TEXT DEFAULT '{}',
+    signal_quality    TEXT NOT NULL DEFAULT 'observed',
+    confidence        REAL DEFAULT 0.5,
+    weight_role       TEXT NOT NULL DEFAULT 'evidence',
+    visibility        TEXT NOT NULL DEFAULT 'private',
+    consent_scope     TEXT DEFAULT '[]',
+    status            TEXT NOT NULL DEFAULT 'active',
+    superseded_by     TEXT DEFAULT NULL,
+    created_at        TEXT DEFAULT (datetime('now')),
+    updated_at        TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_timeline_user_time
+    ON timeline_events(user_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_timeline_user_kind
+    ON timeline_events(user_id, event_kind, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_timeline_source
+    ON timeline_events(source_system, source_ref);
+
 """
 
 
@@ -3048,3 +3083,201 @@ class DatabaseManager:
                     (user_id,),
                 )
         return cur.rowcount > 0
+
+    # ============================================
+    # Timeline: career time-series events
+    # ============================================
+    def insert_timeline_event(
+        self,
+        user_id: str,
+        event_kind: str,
+        source_system: str,
+        *,
+        source_ref: str = "",
+        title: str = "",
+        summary: str = "",
+        payload: dict | None = None,
+        signal_quality: str = "observed",
+        confidence: float = 0.5,
+        weight_role: str = "evidence",
+        visibility: str = "private",
+        consent_scope: list | None = None,
+        occurred_at: str | None = None,
+        allow_duplicate: bool = False,
+    ) -> dict:
+        """Insert or upsert a timeline event. Returns the row as dict.
+
+        Idempotent on (user_id, source_system, source_ref, event_kind) when
+        source_ref is non-empty and allow_duplicate is False.
+        """
+        now = _dt_now().isoformat()
+        occurred = occurred_at or now
+        payload_json = json.dumps(payload or {}, ensure_ascii=False)
+        consent_json = json.dumps(consent_scope or [], ensure_ascii=False)
+        event_id = f"tle_{uuid.uuid4().hex[:8]}"
+
+        with self.get_conn() as conn:
+            existing = None
+            if source_ref and not allow_duplicate:
+                existing = conn.execute(
+                    """SELECT * FROM timeline_events
+                       WHERE user_id = ? AND source_system = ?
+                         AND source_ref = ? AND event_kind = ?
+                         AND status != 'deleted'
+                       ORDER BY recorded_at DESC LIMIT 1""",
+                    (user_id, source_system, source_ref, event_kind),
+                ).fetchone()
+
+            if existing:
+                conn.execute(
+                    """UPDATE timeline_events SET
+                         title = ?, summary = ?, payload_json = ?,
+                         signal_quality = ?, confidence = ?, weight_role = ?,
+                         visibility = ?, consent_scope = ?,
+                         occurred_at = ?, updated_at = datetime('now'),
+                         status = 'active'
+                       WHERE id = ?""",
+                    (
+                        title or existing["title"],
+                        summary or existing["summary"],
+                        payload_json,
+                        signal_quality,
+                        confidence,
+                        weight_role,
+                        visibility,
+                        consent_json,
+                        occurred,
+                        existing["id"],
+                    ),
+                )
+                row = conn.execute(
+                    "SELECT * FROM timeline_events WHERE id = ?",
+                    (existing["id"],),
+                ).fetchone()
+            else:
+                conn.execute(
+                    """INSERT INTO timeline_events
+                       (id, user_id, event_kind, occurred_at, recorded_at,
+                        source_system, source_ref, title, summary, payload_json,
+                        signal_quality, confidence, weight_role, visibility,
+                        consent_scope, status)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
+                    (
+                        event_id, user_id, event_kind, occurred, now,
+                        source_system, source_ref, title, summary, payload_json,
+                        signal_quality, confidence, weight_role, visibility,
+                        consent_json,
+                    ),
+                )
+                row = conn.execute(
+                    "SELECT * FROM timeline_events WHERE id = ?",
+                    (event_id,),
+                ).fetchone()
+        return dict(row) if row else {}
+
+    def list_timeline_events(
+        self,
+        user_id: str,
+        *,
+        event_kind: str | None = None,
+        since: str | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+        include_deleted: bool = False,
+    ) -> list[dict]:
+        """List timeline events newest-first. cursor = occurred_at of last item."""
+        limit = max(1, min(int(limit or 50), 100))
+        clauses = ["user_id = ?"]
+        params: list = [user_id]
+        if not include_deleted:
+            clauses.append("status != 'deleted'")
+        if event_kind:
+            clauses.append("event_kind = ?")
+            params.append(event_kind)
+        if since:
+            clauses.append("occurred_at >= ?")
+            params.append(since)
+        if cursor:
+            clauses.append("occurred_at < ?")
+            params.append(cursor)
+        where = " AND ".join(clauses)
+        sql = f"""SELECT * FROM timeline_events
+                  WHERE {where}
+                  ORDER BY occurred_at DESC, recorded_at DESC
+                  LIMIT ?"""
+        params.append(limit)
+        with self.get_conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_timeline_event(self, user_id: str, event_id: str) -> dict | None:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT * FROM timeline_events
+                   WHERE id = ? AND user_id = ?""",
+                (event_id, user_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def soft_delete_timeline_event(self, user_id: str, event_id: str) -> bool:
+        with self.get_conn() as conn:
+            cur = conn.execute(
+                """UPDATE timeline_events SET status = 'deleted',
+                   updated_at = datetime('now')
+                   WHERE id = ? AND user_id = ? AND status != 'deleted'""",
+                (event_id, user_id),
+            )
+        return cur.rowcount > 0
+
+    def supersede_timeline_event(
+        self,
+        user_id: str,
+        event_id: str,
+        *,
+        title: str | None = None,
+        summary: str | None = None,
+        payload: dict | None = None,
+    ) -> dict | None:
+        """Mark old event superseded and insert a replacement active row."""
+        old = self.get_timeline_event(user_id, event_id)
+        if not old or old.get("status") == "deleted":
+            return None
+        old_payload = old.get("payload_json") or "{}"
+        if isinstance(old_payload, str):
+            try:
+                old_payload = json.loads(old_payload)
+            except (json.JSONDecodeError, TypeError):
+                old_payload = {}
+        new_payload = payload if payload is not None else old_payload
+        new_row = self.insert_timeline_event(
+            user_id=user_id,
+            event_kind=old["event_kind"],
+            source_system=old["source_system"],
+            source_ref=old.get("source_ref") or "",
+            title=title if title is not None else old.get("title") or "",
+            summary=summary if summary is not None else old.get("summary") or "",
+            payload=new_payload if isinstance(new_payload, dict) else {},
+            signal_quality=old.get("signal_quality") or "observed",
+            confidence=float(old.get("confidence") or 0.5),
+            weight_role=old.get("weight_role") or "evidence",
+            visibility=old.get("visibility") or "private",
+            occurred_at=old.get("occurred_at"),
+            allow_duplicate=True,
+        )
+        with self.get_conn() as conn:
+            conn.execute(
+                """UPDATE timeline_events SET status = 'superseded',
+                   superseded_by = ?, updated_at = datetime('now')
+                   WHERE id = ? AND user_id = ?""",
+                (new_row.get("id"), event_id, user_id),
+            )
+        return new_row
+
+    def count_timeline_events(self, user_id: str) -> int:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT COUNT(*) AS n FROM timeline_events
+                   WHERE user_id = ? AND status = 'active'""",
+                (user_id,),
+            ).fetchone()
+        return int(row["n"]) if row else 0

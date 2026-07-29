@@ -147,6 +147,19 @@ def sync_personality():
         except Exception as e:
             logger.warning("trust_agent: quiz memory skipped for %s: %s", g.user_id, e)
 
+        # ── Timeline: quiz fact + initial_hypothesis (additive; not trust) ──
+        try:
+            from src.timeline.events import record_quiz_hypothesis
+            record_quiz_hypothesis(
+                db,
+                g.user_id,
+                personality_type,
+                personality_detail=personality_detail,
+                source_ref=f"profile_sync_{g.user_id}",
+            )
+        except Exception as e:
+            logger.warning("timeline: quiz hypothesis skipped for %s: %s", g.user_id, e)
+
     # Return the full profile after sync (so frontend gets XP/level too)
     profile = db.get_game_profile(g.user_id)
     return jsonify(
