@@ -78,7 +78,7 @@ export default function AuthScreen() {
 
   const handleRegister = async () => {
     if (!email || !password) { setToast('请填写邮箱和密码'); return }
-    if (password.length < 6) { setToast('密码至少6位'); return }
+    if (password.length < 8) { setToast('密码至少8位'); return }
     setLoading(true)
     await register(email, password)
     setLoading(false)
@@ -124,10 +124,33 @@ export default function AuthScreen() {
           label="🔐 Password"
           value={password}
           onChange={setPassword}
-          placeholder="至少6位 / min 6 chars"
+          placeholder="至少8位"
           type="password"
-          helperText="密码至少6位字符"
+          helperText="密码至少8位字符"
         />
+
+        {import.meta.env.DEV && (
+          <button
+            type="button"
+            onClick={() => {
+              setEmail('demo@looma.local')
+              setPassword('Demo2026!')
+              setToast('已填入本地演示账号 demo@looma.local，点「登录」即可')
+            }}
+            style={{
+              alignSelf: 'flex-start',
+              background: 'transparent',
+              border: '1px dashed rgba(200,255,80,0.35)',
+              color: 'var(--px-color-accent)',
+              borderRadius: 8,
+              padding: '6px 10px',
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
+          >
+            填入本地演示账号
+          </button>
+        )}
 
         <div style={{ display: 'flex', gap: 'var(--px-spacing-sm)' }}>
           <PlanetXButton

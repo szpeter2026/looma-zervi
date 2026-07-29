@@ -41,7 +41,8 @@ export function getRankName(level: number): RankName {
 }
 
 // ============ API Client 初始化 ============
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:5200'
+// Dev default: same-origin + Vite proxy (/v1 → :5200). Avoid CORS with 127.0.0.1 vs localhost.
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_API_BASE ?? ''
 const SAAS_BASE = import.meta.env.VITE_SAAS_URL ?? 'http://localhost:5174'
 
 const MISSION_XP: Record<MissionId, number> = {
@@ -306,8 +307,13 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
       await get().consumeJoinInviteFromUrl()
       return true
     } catch (e) {
-      const msg = (e as { response?: { data?: { message?: string } }; message?: string })
-      get().setToast('登录失败: ' + (msg.response?.data?.message ?? msg.message ?? '未知错误'))
+      const err = e as { body?: { message?: string }; message?: string }
+      const detail = err.body?.message ?? err.message ?? '未知错误'
+      const hint =
+        detail === 'invalid credentials' || detail === 'Unauthorized'
+          ? '邮箱或密码错误'
+          : detail
+      get().setToast('登录失败: ' + hint)
       return false
     }
   },
@@ -327,8 +333,8 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
       get().setScreen('onboarding')
       return true
     } catch (e) {
-      const msg = (e as { response?: { data?: { message?: string } }; message?: string })
-      get().setToast('注册失败: ' + (msg.response?.data?.message ?? msg.message ?? '未知错误'))
+      const err = e as { body?: { message?: string }; message?: string }
+      get().setToast('注册失败: ' + (err.body?.message ?? err.message ?? '未知错误'))
       return false
     }
   },
