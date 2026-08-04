@@ -39,6 +39,8 @@ export interface PaymentStatus {
   status: "active" | "expired" | "cancelled" | "inactive";
   expires_at: string | null;
   stub_mode?: boolean;
+  /** 支付成功后后端可能返回新 token（tier 变更后需刷新会话） */
+  access_token?: string;
 }
 
 /** POST /v1/payment/upgrade 请求 */

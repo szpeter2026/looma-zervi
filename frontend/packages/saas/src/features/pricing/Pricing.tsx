@@ -179,7 +179,7 @@ export default function Pricing() {
   };
 
   /** 轮询支付状态（每 3 秒检查一次，最多 60 次 / 3 分钟） */
-  const pollPaymentStatus = async (outTradeNo: string) => {
+  const pollPaymentStatus = async (_outTradeNo: string) => {
     setPollingOrder(true);
     let attempts = 0;
     const maxAttempts = 60;
