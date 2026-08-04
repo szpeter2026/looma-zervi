@@ -31,7 +31,7 @@ html, body {
   min-height: 100vh;
 }
 
-/* Typography scale — 对齐设计规范 */
+/* Typography scale */
 .text-display {
   font-size: 24px;
   line-height: 32px;
@@ -87,7 +87,7 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Card base — 浅色卡片式风格 */
+/* Card base */
 .card {
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
@@ -100,7 +100,7 @@ html, body {
   transition: box-shadow var(--transition-fast);
 }
 
-/* Button base — 圆角 8px */
+/* Button base */
 .btn {
   border-radius: var(--radius-md);
   font-weight: var(--font-weight-medium);
@@ -130,4 +130,31 @@ html, body {
 ::selection {
   background: var(--color-primary-light);
   color: var(--color-primary);
+}
+
+/* ========================================================
+ * Mobile responsive overrides
+ * ======================================================== */
+@media (max-width: 767px) {
+  /* Reset sidebar margin on mobile - sidebar is hidden */
+  #root > div > div[style*="margin-left"] {
+    margin-left: 0 !important;
+  }
+
+  /* Full-width cards on mobile */
+  .saas-responsive-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Hide desktop-only elements */
+  .saas-desktop-only {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) {
+  /* Hide mobile-only elements */
+  .saas-mobile-only {
+    display: none !important;
+  }
 }

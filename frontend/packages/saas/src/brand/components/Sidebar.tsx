@@ -7,6 +7,7 @@
  * Quota format aligned with backend: { tier, records }.
  *
  * Style: 浅色 B 端 SaaS 侧边栏，白色底 + 深蓝文字 + 专业蓝激活态
+ * Hidden on mobile (<md) — replaced by MobileDrawer.
  */
 import { NavLink, useNavigate } from "react-router-dom";
 import { BRAND_SAAS } from "@looma/shared-core";
@@ -45,7 +46,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="fixed left-0 top-0 bottom-0 flex flex-col z-50"
+      className="hidden md:flex fixed left-0 top-0 bottom-0 flex-col z-50"
       style={{
         width: "var(--sidebar-width)",
         backgroundColor: "var(--color-bg-sidebar)",
