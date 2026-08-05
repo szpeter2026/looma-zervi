@@ -762,6 +762,24 @@ def quiz_result():
             generate_attestations(g.user_id, db)
         except Exception as e:
             logger.warning("trust_agent: harmonyos quiz memory skipped for %s: %s", g.user_id, e)
+
+        # Timeline: learning_activity (HarmonyOS quiz completion)
+        try:
+            from src.timeline.events import record_learning_activity
+            record_learning_activity(
+                db,
+                g.user_id,
+                source_ref=session_id,
+                activity_type="harmony_quiz",
+                title="完成鸿蒙答题",
+                summary=f"{result_type} · {session['correct_count']}/{session['total_questions']}",
+                score=session["total_score"],
+                total=session["total_questions"],
+                correct_count=session["correct_count"],
+                result_type=result_type,
+            )
+        except Exception as e:
+            logger.warning("timeline: learning_activity skipped for %s: %s", g.user_id, e)
     import json as _json
     insights = _json.loads(session.get("insights_json") or "[]")
 

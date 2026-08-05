@@ -9,6 +9,7 @@ export const API_ROUTES = {
   AUTH_LOGIN: "/v1/auth/login",
   AUTH_WECHAT: "/v1/auth/wechat",
   AUTH_GOOGLE: "/v1/auth/google",
+  AUTH_HUAWEI: "/v1/auth/huawei",
   AUTH_BIND: "/v1/auth/bind",
   AUTH_PROFILE: "/v1/auth/profile",
   AUTH_REFRESH: "/v1/auth/refresh",
@@ -140,6 +141,16 @@ export const API_ROUTES = {
   TIMELINE_BACKFILL: "/v1/timeline/bridge/backfill",
   TIMELINE_EXPORT: "/v1/timeline/export",
   TIMELINE_DELETE_ME: "/v1/timeline/me",
+
+  // HarmonyOS cloud kits (IAP / Push / Card)
+  HUAWEI_IAP_NOTIFY: "/v1/payment/huawei/notify",
+  HUAWEI_IAP_VERIFY: "/v1/payment/huawei/verify",
+  HUAWEI_PUSH_REGISTER: "/v1/push/huawei/register",
+  HUAWEI_PUSH_UNREGISTER: "/v1/push/huawei/unregister",
+  HUAWEI_PUSH_SEND: "/v1/push/huawei/send",
+  HUAWEI_PUSH_BATCH: "/v1/push/huawei/batch",
+  HUAWEI_CARD: "/v1/card",
+  HUAWEI_CARD_BATCH: "/v1/card/batch",
 
   // Trust protocol (attestation cards + share_code verify)
   TRUST_ATTESTATIONS: "/v1/trust/attestations",

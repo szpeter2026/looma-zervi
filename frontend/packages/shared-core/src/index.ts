@@ -41,6 +41,9 @@ export {
   createComplianceApi,
   createAdminApi,
   createTimelineApi,
+  createHuaweiIapApi,
+  createHuaweiPushApi,
+  createCardApi,
 } from "./api/createApi";
 
 // Types
@@ -63,6 +66,22 @@ export type {
   QuotaResponse,
   TokenPayload,
 } from "./types/auth";
+
+export type {
+  HuaweiAuthRequest,
+  HuaweiAuthResponse,
+  HuaweiIapNotifyRequest,
+  HuaweiIapNotifyResponse,
+  HuaweiIapVerifyRequest,
+  HuaweiIapVerifyResponse,
+  HuaweiPushTokenRequest,
+  HuaweiPushRegisterResponse,
+  HuaweiPushSendRequest,
+  HuaweiPushSendResponse,
+  HarmonyCardType,
+  HarmonyCardItem,
+  HarmonyCardBatchRequest,
+} from "./types/harmony";
 
 export type {
   ChatMessage,

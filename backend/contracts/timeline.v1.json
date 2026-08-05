@@ -13,10 +13,11 @@
         "interaction_log",
         "share_authorized",
         "match_scan",
-        "resume_ingest"
+        "resume_ingest",
+        "mission_completed",
+        "learning_activity"
       ],
       "phase1_stub": [
-        "learning_activity",
         "career_decision",
         "interview_session",
         "fleet_co_presence",
@@ -155,7 +156,9 @@
       "event_kind"
     ],
     "except_kinds": [
-      "check_in"
+      "check_in",
+      "interaction_log",
+      "match_scan"
     ],
     "on_conflict": "update payload_json and updated_at"
   },
@@ -227,6 +230,19 @@
         "path": "/v1/timeline/bridge/backfill",
         "auth": "required",
         "notes": "idempotent for current user"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/timeline/export",
+        "auth": "required",
+        "notes": "GDPR full export: active events + l1_summary (paginated server-side)"
+      },
+      {
+        "method": "DELETE",
+        "path": "/v1/timeline/me",
+        "auth": "required",
+        "query": ["confirm=yes"],
+        "notes": "GDPR soft-delete all timeline events; requires ?confirm=yes"
       }
     ]
   },

@@ -16,6 +16,7 @@
     "email",
     "wechat",
     "google",
+    "huawei",
     "apple",
     "orcid"
   ],
@@ -297,8 +298,29 @@
       },
       {
         "method": "POST",
+        "path": "/v1/auth/huawei",
+        "purpose": "华为账号登录（authorizationCode）→ user_identities(provider=huawei)",
+        "body": {
+          "authorizationCode": "string (required)",
+          "state": "string (optional, not validated)"
+        },
+        "response": {
+          "access_token": "JWT",
+          "token_type": "bearer",
+          "expires_in": "number",
+          "user": {
+            "id": "uuid",
+            "name": "string",
+            "tier": "string",
+            "role": "string",
+            "is_new_user": "boolean"
+          }
+        }
+      },
+      {
+        "method": "POST",
         "path": "/v1/auth/bind",
-        "purpose": "绑定微信到已有 user_id"
+        "purpose": "绑定微信到已有 user_id（当前仅 wechat；huawei 走独立登录链路）"
       },
       {
         "method": "GET",

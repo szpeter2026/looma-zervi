@@ -310,6 +310,46 @@ def record_resume_ingest(
     )
 
 
+def record_learning_activity(
+    db,
+    user_id: str,
+    *,
+    source_ref: str,
+    activity_type: str = "quiz",
+    title: str = "完成学习活动",
+    summary: str = "",
+    score: int | float = 0,
+    total: int = 0,
+    correct_count: int = 0,
+    result_type: str = "",
+    occurred_at: str | None = None,
+) -> dict | None:
+    """Timeline node for quiz / learning sessions (HarmonyOS game quiz, etc.)."""
+    if not user_id or user_id == "guest-anon":
+        return None
+    return record_timeline_event(
+        db,
+        user_id,
+        "learning_activity",
+        "quiz",
+        source_ref=source_ref,
+        title=title,
+        summary=summary or f"{activity_type}: {correct_count}/{total}",
+        payload={
+            "activity_type": activity_type,
+            "score": score,
+            "total": total,
+            "correct_count": correct_count,
+            "result_type": result_type or "",
+        },
+        signal_quality="observed",
+        confidence=0.85,
+        weight_role="evidence",
+        visibility="private",
+        occurred_at=occurred_at,
+    )
+
+
 def record_mission_completed(
     db,
     user_id: str,

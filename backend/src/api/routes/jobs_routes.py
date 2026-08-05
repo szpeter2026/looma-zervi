@@ -15,6 +15,7 @@ Endpoints:
 import io
 import json
 import logging
+import time
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -421,6 +422,25 @@ def job_match():
         # ── Trust Bridge: record match interaction ──
         if user_id and user_id != "guest-anon" and matches:
             _record_match_trust(user_id, matches)
+            # Timeline: job match scan (Harmony / Web 求职主路径)
+            try:
+                from src.timeline.events import record_match_scan
+                scores = [
+                    float(m.get("overall_score") or m.get("match_score") or 0)
+                    for m in matches
+                ]
+                record_match_scan(
+                    current_app._db,
+                    user_id,
+                    report_id=f"jobs_match_{user_id}_{int(time.time())}",
+                    total_jobs=total,
+                    max_score=max(scores) if scores else 0.0,
+                    avg_score=(sum(scores) / len(scores)) if scores else 0.0,
+                    pipeline_version="jobs_match",
+                    has_resume_id=False,
+                )
+            except Exception as e:
+                logger.warning("timeline: match_scan skipped for %s: %s", user_id, e)
 
         return jsonify(matches=matches, total_evaluated=total)
     except Exception as e:

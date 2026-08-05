@@ -85,6 +85,20 @@ def ask_question():
     cached = _cache_get(query, ask_mode)
     if cached is not None:
         logger.info(f"[cache HIT] mode={ask_mode} {query[:50]!r}")
+        # Still record timeline evidence (cache hits are real user interactions)
+        if user_id and user_id != "guest-anon":
+            try:
+                record_interaction_log(
+                    current_app._db,
+                    user_id,
+                    query=query,
+                    intent=str(cached.get("intent") or ""),
+                    intent_confidence=float(cached.get("intent_confidence") or 0),
+                    response_time_ms=0,
+                    ask_mode=ask_mode,
+                )
+            except Exception:
+                pass
         return jsonify(
             answer=cached["answer"],
             intent=cached["intent"],

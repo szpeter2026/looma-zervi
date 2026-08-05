@@ -24,6 +24,7 @@ EVENT_KIND_MANUAL = frozenset({
 EVENT_KIND_ALLOW_DUPLICATE = frozenset({
     "check_in",
     "interaction_log",
+    "match_scan",
 })
 
 SOURCE_SYSTEMS = frozenset({

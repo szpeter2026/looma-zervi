@@ -72,12 +72,21 @@ def _get_status_card(user_id: str) -> dict:
 
 
 def _get_activity_card(user_id: str) -> dict:
-    """动态/活动卡片。"""
+    """动态/活动卡片 — 从 timeline_events 取最近活跃条数。"""
+    recent_count = 0
+    message = "No recent activity"
+    try:
+        db = current_app._db
+        recent_count = int(db.count_timeline_events(user_id) or 0)
+        if recent_count > 0:
+            message = f"{recent_count} timeline events"
+    except Exception as e:
+        logger.warning("card activity: timeline count failed for %s: %s", user_id, e)
     return {
         "type": "activity",
         "data": {
-            "recentCount": 0,
-            "message": "No recent activity",
+            "recentCount": recent_count,
+            "message": message,
             "updateTime": int(time.time()),
         },
     }

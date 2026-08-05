@@ -288,27 +288,24 @@ def huawei_login():
         return jsonify(error="oauth_error", message="Failed to retrieve Huawei openID"), 502
 
     # --- Step 3: 查找或创建用户 ---
+    # metadata 保留 union_id / avatar；勿写入 wechat_openid（微信专用列）
+    import json as _json
+    meta = {
+        "union_id": hw_user.union_id or "",
+        "avatar_url": hw_user.avatar_url or "",
+        "display_name": hw_user.display_name or "",
+        "raw": hw_user.raw or {},
+    }
     db = _get_db()
     user, created = db.get_or_create_user_by_identity(
         provider="huawei",
         provider_uid=hw_user.open_id,
-        extra_data={
-            "name": hw_user.display_name,
-            "avatar": hw_user.avatar_url,
-            "metadata_json": hw_user.to_metadata(),
-        },
+        name=hw_user.display_name or "",
+        metadata_json=_json.dumps(meta, ensure_ascii=False),
     )
 
-    # 若用户已有 union_id 则更新
-    if hw_user.union_id and not user.get("wechat_openid"):
-        try:
-            with db.get_conn() as conn:
-                conn.execute(
-                    "UPDATE users SET wechat_openid = ? WHERE id = ?",
-                    (hw_user.union_id, user["id"]),
-                )
-        except Exception:
-            pass  # 非关键字段
+    if not user:
+        return jsonify(error="server_error", message="Failed to create/find user"), 500
 
     logger.info(
         f"[huawei_auth] Login {'(new)' if created else '(existing)'}: "

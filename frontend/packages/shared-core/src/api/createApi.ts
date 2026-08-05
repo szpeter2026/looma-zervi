@@ -17,6 +17,20 @@ import type {
   QuotaResponse,
 } from "../types/auth";
 import type {
+  HarmonyCardBatchRequest,
+  HarmonyCardItem,
+  HuaweiAuthRequest,
+  HuaweiAuthResponse,
+  HuaweiIapNotifyRequest,
+  HuaweiIapNotifyResponse,
+  HuaweiIapVerifyRequest,
+  HuaweiIapVerifyResponse,
+  HuaweiPushRegisterResponse,
+  HuaweiPushSendRequest,
+  HuaweiPushSendResponse,
+  HuaweiPushTokenRequest,
+} from "../types/harmony";
+import type {
   AskRequest,
   AskResponse,
   StreamCallbacks,
@@ -104,6 +118,10 @@ export function createAuthApi(client: ApiClient) {
     /** Google OAuth login (overseas ID token -> looma JWT) */
     google: (payload: GoogleAuthRequest) =>
       client.post<GoogleAuthResponse>(API_ROUTES.AUTH_GOOGLE, payload),
+
+    /** Huawei Account Kit login (authorizationCode -> looma JWT) */
+    huawei: (payload: HuaweiAuthRequest) =>
+      client.post<HuaweiAuthResponse>(API_ROUTES.AUTH_HUAWEI, payload),
 
     /** Bind WeChat account to existing email user */
     bind: (code: string) =>
@@ -778,6 +796,58 @@ export function createTimelineApi(client: ApiClient) {
     deleteAllMyData: () =>
       client.delete<TimelineDeleteAllResponse>(
         `${API_ROUTES.TIMELINE_DELETE_ME}?confirm=yes`,
+      ),
+  };
+}
+
+// ============================================================
+// HarmonyOS cloud kits (IAP / Push / Card)
+// ============================================================
+export function createHuaweiIapApi(client: ApiClient) {
+  return {
+    /** Client-side purchase → server RSA verify + deliver */
+    notify: (payload: HuaweiIapNotifyRequest) =>
+      client.post<HuaweiIapNotifyResponse>(API_ROUTES.HUAWEI_IAP_NOTIFY, payload),
+
+    /** Server-side order verify (MVP stub → 501) */
+    verify: (payload: HuaweiIapVerifyRequest) =>
+      client.post<HuaweiIapVerifyResponse>(API_ROUTES.HUAWEI_IAP_VERIFY, payload),
+  };
+}
+
+export function createHuaweiPushApi(client: ApiClient) {
+  return {
+    register: (payload: HuaweiPushTokenRequest) =>
+      client.post<HuaweiPushRegisterResponse>(
+        API_ROUTES.HUAWEI_PUSH_REGISTER,
+        payload,
+      ),
+
+    unregister: (payload: HuaweiPushTokenRequest) =>
+      client.post<HuaweiPushRegisterResponse>(
+        API_ROUTES.HUAWEI_PUSH_UNREGISTER,
+        payload,
+      ),
+
+    send: (payload: HuaweiPushSendRequest) =>
+      client.post<HuaweiPushSendResponse>(API_ROUTES.HUAWEI_PUSH_SEND, payload),
+
+    batch: (payload: Record<string, unknown>) =>
+      client.post<HuaweiPushSendResponse>(API_ROUTES.HUAWEI_PUSH_BATCH, payload),
+  };
+}
+
+export function createCardApi(client: ApiClient) {
+  return {
+    get: (cardId: string, type?: string) => {
+      const q = type ? `?type=${encodeURIComponent(type)}` : "";
+      return client.get<HarmonyCardItem>(`${API_ROUTES.HUAWEI_CARD}/${cardId}${q}`);
+    },
+
+    batch: (payload: HarmonyCardBatchRequest) =>
+      client.post<{ cards: HarmonyCardItem[] }>(
+        API_ROUTES.HUAWEI_CARD_BATCH,
+        payload,
       ),
   };
 }
