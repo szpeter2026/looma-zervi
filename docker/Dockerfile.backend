@@ -1,52 +1,19 @@
-# ========================================
-# Stage 1: Build PlanetX Frontend
-# ========================================
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /src/frontend
-
-# Copy workspace config and lockfile
-COPY frontend/pnpm-workspace.yaml frontend/package.json frontend/pnpm-lock.yaml ./
-
-# Copy shared-core (shared dependency)
-COPY frontend/packages/shared-core ./packages/shared-core
-
-# Copy PlanetX package (only what pnpm needs; .dockerignore should trim node_modules)
-COPY frontend/packages/planetx ./packages/planetx
-
-# Install deps + build
-RUN corepack enable && corepack prepare pnpm@latest --activate
-RUN pnpm install --frozen-lockfile
-RUN VITE_API_BASE="" pnpm --filter @looma/shared-core build
-RUN VITE_API_BASE="" pnpm --filter @looma/planetx build
-
-# ========================================
-# Stage 2: Python Backend + PlanetX SPA
-# ========================================
 FROM python:3.12-slim
 
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
-    FLASK_ENV=production \
-    FLASK_PORT=5200 \
-    PLANETX_DIST_DIR=/app/planetx-dist
+    FLASK_PORT=5200
 
-# Mirror sources for faster apt/pip in China
+# 内测机 apt 默认源极慢（CI 曾卡 1h+）；应用代码由 compose volume 挂载，镜像只装依赖
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' \
     /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
     sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
 
-# Python dependencies
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
-
-# Copy backend code (gunicorn_config.py, src/, etc.)
-COPY backend/ .
-
-# Copy PlanetX dist from frontend build stage
-COPY --from=frontend-builder /src/frontend/packages/planetx/dist /app/planetx-dist
 
 EXPOSE 5200
 
+# 运行时 /app 由 bind mount 覆盖；此处仅声明启动命令
 CMD ["gunicorn", "--config", "gunicorn_config.py", "src.app:create_app()"]

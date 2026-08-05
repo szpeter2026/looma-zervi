@@ -7,8 +7,8 @@ services:
   # ============================================
   backend:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile.backend
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
     container_name: looma-backend
     restart: unless-stopped
     ports:
