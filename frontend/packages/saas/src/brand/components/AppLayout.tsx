@@ -116,8 +116,6 @@ export function AppLayout() {
               {t("auth.logout")}
             </button>
           </div>
-            </button>
-          </div>
         </header>
 
         <main
