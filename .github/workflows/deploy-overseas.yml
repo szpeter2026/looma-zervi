@@ -258,6 +258,8 @@ jobs:
           set_kv DEEPSEEK_API_KEY "${{ secrets.VULTR_DEEPSEEK_API_KEY || secrets.ENV_DEEPSEEK_API_KEY }}"
           set_kv DEEPSEEK_BASE_URL "https://api.deepseek.com/v1"
           set_kv DEEPSEEK_MODEL deepseek-chat
+          # Prefer DeepSeek overseas; OpenAI only if secret present. Do not rely on host Ollama.
+          set_kv LLM_PROVIDER_ORDER deepseek,openai,ollama
           set_kv QCC_AUTH_TOKEN "${{ secrets.VULTR_QCC_AUTH_TOKEN || secrets.ENV_QCC_AUTH_TOKEN }}"
           set_kv QCC_ENABLED true
           set_kv QCC_MCP_BASE_URL "${{ vars.QCC_MCP_BASE_URL || 'http://1.14.202.161:8998/mcp' }}"

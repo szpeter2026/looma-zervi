@@ -22,8 +22,12 @@ logger = logging.getLogger("looma.brain")
 INTENTS = ("job_match", "resume_parse", "poetry", "credit", "mbti", "rag", "report", "greeting", "unknown")
 
 # Keyword → intent rules (fallback when LLM unavailable)
+# NOTE: Do NOT put 陪伴/安慰 in poetry — SaaS 六域 chips（情绪陪伴·压力疏导）会误入诗词兜底。
 INTENT_KEYWORDS = {
-    "poetry": ["诗词", "诗人", "古诗", "推荐一句", "陪伴", "安慰", "思乡", "送别", "山水", "边塞", "励志", "一句诗", "唐诗", "宋词", "的诗", "的诗句", "词", "诗句", "绝句", "律诗"],
+    "poetry": [
+        "诗词", "诗人", "古诗", "推荐一句", "思乡", "送别", "山水", "边塞", "励志",
+        "一句诗", "唐诗", "宋词", "的诗", "的诗句", "诗句", "绝句", "律诗", "推荐诗",
+    ],
     "job_match": ["匹配", "职位", "找工作", "有没有适合", "岗位", "求职", "招聘"],
     "resume_parse": ["上传", "解析简历", "分析简历", "提取简历"],
     "credit": ["征信", "信用", "验证"],
@@ -34,6 +38,8 @@ INTENT_KEYWORDS = {
         "是什么", "什么是", "有哪些", "主要内容", "底座", "架构", "可以做什么", "能做什么",
         "有什么功能", "探索", "探索什么", "探索什么", "能探索", "星球", "星际探索",
         "六域", "职业域", "学习域", "生活域", "社交域", "健康域", "创意域",
+        "情绪陪伴", "压力疏导", "时间管理", "效率提升", "职位匹配", "简历解析", "职业规划",
+        "技能训练", "知识问答", "人格匹配", "组建舰队", "诗词推荐", "灵感激发",
         "planetx", "planetx 是什么", "planetx 能做什么", "planetx 有什么",
     ],
     "greeting": ["hi", "hello", "hey", "你好", "早上好", "晚上好", "您好", "很高兴", "再见", "谢谢", "感谢", "辛苦了", "在吗", "你是谁", "你能做什么", "帮我", "请问", "好的", "明白了", "ok", "thanks", "morning", "evening", "下午好", "晚安", "嗨"],
@@ -116,8 +122,11 @@ def _call_llm(
     for provider in provider_order:
         try:
             if provider == "deepseek":
+                api_key = (config.get("DEEPSEEK_API_KEY") or "").strip()
+                if not api_key or api_key.lower() in ("skip", "your-deepseek-api-key"):
+                    continue
                 url = f"{config['DEEPSEEK_BASE_URL']}/chat/completions"
-                headers = {"Authorization": f"Bearer {config['DEEPSEEK_API_KEY']}", "Content-Type": "application/json"}
+                headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
                 payload: dict[str, Any] = {
                     "model": config["DEEPSEEK_MODEL"],
                     "messages": [{"role": "user", "content": prompt}],
@@ -130,10 +139,11 @@ def _call_llm(
                 return resp.json()["choices"][0]["message"]["content"]
 
             elif provider == "openai":
-                if not config.get("OPENAI_API_KEY"):
+                openai_key = (config.get("OPENAI_API_KEY") or "").strip()
+                if not openai_key or openai_key.lower() in ("skip", "your-openai-api-key"):
                     continue
                 url = f"{config.get('OPENAI_BASE_URL', 'https://api.openai.com/v1')}/chat/completions"
-                headers = {"Authorization": f"Bearer {config['OPENAI_API_KEY']}", "Content-Type": "application/json"}
+                headers = {"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"}
                 payload = {
                     "model": config.get("OPENAI_MODEL", "gpt-3.5-turbo"),
                     "messages": [{"role": "user", "content": prompt}],
@@ -652,8 +662,18 @@ def dispatch(
             prompt,
             temperature=float(preset["temperature"]),
             max_tokens=int(preset["max_tokens"]),
-        ) or "嗨，我是你的星际导航员，PlanetX 有六域探索等你开启：职业、学习、生活、社交、健康、创意，想从哪个开始？"
+        )
+        if not answer:
+            # Do not masquerade as a successful navigator greeting when all providers fail
+            # (common overseas cause: DeepSeek 402 Payment Required / empty balance).
+            answer = (
+                "星际导航暂时连不上 AI 服务（常见原因：DeepSeek 配额不足或密钥失效）。"
+                "请稍后重试，或联系客服 zervi@genz.ltd。"
+            )
     except Exception as e:
         logger.warning(f"Unknown fallback LLM failed: {e}")
-        answer = "嗨，我是你的星际导航员，PlanetX 有六域探索等你开启：职业、学习、生活、社交、健康、创意，想从哪个开始？"
+        answer = (
+            "星际导航暂时连不上 AI 服务（常见原因：DeepSeek 配额不足或密钥失效）。"
+            "请稍后重试，或联系客服 zervi@genz.ltd。"
+        )
     return {"answer": answer, "slots": slots, "ask_mode": resolve_ask_mode(context.get("ask_mode"))}
