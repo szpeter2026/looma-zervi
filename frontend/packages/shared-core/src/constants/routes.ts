@@ -138,6 +138,8 @@ export const API_ROUTES = {
   TIMELINE_EVENTS: "/v1/timeline/events",
   TIMELINE_GROWTH: "/v1/timeline/growth",
   TIMELINE_BACKFILL: "/v1/timeline/bridge/backfill",
+  TIMELINE_EXPORT: "/v1/timeline/export",
+  TIMELINE_DELETE_ME: "/v1/timeline/me",
 
   // Trust protocol (attestation cards + share_code verify)
   TRUST_ATTESTATIONS: "/v1/trust/attestations",

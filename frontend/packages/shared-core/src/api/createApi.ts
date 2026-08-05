@@ -76,9 +76,11 @@ import type {
 import type {
   CreateTimelineEventRequest,
   TimelineBackfillResponse,
+  TimelineDeleteAllResponse,
+  TimelineEvent,
+  TimelineExportResponse,
   TimelineGrowthResponse,
   TimelineListResponse,
-  TimelineEvent,
 } from "../types/timeline";
 import { API_ROUTES } from "../constants/routes";
 
@@ -769,6 +771,14 @@ export function createTimelineApi(client: ApiClient) {
 
     backfill: () =>
       client.post<TimelineBackfillResponse>(API_ROUTES.TIMELINE_BACKFILL),
+
+    exportMyData: () =>
+      client.get<TimelineExportResponse>(API_ROUTES.TIMELINE_EXPORT),
+
+    deleteAllMyData: () =>
+      client.delete<TimelineDeleteAllResponse>(
+        `${API_ROUTES.TIMELINE_DELETE_ME}?confirm=yes`,
+      ),
   };
 }
 

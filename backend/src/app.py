@@ -2,7 +2,9 @@
 Flask application factory.
 Registers all blueprints, middleware, and error handlers.
 """
-from flask import Flask, jsonify
+import os
+
+from flask import Flask, abort, jsonify, send_from_directory
 from flask_cors import CORS
 
 from src.config import Config, _refresh_config
@@ -122,112 +124,135 @@ def create_app(env="development"):
             qcc_configured=has_qcc and qcc_enabled,
         )
 
-    # --- Root: API info (so visiting localhost:5200 in browser is helpful) ---
-    @app.route("/", methods=["GET"])
-    def api_info():
-        return jsonify(
-            service="looma-backend",
-            status="ok",
-            version="v1",
-            endpoints={
-                "auth": [
-                    "POST /v1/auth/register",
-                    "POST /v1/auth/login",
-                    "POST /v1/auth/wechat",
-                    "POST /v1/auth/google",
-                    "POST /v1/auth/huawei",
-                    "POST /v1/auth/bind",
-                    "GET  /v1/auth/profile",
-                    "POST /v1/auth/refresh",
-                    "POST /v1/auth/bridge",
-                ],
-                "game": [
-                    "GET  /v1/game/profile",
-                    "POST /v1/game/profile-sync",
-                    "POST /v1/game/mission-complete",
-                    "POST /v1/game/match",
-                    "POST /v1/game/fleet/create",
-                    "POST /v1/game/fleet/join",
-                    "GET  /v1/game/fleet/mine",
-                    "POST /v1/game/fleet/leave",
-                    "POST /v1/game/start",
-                    "POST /v1/game/answer",
-                    "GET  /v1/game/result",
-                    "GET  /v1/game/history",
-                ],
-                "ask": ["POST /v1/ask", "POST /v1/feedback/rate", "GET  /v1/feedback/last-query"],
-                "quota": ["GET /v1/quota"],
-                "jobs": [
-                    "GET  /v1/jobs",
-                    "GET  /v1/jobs/list",
-                    "GET  /v1/jobs/search",
-                    "GET  /v1/jobs/recommend",
-                    "GET  /v1/jobs/<job_id>",
-                    "POST /v1/jobs/upload",
-                    "POST /v1/jobs/parse",
-                    "POST /v1/jobs/match",
-                ],
-                "resume": [
-                    "GET  /v1/resume/list",
-                    "GET  /v1/resume/analysis",
-                    "POST /v1/resume/parse",
-                    "POST /v1/resume/upload",
-                    "POST /v1/resume/improve",
-                    "DELETE /v1/resume/<resume_id>",
-                ],
-                "reports": ["POST /v1/reports/generate", "GET /v1/reports/list"],
-                "payment": [
-                    "GET  /v1/payment/plans",
-                    "GET  /v1/payment/status",
-                    "POST /v1/payment/upgrade",
-                ],
-                "credit": [
-                    "POST /v1/credit/analyze",
-                    "POST /v1/credit/check-company",
-                ],
-                "referral": ["POST /v1/referral/create", "POST /v1/referral/use", "GET /v1/referral/my-codes"],
-                "narrative": [
-                    "POST /v1/narrative/start",
-                    "POST /v1/narrative/event",
-                    "POST /v1/narrative/end",
-                    "POST /v1/narrative/feedback",
-                    "GET  /v1/narrative/stats",
-                ],
-                "enterprise": [
-                    "POST /v1/enterprise/create",
-                    "POST /v1/enterprise/join",
-                    "GET  /v1/enterprise/profile",
-                    "GET  /v1/enterprise/candidates",
-                    "GET  /v1/enterprise/candidate/<id>",
-                    "POST /v1/enterprise/candidates/add",
-                    "POST /v1/enterprise/candidates/import-share",
-                    "POST /v1/enterprise/contact-sales",
-                ],
-                "job_posts": [
-                    "POST /v1/job-posts",
-                    "GET  /v1/job-posts",
-                    "PUT  /v1/job-posts/<id>",
-                    "DELETE /v1/job-posts/<id>",
-                    "GET  /v1/job-posts/<id>/matches",
-                ],
-                "harmonyos": {
+    # --- SPA mode: serve PlanetX frontend as a single-app deployment ---
+    # Set PLANETX_DIST_DIR env var to the PlanetX build output directory.
+    # When enabled, Flask serves the SPA at / and all non-API routes,
+    # replacing the JSON API info root endpoint.
+    _planetx_dist = os.getenv("PLANETX_DIST_DIR", "")
+    _spa_enabled = bool(_planetx_dist and os.path.isdir(_planetx_dist))
+
+    if _spa_enabled:
+        @app.route("/", methods=["GET"])
+        def serve_spa_root():
+            return send_from_directory(_planetx_dist, "index.html")
+
+        @app.route("/<path:spa_path>")
+        def serve_spa(spa_path):
+            # /v1/* is handled by blueprints — if we reach here it's a 404
+            if spa_path.startswith("v1/"):
+                abort(404)
+            file_path = os.path.join(_planetx_dist, spa_path)
+            if os.path.isfile(file_path):
+                return send_from_directory(_planetx_dist, spa_path)
+            # SPA fallback: all client-side routes → index.html
+            return send_from_directory(_planetx_dist, "index.html")
+    else:
+        # --- Root: API info (so visiting localhost:5200 in browser is helpful) ---
+        @app.route("/", methods=["GET"])
+        def api_info():
+            return jsonify(
+                service="looma-backend",
+                status="ok",
+                version="v1",
+                endpoints={
+                    "auth": [
+                        "POST /v1/auth/register",
+                        "POST /v1/auth/login",
+                        "POST /v1/auth/wechat",
+                        "POST /v1/auth/google",
+                        "POST /v1/auth/huawei",
+                        "POST /v1/auth/bind",
+                        "GET  /v1/auth/profile",
+                        "POST /v1/auth/refresh",
+                        "POST /v1/auth/bridge",
+                    ],
+                    "game": [
+                        "GET  /v1/game/profile",
+                        "POST /v1/game/profile-sync",
+                        "POST /v1/game/mission-complete",
+                        "POST /v1/game/match",
+                        "POST /v1/game/fleet/create",
+                        "POST /v1/game/fleet/join",
+                        "GET  /v1/game/fleet/mine",
+                        "POST /v1/game/fleet/leave",
+                        "POST /v1/game/start",
+                        "POST /v1/game/answer",
+                        "GET  /v1/game/result",
+                        "GET  /v1/game/history",
+                    ],
+                    "ask": ["POST /v1/ask", "POST /v1/feedback/rate", "GET  /v1/feedback/last-query"],
+                    "quota": ["GET /v1/quota"],
+                    "jobs": [
+                        "GET  /v1/jobs",
+                        "GET  /v1/jobs/list",
+                        "GET  /v1/jobs/search",
+                        "GET  /v1/jobs/recommend",
+                        "GET  /v1/jobs/<job_id>",
+                        "POST /v1/jobs/upload",
+                        "POST /v1/jobs/parse",
+                        "POST /v1/jobs/match",
+                    ],
+                    "resume": [
+                        "GET  /v1/resume/list",
+                        "GET  /v1/resume/analysis",
+                        "POST /v1/resume/parse",
+                        "POST /v1/resume/upload",
+                        "POST /v1/resume/improve",
+                        "DELETE /v1/resume/<resume_id>",
+                    ],
+                    "reports": ["POST /v1/reports/generate", "GET /v1/reports/list"],
                     "payment": [
-                        "POST /v1/payment/huawei/notify",
-                        "POST /v1/payment/huawei/verify",
+                        "GET  /v1/payment/plans",
+                        "GET  /v1/payment/status",
+                        "POST /v1/payment/upgrade",
                     ],
-                    "push": [
-                        "POST /v1/push/huawei/register",
-                        "POST /v1/push/huawei/unregister",
-                        "POST /v1/push/huawei/send",
-                        "POST /v1/push/huawei/batch",
+                    "credit": [
+                        "POST /v1/credit/analyze",
+                        "POST /v1/credit/check-company",
                     ],
-                    "cards": [
-                        "GET  /v1/card/<card_id>",
-                        "POST /v1/card/batch",
+                    "referral": ["POST /v1/referral/create", "POST /v1/referral/use", "GET /v1/referral/my-codes"],
+                    "narrative": [
+                        "POST /v1/narrative/start",
+                        "POST /v1/narrative/event",
+                        "POST /v1/narrative/end",
+                        "POST /v1/narrative/feedback",
+                        "GET  /v1/narrative/stats",
                     ],
+                    "enterprise": [
+                        "POST /v1/enterprise/create",
+                        "POST /v1/enterprise/join",
+                        "GET  /v1/enterprise/profile",
+                        "GET  /v1/enterprise/candidates",
+                        "GET  /v1/enterprise/candidate/<id>",
+                        "POST /v1/enterprise/candidates/add",
+                        "POST /v1/enterprise/candidates/import-share",
+                        "POST /v1/enterprise/contact-sales",
+                    ],
+                    "job_posts": [
+                        "POST /v1/job-posts",
+                        "GET  /v1/job-posts",
+                        "PUT  /v1/job-posts/<id>",
+                        "DELETE /v1/job-posts/<id>",
+                        "GET  /v1/job-posts/<id>/matches",
+                    ],
+                    "harmonyos": {
+                        "payment": [
+                            "POST /v1/payment/huawei/notify",
+                            "POST /v1/payment/huawei/verify",
+                        ],
+                        "push": [
+                            "POST /v1/push/huawei/register",
+                            "POST /v1/push/huawei/unregister",
+                            "POST /v1/push/huawei/send",
+                            "POST /v1/push/huawei/batch",
+                        ],
+                        "cards": [
+                            "GET  /v1/card/<card_id>",
+                            "POST /v1/card/batch",
+                        ],
+                    },
                 },
-            },
-        )
+            )
 
     # --- Error handlers ---
     @app.errorhandler(404)

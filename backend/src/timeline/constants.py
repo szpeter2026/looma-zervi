@@ -10,6 +10,8 @@ EVENT_KIND_PHASE1 = frozenset({
     "share_authorized",
     "match_scan",
     "resume_ingest",
+    "mission_completed",
+    "learning_activity",
 })
 
 EVENT_KIND_MANUAL = frozenset({
@@ -21,6 +23,7 @@ EVENT_KIND_MANUAL = frozenset({
 # kinds that may appear more than once for same source_ref
 EVENT_KIND_ALLOW_DUPLICATE = frozenset({
     "check_in",
+    "interaction_log",
 })
 
 SOURCE_SYSTEMS = frozenset({

@@ -310,6 +310,80 @@ def record_resume_ingest(
     )
 
 
+def record_mission_completed(
+    db,
+    user_id: str,
+    *,
+    mission_id: str,
+    xp_reward: int = 0,
+    occurred_at: str | None = None,
+) -> dict | None:
+    """Timeline node when a user completes a mission."""
+    mission_labels: dict[str, str] = {
+        "personality": "完成人格冷启动测评",
+        "team": "组建舰队",
+        "match": "完成星际匹配",
+        "share": "发送星际信号",
+    }
+    return record_timeline_event(
+        db,
+        user_id,
+        "mission_completed",
+        "system",
+        source_ref=mission_id,
+        title=mission_labels.get(mission_id, f"完成任务: {mission_id}"),
+        summary=f"获得 {xp_reward} 能量",
+        payload={
+            "mission_id": mission_id,
+            "xp_reward": xp_reward,
+        },
+        signal_quality="observed",
+        confidence=0.95,
+        weight_role="evidence",
+        visibility="private",
+        occurred_at=occurred_at,
+    )
+
+
+def record_interaction_log(
+    db,
+    user_id: str,
+    *,
+    query: str,
+    intent: str = "",
+    intent_confidence: float = 0.0,
+    response_time_ms: int = 0,
+    ask_mode: str = "chat",
+    occurred_at: str | None = None,
+) -> dict | None:
+    """Timeline node for each AI chat interaction."""
+    if not user_id or user_id == "guest-anon":
+        return None
+    # Truncate query for safety and brevity
+    summary = query[:120] + ("…" if len(query) > 120 else "")
+    return record_timeline_event(
+        db,
+        user_id,
+        "interaction_log",
+        "ask",
+        source_ref=f"ask_{intent}_{int(response_time_ms)}",
+        title="对话交互",
+        summary=summary,
+        payload={
+            "intent": intent or "",
+            "intent_confidence": intent_confidence,
+            "response_time_ms": response_time_ms,
+            "ask_mode": ask_mode,
+            "query_chars": len(query),
+        },
+        signal_quality="observed",
+        confidence=0.75,
+        weight_role="evidence",
+        visibility="private",
+        occurred_at=occurred_at,
+    )
+
+
 def backfill_user_timeline(db, user_id: str) -> list[str]:
     """Idempotent backfill from quiz / share / match / resume sources."""
     written: list[str] = []
@@ -451,6 +525,8 @@ _L1_KIND_LABELS = {
     "match_scan": "匹配扫描",
     "resume_ingest": "简历沉淀",
     "interaction_log": "对话沉淀",
+    "mission_completed": "任务完成",
+    "learning_activity": "学习行为",
 }
 
 
@@ -469,6 +545,8 @@ def build_timeline_l1_summary(db, user_id: str) -> dict:
         "match_scan",
         "resume_ingest",
         "interaction_log",
+        "mission_completed",
+        "learning_activity",
         "fleet_co_presence",
     }
     evidence_behavior = [e for e in active if e.get("event_kind") in behavior_kinds]

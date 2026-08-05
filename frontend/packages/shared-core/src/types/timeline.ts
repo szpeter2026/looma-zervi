@@ -8,6 +8,7 @@ export type TimelineEventKind =
   | "share_authorized"
   | "match_scan"
   | "resume_ingest"
+  | "mission_completed"
   | "learning_activity"
   | "career_decision"
   | "interview_session"
@@ -82,4 +83,22 @@ export interface TimelineBackfillResponse {
   written_kinds: string[];
   event_count: number;
   note?: string;
+}
+
+export interface TimelineExportResponse {
+  exported_at: string;
+  user_id: string;
+  event_count: number;
+  l1_summary: Record<string, unknown>;
+  items: TimelineEvent[];
+  note: string;
+}
+
+export interface TimelineDeleteAllResponse {
+  ok: boolean;
+  user_id: string;
+  deleted: number;
+  errors: number;
+  total_was: number;
+  note: string;
 }

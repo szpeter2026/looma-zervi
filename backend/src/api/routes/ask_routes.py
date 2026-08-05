@@ -21,6 +21,7 @@ from src.utils.quota import (
     consume_with_boost, refund_consumption, get_remaining, build_upgrade_hint,
     QUOTA_LIMITS, RESOURCE_ASK,
 )
+from src.timeline.events import record_interaction_log
 
 logger = logging.getLogger("looma.ask")
 
@@ -171,6 +172,17 @@ def ask_question():
             user_id=user_id if tier != "guest" else None,
             intent_label=intent_str,
         )
+        # Timeline: AI interaction (best-effort, non-blocking)
+        if user_id and user_id != "guest-anon":
+            record_interaction_log(
+                db,
+                user_id,
+                query=query,
+                intent=intent_str,
+                intent_confidence=round(confidence, 3),
+                response_time_ms=elapsed,
+                ask_mode=ask_mode,
+            )
     except Exception:
         pass
 

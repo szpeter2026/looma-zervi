@@ -24,6 +24,7 @@ from flask import Blueprint, request, jsonify, current_app, g
 
 from src.api.auth.decorators import require_auth, optional_auth
 from src.agents.trust_agent import generate_attestations
+from src.timeline.events import record_mission_completed
 import logging
 
 logger = logging.getLogger("looma.game_routes")
@@ -286,6 +287,12 @@ def complete_mission():
     new_level = _calculate_level(profile["xp"])
     if new_level != profile["level"]:
         db.update_level(g.user_id, new_level)
+
+    # Timeline record (best-effort, non-blocking)
+    try:
+        record_mission_completed(db, g.user_id, mission_id=mission_id, xp_reward=xp_reward)
+    except Exception:
+        logger.warning("timeline record failed for mission %s", mission_id)
 
     return jsonify(
         message="mission completed",

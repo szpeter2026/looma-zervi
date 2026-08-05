@@ -6,6 +6,7 @@ See docs/TIMELINE_EVENT_MODEL.md and contracts/timeline.v1.json.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, g, jsonify, request
 
@@ -146,4 +147,90 @@ def bridge_backfill():
         written_kinds=written,
         event_count=count,
         note="phase1 backfill: quiz + share_codes + profile_share + match_reports + resume memories",
+    )
+
+
+@timeline_bp.route("/export", methods=["GET"])
+@require_auth
+def export_my_data():
+    """GDPR: export all active timeline events + growth as machine-readable JSON.
+
+    Returns a self-contained file the user can download and take to another platform.
+    """
+    db = _get_db()
+    # list_timeline_events caps limit at 100 — page with cursor for a full export
+    rows: list = []
+    cursor = None
+    while True:
+        batch = db.list_timeline_events(g.user_id, limit=100, cursor=cursor)
+        if not batch:
+            break
+        rows.extend(batch)
+        cursor = batch[-1].get("occurred_at")
+        if len(batch) < 100 or not cursor:
+            break
+    active = [r for r in rows if r.get("status") == "active"]
+    items = [serialize_timeline_row(r) for r in active]
+
+    # Append growth summary as metadata
+    from src.timeline.events import build_timeline_l1_summary
+
+    summary = build_timeline_l1_summary(db, g.user_id)
+
+    return jsonify(
+        exported_at=datetime.now(timezone.utc).isoformat(),
+        user_id=g.user_id,
+        event_count=len(items),
+        l1_summary=summary,
+        items=items,
+        note="This is your complete PlanetX career timeline. You own this data.",
+    )
+
+
+@timeline_bp.route("/me", methods=["DELETE"])
+@require_auth
+def delete_all_my_events():
+    """GDPR: soft-delete every timeline event owned by the authenticated user.
+
+    Requires explicit confirmation via ?confirm=yes query param to prevent accidents.
+    """
+    confirm = (request.args.get("confirm") or "").strip().lower()
+    if confirm != "yes":
+        return jsonify(
+            error="confirmation_required",
+            message="添加 ?confirm=yes 以确认删除所有时间线数据。此操作不可撤销。",
+            hint="GET /v1/timeline/export first to download your data.",
+        ), 400
+
+    db = _get_db()
+    total = db.count_timeline_events(g.user_id)
+    deleted = 0
+    errors = 0
+
+    # Batch soft-delete in pages of 100
+    while True:
+        batch = db.list_timeline_events(g.user_id, limit=100)
+        if not batch:
+            break
+        for row in batch:
+            try:
+                db.soft_delete_timeline_event(g.user_id, row["id"])
+                deleted += 1
+            except Exception:
+                errors += 1
+        if len(batch) < 100:
+            break
+
+    logger.info(
+        "GDPR delete_timeline user=%s total=%d deleted=%d errors=%d",
+        g.user_id, total, deleted, errors,
+    )
+
+    return jsonify(
+        ok=True,
+        user_id=g.user_id,
+        deleted=deleted,
+        errors=errors,
+        total_was=total,
+        note="Timeline data has been soft-deleted. Growth curves will be empty until new events accumulate.",
     )

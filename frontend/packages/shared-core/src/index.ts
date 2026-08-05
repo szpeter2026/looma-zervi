@@ -243,6 +243,8 @@ export type {
   TimelineGrowthResponse,
   TimelineGrowthDimension,
   TimelineBackfillResponse,
+  TimelineExportResponse,
+  TimelineDeleteAllResponse,
   TimelineSignalQuality,
   TimelineWeightRole,
   TimelineVisibility,

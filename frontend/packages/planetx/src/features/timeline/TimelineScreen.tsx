@@ -11,6 +11,8 @@ const KIND_LABEL: Record<string, string> = {
   match_scan: '匹配扫描',
   resume_ingest: '简历沉淀',
   interaction_log: '对话摘要',
+  mission_completed: '任务完成',
+  learning_activity: '学习行为',
 }
 
 function kindLabel(kind: string) {
@@ -32,6 +34,7 @@ export default function TimelineScreen() {
   const [projectTitle, setProjectTitle] = useState('')
   const [projectSummary, setProjectSummary] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -103,6 +106,58 @@ export default function TimelineScreen() {
     }
   }
 
+  const handleExport = useCallback(async () => {
+    setSaving(true)
+    try {
+      const api = createTimelineApi(getApiClient())
+      const data = await api.exportMyData()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `planex-timeline-${data.user_id.slice(0, 8)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setToast(`已导出 ${data.event_count} 条事件`)
+    } catch {
+      setToast('导出失败')
+    } finally {
+      setSaving(false)
+    }
+  }, [setToast])
+
+  const handleDeleteAll = useCallback(async () => {
+    setSaving(true)
+    try {
+      const api = createTimelineApi(getApiClient())
+      const res = await api.deleteAllMyData()
+      setToast(`已删除 ${res.deleted} 条事件`)
+      setDeleteConfirm(false)
+      await reload()
+    } catch {
+      setToast('删除失败')
+    } finally {
+      setSaving(false)
+    }
+  }, [setToast, reload])
+
+  const handleDeleteEvent = useCallback(
+    async (eventId: string) => {
+      setSaving(true)
+      try {
+        const api = createTimelineApi(getApiClient())
+        await api.deleteEvent(eventId)
+        setToast('事件已删除')
+        await reload()
+      } catch {
+        setToast('删除失败')
+      } finally {
+        setSaving(false)
+      }
+    },
+    [setToast, reload],
+  )
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -124,6 +179,21 @@ export default function TimelineScreen() {
           <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--px-color-accent)' }}>职业时间线</div>
           <div style={{ fontSize: 12, color: 'var(--px-color-text-muted)' }}>行为沉淀让画像浮现</div>
         </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <button type="button" onClick={handleExport} disabled={saving} style={{ ...ctaStyle, flex: 1, fontSize: 12 }}>
+          📥 导出数据
+        </button>
+        {!deleteConfirm ? (
+          <button type="button" onClick={() => setDeleteConfirm(true)} style={{ ...ctaStyle, flex: 1, fontSize: 12, border: '1px solid rgba(255,80,80,0.35)', background: 'rgba(255,80,80,0.08)', color: 'rgba(255,100,100,0.9)' }}>
+            🗑 清空时间线
+          </button>
+        ) : (
+          <button type="button" onClick={handleDeleteAll} disabled={saving} style={{ ...ctaStyle, flex: 1, fontSize: 12, border: '1px solid rgba(255,80,80,0.7)', background: 'rgba(255,80,80,0.18)', color: '#f66' }}>
+            {saving ? '删除中…' : '确认清空'}
+          </button>
+        )}
       </div>
 
       {growth && (
@@ -266,9 +336,28 @@ export default function TimelineScreen() {
                   {kindLabel(ev.event_kind)}
                   {ev.weight_role === 'hypothesis' ? ' · 假设' : ''}
                 </span>
-                <span style={{ fontSize: 11, color: 'var(--px-color-text-muted)' }}>
-                  {(ev.occurred_at || '').slice(0, 10)}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--px-color-text-muted)' }}>
+                    {(ev.occurred_at || '').slice(0, 10)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteEvent(ev.id)}
+                    disabled={saving}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'rgba(255,255,255,0.25)',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      padding: '0 2px',
+                      lineHeight: 1,
+                    }}
+                    title="删除此事件"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, marginTop: 8 }}>{ev.title || kindLabel(ev.event_kind)}</div>
               {ev.summary ? (
