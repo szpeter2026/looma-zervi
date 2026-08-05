@@ -2,9 +2,16 @@
  * Sidebar - SaaS navigation shell.
  * Owner: szbenyx
  *
+ * Pure CSS + HTML (no tdesign-react / tdesign-icons-react).
+ * Uses @looma/shared-core for brand config and auth store.
+ * Quota format aligned with backend: { tier, records }.
+ *
  * Tier/role differentiation:
  * - admin: show Admin nav
  * - free: show lock badge on supporter+ features (still navigable → upgrade CTA)
+ *
+ * Style: 浅色 B 端 SaaS 侧边栏，白色底 + 深蓝文字 + 专业蓝激活态
+ * Hidden on mobile (<md) — replaced by MobileDrawer.
  */
 import { useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
@@ -81,7 +88,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="fixed left-0 top-0 bottom-0 flex flex-col z-50 border-r border-[var(--color-border)]"
+      className="hidden md:flex fixed left-0 top-0 bottom-0 flex-col z-50 border-r border-[var(--color-border)]"
       style={{
         width: "var(--sidebar-width)",
         backgroundColor: "var(--color-bg-sidebar)",

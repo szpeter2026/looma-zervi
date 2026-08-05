@@ -38,6 +38,9 @@ def create_app(env="development"):
     from src.api.routes.social_routes import social_bp  # 六度分隔社交图谱
     from src.api.routes.trust_routes import trust_bp    # Trust Agent 信任证明
     from src.api.routes.timeline_routes import timeline_bp  # Career timeline
+    from src.api.routes.huawei_iap_routes import huawei_iap_bp  # HarmonyOS IAP
+    from src.api.routes.huawei_push_routes import huawei_push_bp  # HarmonyOS Push
+    from src.api.routes.card_routes import card_bp  # HarmonyOS Card API
 
     app.register_blueprint(auth_bp, url_prefix="/v1/auth")
     app.register_blueprint(game_bp, url_prefix="/v1/game")
@@ -60,6 +63,9 @@ def create_app(env="development"):
     app.register_blueprint(social_bp, url_prefix="/v1/social")  # 六度分隔社交图谱
     app.register_blueprint(trust_bp, url_prefix="/v1/trust")    # Trust Agent 信任证明
     app.register_blueprint(timeline_bp, url_prefix="/v1/timeline")  # Career timeline
+    app.register_blueprint(huawei_iap_bp, url_prefix="/v1/payment/huawei")  # HarmonyOS IAP
+    app.register_blueprint(huawei_push_bp, url_prefix="/v1/push/huawei")  # HarmonyOS Push
+    app.register_blueprint(card_bp, url_prefix="/v1")  # HarmonyOS Cards (/v1/card/*)
 
     # --- Health check ---
     @app.route("/health", methods=["GET"])
@@ -128,6 +134,8 @@ def create_app(env="development"):
                     "POST /v1/auth/register",
                     "POST /v1/auth/login",
                     "POST /v1/auth/wechat",
+                    "POST /v1/auth/google",
+                    "POST /v1/auth/huawei",
                     "POST /v1/auth/bind",
                     "GET  /v1/auth/profile",
                     "POST /v1/auth/refresh",
@@ -202,6 +210,22 @@ def create_app(env="development"):
                     "DELETE /v1/job-posts/<id>",
                     "GET  /v1/job-posts/<id>/matches",
                 ],
+                "harmonyos": {
+                    "payment": [
+                        "POST /v1/payment/huawei/notify",
+                        "POST /v1/payment/huawei/verify",
+                    ],
+                    "push": [
+                        "POST /v1/push/huawei/register",
+                        "POST /v1/push/huawei/unregister",
+                        "POST /v1/push/huawei/send",
+                        "POST /v1/push/huawei/batch",
+                    ],
+                    "cards": [
+                        "GET  /v1/card/<card_id>",
+                        "POST /v1/card/batch",
+                    ],
+                },
             },
         )
 

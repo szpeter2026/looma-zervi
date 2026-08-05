@@ -298,6 +298,20 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_expires ON subscriptions(expires_at);
 
 -- ============================================
+-- Push: huawei_push_tokens (HarmonyOS Push Kit)
+-- ============================================
+CREATE TABLE IF NOT EXISTS huawei_push_tokens (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         TEXT NOT NULL,
+    push_token      TEXT NOT NULL,
+    created_at      INTEGER DEFAULT (strftime('%s','now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_push_token ON huawei_push_tokens(push_token);
+CREATE INDEX IF NOT EXISTS idx_push_user ON huawei_push_tokens(user_id);
+
+-- ============================================
 -- Growth: invite_codes (joint ownership)
 -- ============================================
 CREATE TABLE IF NOT EXISTS invite_codes (
@@ -919,6 +933,7 @@ class DatabaseManager:
         if not self._is_memory:
             conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA busy_timeout=5000")  # 5s busy-wait 缓解 SQLITE_BUSY
         return conn
 
     @contextmanager

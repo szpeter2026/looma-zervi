@@ -128,6 +128,23 @@ class Config:
     AIRWALLEX_MODE = os.getenv("AIRWALLEX_MODE", "demo")  # demo | production
     AIRWALLEX_WEBHOOK_SECRET = os.getenv("AIRWALLEX_WEBHOOK_SECRET", "")
 
+    # ============================================
+    # HarmonyOS / 华为生态
+    # ============================================
+    # 华为帐号 OAuth (AppGallery Connect → OAuth 2.0 客户端ID)
+    HUAWEI_CLIENT_ID = os.getenv("HUAWEI_CLIENT_ID", "")
+    HUAWEI_CLIENT_SECRET = os.getenv("HUAWEI_CLIENT_SECRET", "")
+    HUAWEI_OAUTH_REGION = os.getenv("HUAWEI_OAUTH_REGION", "cn")  # cn | ru | de | sg
+
+    # 华为 IAP (AppGallery Connect → 支付服务信息 → IAP 公钥)
+    HUAWEI_IAP_PUBLIC_KEY = os.getenv("HUAWEI_IAP_PUBLIC_KEY", "")
+    HUAWEI_IAP_SIGN_ALGORITHM = os.getenv("HUAWEI_IAP_SIGN_ALGORITHM", "SHA256WithRSA")
+
+    # 华为 Push Kit (AppGallery Connect → 项目设置)
+    HUAWEI_PUSH_CLIENT_ID = os.getenv("HUAWEI_PUSH_CLIENT_ID", "")
+    HUAWEI_PUSH_CLIENT_SECRET = os.getenv("HUAWEI_PUSH_CLIENT_SECRET", "")
+    HUAWEI_PROJECT_ID = os.getenv("HUAWEI_PROJECT_ID", "")
+
     # Rate limiting
     RATE_LIMIT_GLOBAL = os.getenv("RATE_LIMIT_GLOBAL", "200/hour")
     RATE_LIMIT_AUTH = os.getenv("RATE_LIMIT_AUTH", "10/minute")
@@ -247,6 +264,16 @@ def _refresh_config():
     Config.AIRWALLEX_CLIENT_KEY = os.getenv("AIRWALLEX_CLIENT_KEY", "")
     Config.AIRWALLEX_MODE = os.getenv("AIRWALLEX_MODE", "demo")
     Config.AIRWALLEX_WEBHOOK_SECRET = os.getenv("AIRWALLEX_WEBHOOK_SECRET", "")
+
+    # HarmonyOS / 华为生态
+    Config.HUAWEI_CLIENT_ID = os.getenv("HUAWEI_CLIENT_ID", "")
+    Config.HUAWEI_CLIENT_SECRET = os.getenv("HUAWEI_CLIENT_SECRET", "")
+    Config.HUAWEI_OAUTH_REGION = os.getenv("HUAWEI_OAUTH_REGION", "cn")
+    Config.HUAWEI_IAP_PUBLIC_KEY = os.getenv("HUAWEI_IAP_PUBLIC_KEY", "")
+    Config.HUAWEI_IAP_SIGN_ALGORITHM = os.getenv("HUAWEI_IAP_SIGN_ALGORITHM", "SHA256WithRSA")
+    Config.HUAWEI_PUSH_CLIENT_ID = os.getenv("HUAWEI_PUSH_CLIENT_ID", "")
+    Config.HUAWEI_PUSH_CLIENT_SECRET = os.getenv("HUAWEI_PUSH_CLIENT_SECRET", "")
+    Config.HUAWEI_PROJECT_ID = os.getenv("HUAWEI_PROJECT_ID", "")
 
     # Rate limiting
     Config.RATE_LIMIT_GLOBAL = os.getenv("RATE_LIMIT_GLOBAL", "200/hour")

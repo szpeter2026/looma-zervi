@@ -7,6 +7,7 @@ Endpoints:
   POST /v1/auth/login        - Web email/password login
   POST /v1/auth/wechat       - WeChat miniprogram login (openid -> JWT)
   POST /v1/auth/google       - Google OAuth login (ID Token -> JWT) [overseas]
+  POST /v1/auth/huawei       - HarmonyOS Account Kit login (authorizationCode -> JWT)
   POST /v1/auth/bind         - Bind wechat openid to existing account
   GET  /v1/auth/profile      - Get current user profile (requires auth)
   GET  /v1/auth/identities   - List linked identities (requires auth)
@@ -14,12 +15,16 @@ Endpoints:
   POST /v1/auth/bridge       - [OPTIONAL] Supabase JWT -> looma JWT (MVP: 501)
 """
 import bcrypt
+import logging
 from flask import Blueprint, request, jsonify, current_app, g
 
 from src.api.auth.jwt_handler import sign_token, verify_token, get_current_user_id, sign_token_for_user
 from src.api.auth.decorators import require_auth
 from src.api.auth.wechat_auth import code2session
 from src.api.auth.google_auth import verify_id_token, exchange_auth_code, GoogleUserInfo
+from src.api.auth.huawei_auth import exchange_authorization_code, fetch_user_info
+
+logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -212,6 +217,115 @@ def google_login():
         user={
             "id": user["id"],
             "email": user.get("email"),
+            "name": user.get("name", ""),
+            "tier": user.get("tier", "free"),
+            "role": user.get("role", "user"),
+            "is_new_user": created,
+        }
+    )
+
+
+# ============================================
+# HarmonyOS Account Kit login
+# ============================================
+@auth_bp.route("/huawei", methods=["POST"])
+def huawei_login():
+    """
+    POST /v1/auth/huawei
+
+    请求体:
+    {
+        "authorizationCode": "CgB6e3...",  # 元服务端 Account Kit 获取的授权码
+        "state": "uuid-string"             # (可选) 防跨站攻击 state
+    }
+
+    响应:
+    {
+        "access_token": "eyJhbG...",
+        "token_type": "bearer",
+        "expires_in": 86400,
+        "user": {
+            "id": "user_xxx",
+            "name": "...",
+            "tier": "free",
+            "is_new_user": false
+        }
+    }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify(error="bad_request", message="Invalid JSON body"), 400
+
+    authorization_code = (data.get("authorizationCode", "") or "").strip()
+    if not authorization_code:
+        return jsonify(error="bad_request", message="authorizationCode is required"), 400
+
+    # --- Step 1: 换取 access_token ---
+    try:
+        token_data = exchange_authorization_code(authorization_code)
+    except ValueError as e:
+        logger.warning(f"[huawei_auth] Token exchange failed: {e}")
+        return jsonify(error="oauth_error", message=str(e)), 401
+    except Exception as e:
+        logger.error(f"[huawei_auth] Token exchange network error: {e}")
+        return jsonify(error="upstream_error", message="Huawei OAuth server unreachable"), 502
+
+    access_token = token_data.get("access_token", "")
+    if not access_token:
+        return jsonify(error="oauth_error", message="No access_token in Huawei response"), 502
+
+    # --- Step 2: 获取用户信息 ---
+    try:
+        hw_user = fetch_user_info(access_token)
+    except ValueError as e:
+        logger.warning(f"[huawei_auth] Userinfo fetch failed: {e}")
+        return jsonify(error="oauth_error", message=str(e)), 502
+    except Exception as e:
+        logger.error(f"[huawei_auth] Userinfo network error: {e}")
+        return jsonify(error="upstream_error", message="Huawei account server unreachable"), 502
+
+    if not hw_user.open_id:
+        return jsonify(error="oauth_error", message="Failed to retrieve Huawei openID"), 502
+
+    # --- Step 3: 查找或创建用户 ---
+    db = _get_db()
+    user, created = db.get_or_create_user_by_identity(
+        provider="huawei",
+        provider_uid=hw_user.open_id,
+        extra_data={
+            "name": hw_user.display_name,
+            "avatar": hw_user.avatar_url,
+            "metadata_json": hw_user.to_metadata(),
+        },
+    )
+
+    # 若用户已有 union_id 则更新
+    if hw_user.union_id and not user.get("wechat_openid"):
+        try:
+            with db.get_conn() as conn:
+                conn.execute(
+                    "UPDATE users SET wechat_openid = ? WHERE id = ?",
+                    (hw_user.union_id, user["id"]),
+                )
+        except Exception:
+            pass  # 非关键字段
+
+    logger.info(
+        f"[huawei_auth] Login {'(new)' if created else '(existing)'}: "
+        f"user={user['id']} huawei_open_id={hw_user.open_id}"
+    )
+
+    # --- Step 4: 签发 JWT ---
+    token = sign_token(user["id"], extra_claims={
+        "tier": user.get("tier", "free"),
+        "provider": "huawei",
+    })
+    return jsonify(
+        access_token=token,
+        token_type="bearer",
+        expires_in=current_app.config["JWT_EXPIRY_HOURS"] * 3600,
+        user={
+            "id": user["id"],
             "name": user.get("name", ""),
             "tier": user.get("tier", "free"),
             "role": user.get("role", "user"),
