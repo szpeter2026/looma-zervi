@@ -3,6 +3,11 @@
 #
 # 目标机: 139.180.184.25 · genz.ltd + tspace.genz.ltd + api.genz.ltd
 #
+# URL 契约（与独立营销仓 szpeter2026/genz-web 对齐）:
+#   营销 CTA appRegisterUrl = https://tspace.genz.ltd/register
+#   本 CI 发布 SaaS → /var/www/saas/dist → nginx host tspace.genz.ltd
+#   genz.ltd 营销站由 Vercel 独立部署，本 workflow 不发布 genz-web
+#
 # 触发: git tag overseas-v1.4.3 && git push origin overseas-v1.4.3
 #       或 Actions 页 workflow_dispatch 手动部署
 #
@@ -482,8 +487,19 @@ jobs:
           echo "=== Public https://genz.ltd/ (first bytes) ==="
           curl -sf --connect-timeout 20 "https://genz.ltd/" | head -c 120
           echo ""
-          echo "=== Public https://tspace.genz.ltd/register (first bytes) ==="
-          curl -sf --connect-timeout 20 "https://tspace.genz.ltd/register" | head -c 120
+          echo "=== Marketing CTA target: https://tspace.genz.ltd/register ==="
+          # Must match szpeter2026/genz-web SITE_CONFIG.appRegisterUrl
+          REG_CODE=$(curl -sS -o /tmp/tspace-register.html -w '%{http_code}' --connect-timeout 20 \
+            "https://tspace.genz.ltd/register")
+          echo "HTTP ${REG_CODE}"
+          if [ "${REG_CODE}" != "200" ]; then
+            echo "::error::tspace register URL not reachable (expected 200, got ${REG_CODE})"
+            exit 1
+          fi
+          head -c 160 /tmp/tspace-register.html; echo ""
+          if ! grep -q 'PlanetX\|root\|assets/' /tmp/tspace-register.html; then
+            echo "::warning::register HTML unexpected; check SaaS deploy"
+          fi
           echo ""
 
       - name: Clean up old images
