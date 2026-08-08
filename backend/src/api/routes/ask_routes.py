@@ -18,9 +18,10 @@ from flask import Blueprint, request, jsonify, current_app, g
 from src.api.auth.decorators import require_auth, optional_auth
 from src.compliance.consent import require_consent
 from src.utils.quota import (
-    consume_with_boost, get_remaining, build_upgrade_hint,
+    consume_with_boost, refund_consumption, get_remaining, build_upgrade_hint,
     QUOTA_LIMITS, RESOURCE_ASK,
 )
+from src.timeline.events import record_interaction_log
 
 logger = logging.getLogger("looma.ask")
 
@@ -32,12 +33,12 @@ _RESULT_CACHE_MAX = 64
 _RESULT_CACHE_TTL = 120
 
 
-def _cache_key(query: str) -> str:
-    return hashlib.sha256(query.encode()).hexdigest()
+def _cache_key(query: str, mode: str = "chat") -> str:
+    return hashlib.sha256(f"{mode}\n{query}".encode()).hexdigest()
 
 
-def _cache_get(query: str) -> dict | None:
-    key = _cache_key(query)
+def _cache_get(query: str, mode: str = "chat") -> dict | None:
+    key = _cache_key(query, mode)
     if key in _result_cache:
         ts, val = _result_cache[key]
         if time.time() - ts < _RESULT_CACHE_TTL:
@@ -47,8 +48,8 @@ def _cache_get(query: str) -> dict | None:
     return None
 
 
-def _cache_set(query: str, result: dict) -> None:
-    key = _cache_key(query)
+def _cache_set(query: str, result: dict, mode: str = "chat") -> None:
+    key = _cache_key(query, mode)
     if key in _result_cache:
         _result_cache.move_to_end(key)
     _result_cache[key] = (time.time(), result)
@@ -66,6 +67,8 @@ def ask_question():
     """
     data = request.get_json() or {}
     query = data.get("query", "").strip()
+    raw_mode = str(data.get("mode") or "chat").strip().lower()
+    ask_mode = raw_mode if raw_mode in ("chat", "deepseek", "fast") else "chat"
     navigator_mode = data.get("navigator_mode", False)
     navigator_system_prompt = data.get("navigator_system_prompt")
     session_history = data.get("session_history")
@@ -75,9 +78,34 @@ def ask_question():
     if not query:
         return jsonify(error="bad_request", message="query required"), 400
 
-    # Quota check
     user_id = g.get("user_id", "guest-anon")
     tier = g.get("user_tier", "guest")
+
+    # Cache before quota — identical questions within TTL should not burn daily asks
+    cached = _cache_get(query, ask_mode)
+    if cached is not None:
+        logger.info(f"[cache HIT] mode={ask_mode} {query[:50]!r}")
+        # Still record timeline evidence (cache hits are real user interactions)
+        if user_id and user_id != "guest-anon":
+            try:
+                record_interaction_log(
+                    current_app._db,
+                    user_id,
+                    query=query,
+                    intent=str(cached.get("intent") or ""),
+                    intent_confidence=float(cached.get("intent_confidence") or 0),
+                    response_time_ms=0,
+                    ask_mode=ask_mode,
+                )
+            except Exception:
+                pass
+        return jsonify(
+            answer=cached["answer"],
+            intent=cached["intent"],
+            intent_confidence=cached.get("intent_confidence"),
+            sources=cached["sources"],
+            mode=ask_mode,
+        )
 
     quota_result = consume_with_boost(user_id, tier, RESOURCE_ASK)
     if not quota_result["ok"]:
@@ -91,44 +119,39 @@ def ask_question():
             upgrade=upgrade,
         ), 429
 
-    # Cache check
-    cached = _cache_get(query)
-    if cached is not None:
-        logger.info(f"[cache HIT] {query[:50]!r}")
-        return jsonify(
-            answer=cached["answer"],
-            intent=cached["intent"],
-            intent_confidence=cached.get("intent_confidence"),
-            sources=cached["sources"],
-        )
-
     t0 = time.time()
     _timing: dict[str, int] = {}
 
-    # Intent parsing
-    from src.agents.central_brain import parse_intent, dispatch
-    t_intent = time.time()
-    intent_str, confidence, slots = parse_intent(query, navigator_mode=navigator_mode)
-    _timing["intent"] = int((time.time() - t_intent) * 1000)
-    logger.info(f"意图: {query[:50]!r} -> {intent_str} conf={confidence:.2f} ({_timing['intent']}ms)")
+    try:
+        # Intent parsing
+        from src.agents.central_brain import parse_intent, dispatch
+        t_intent = time.time()
+        intent_str, confidence, slots = parse_intent(query, navigator_mode=navigator_mode)
+        _timing["intent"] = int((time.time() - t_intent) * 1000)
+        logger.info(f"意图: {query[:50]!r} -> {intent_str} conf={confidence:.2f} ({_timing['intent']}ms)")
 
-    # Dispatch
-    t_dispatch = time.time()
-    context = {
-        "navigator_mode": navigator_mode,
-        "navigator_system_prompt": navigator_system_prompt,
-        "session_history": session_history,
-        "current_stage": current_stage,
-        "active_domain": active_domain,
-    }
-    result = dispatch(
-        intent=intent_str,
-        query=query,
-        context=context,
-        slots=slots,
-        _timing=_timing,
-    )
-    _timing["dispatch"] = int((time.time() - t_dispatch) * 1000)
+        # Dispatch
+        t_dispatch = time.time()
+        context = {
+            "ask_mode": ask_mode,
+            "navigator_mode": navigator_mode,
+            "navigator_system_prompt": navigator_system_prompt,
+            "session_history": session_history,
+            "current_stage": current_stage,
+            "active_domain": active_domain,
+        }
+        result = dispatch(
+            intent=intent_str,
+            query=query,
+            context=context,
+            slots=slots,
+            _timing=_timing,
+        )
+        _timing["dispatch"] = int((time.time() - t_dispatch) * 1000)
+    except Exception:
+        logger.exception("ask dispatch failed; refunding quota")
+        refund_consumption(user_id, RESOURCE_ASK, quota_result.get("source", "daily"))
+        return jsonify(error="server_error", message="问答服务暂时不可用，请稍后重试"), 500
 
     elapsed = int((time.time() - t0) * 1000)
     logger.info(f"[cache MISS] {query[:50]!r} -> {intent_str} ({elapsed}ms)")
@@ -150,7 +173,7 @@ def ask_question():
         "intent_confidence": confidence,
         "answer": answer,
         "sources": sources,
-    })
+    }, ask_mode)
 
     # Log query for data flywheel
     try:
@@ -163,6 +186,17 @@ def ask_question():
             user_id=user_id if tier != "guest" else None,
             intent_label=intent_str,
         )
+        # Timeline: AI interaction (best-effort, non-blocking)
+        if user_id and user_id != "guest-anon":
+            record_interaction_log(
+                db,
+                user_id,
+                query=query,
+                intent=intent_str,
+                intent_confidence=round(confidence, 3),
+                response_time_ms=elapsed,
+                ask_mode=ask_mode,
+            )
     except Exception:
         pass
 
@@ -173,6 +207,7 @@ def ask_question():
         sources=sources,
         tokens_used=elapsed,
         extracted=extracted,
+        mode=ask_mode,
     )
 
 

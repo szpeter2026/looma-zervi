@@ -21,6 +21,7 @@ Page({
     personalityTagline: '',
     missionsCompleted: [] as string[],
     teamSize: 0,
+    spreadCount: 0,
     fleet: null as any,
     fleetMembers: [] as string[],
 
@@ -135,6 +136,7 @@ Page({
       personalityTagline: personalityObj?.tagline || '',
       missionsCompleted: s.missionsCompleted,
       teamSize: s.teamSize,
+      spreadCount: s.spreadCount ?? 0,
       fleet: s.fleet,
       fleetMembers: s.fleetMembers,
     })

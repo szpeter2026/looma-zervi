@@ -20,7 +20,14 @@ from flask import Blueprint, request, jsonify, current_app, g
 
 from src.api.auth.decorators import require_auth, optional_auth
 from src.compliance.consent import require_consent
-from src.utils.quota import consume_with_boost, QUOTA_LIMITS, RESOURCE_RESUME_PARSE, get_remaining, build_upgrade_hint
+from src.utils.quota import (
+    consume_with_boost,
+    refund_consumption,
+    QUOTA_LIMITS,
+    RESOURCE_RESUME_PARSE,
+    get_remaining,
+    build_upgrade_hint,
+)
 
 logger = logging.getLogger("looma.resume")
 resume_bp = Blueprint("resume", __name__)
@@ -63,6 +70,34 @@ def _record_resume_trust(user_id: str, parsed: dict):
     except Exception as e:
         logger.warning("trust_bridge: resume trust recording skipped for %s: %s", user_id, e)
 
+
+def _record_resume_timeline(user_id: str, parsed: dict, *, channel: str, file_ext: str = "", raw_chars: int = 0):
+    """Best-effort timeline resume_ingest (no full text)."""
+    if user_id == "guest-anon":
+        return
+    try:
+        from src.db.manager import DatabaseManager
+        from src.timeline.events import record_resume_ingest
+
+        db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
+        db = DatabaseManager(db_path)
+        skills = parsed.get("skills") or parsed.get("tech_stack") or []
+        if isinstance(skills, str):
+            skills = [s.strip() for s in skills.split(",") if s.strip()]
+        record_resume_ingest(
+            db,
+            user_id,
+            source_ref=f"resume_parse_{user_id}",
+            channel=channel,
+            skills_count=len(skills) if isinstance(skills, list) else 0,
+            years=str(parsed.get("years_of_experience") or ""),
+            degree=str(parsed.get("highest_degree") or ""),
+            file_ext=file_ext,
+            raw_chars=raw_chars,
+        )
+    except Exception as e:
+        logger.warning("timeline: resume_ingest skipped for %s: %s", user_id, e)
+
 _SHA_TZ = timezone(timedelta(hours=8))
 
 
@@ -77,7 +112,7 @@ def _quota_exceeded_response(tier: str):
 
 @resume_bp.route("/parse", methods=["POST"])
 @optional_auth
-@require_consent("resume_parse")
+@require_consent("jobseeker_core")
 def parse_resume():
     """Parse resume text to structured data."""
     data = request.get_json() or {}
@@ -102,6 +137,7 @@ def parse_resume():
 
         # ── Trust Bridge: record skills_claimed from resume ──
         _record_resume_trust(user_id, result)
+        _record_resume_timeline(user_id, result, channel="parse", raw_chars=len(text))
 
         return jsonify(extracted=result)
     except Exception as e:
@@ -110,7 +146,7 @@ def parse_resume():
 
 @resume_bp.route("/upload", methods=["POST"])
 @optional_auth
-@require_consent("resume_upload")
+@require_consent("jobseeker_core")
 def upload_resume():
     """Upload resume file (PDF/DOCX/Word) for AI parsing.
 
@@ -152,23 +188,55 @@ def upload_resume():
 
     # Step 1: MarkItDown conversion (PDF/DOCX → Markdown)
     try:
-        from src.ingest.markitdown_convert import stream_to_markdown
+        from src.ingest.markitdown_convert import UnsupportedDocumentFormat, bytes_to_markdown
 
-        markdown = stream_to_markdown(
-            io.BytesIO(content),
-            filename=filename,
-        )
+        markdown = bytes_to_markdown(content, filename=filename)
+    except UnsupportedDocumentFormat as e:
+        logger.warning("Resume upload rejected (%s): %s", e.code, e)
+        refund_consumption(user_id, RESOURCE_RESUME_PARSE, quota_result.get("source", "daily"))
+        return jsonify(error="convert_failed", hint=e.code, message=str(e)), 422
     except Exception as e:
         logger.error(f"MarkItDown conversion failed for {filename}: {e}")
-        return jsonify(error="convert_failed", message=f"文档解析失败（{filename} 格式未识别或文件损坏）"), 422
+        refund_consumption(user_id, RESOURCE_RESUME_PARSE, quota_result.get("source", "daily"))
+        err_text = str(e)
+        if "dependencies needed to read" in err_text or "MissingDependency" in err_text:
+            return jsonify(
+                error="convert_failed",
+                message="服务端缺少文档解析依赖，请联系管理员（PDF/DOCX 转换组件未安装）",
+            ), 503
+        # MarkItDown: legacy .doc often surfaces as "No converter attempted"
+        if "No converter attempted" in err_text or "not supported" in err_text.lower():
+            return jsonify(
+                error="convert_failed",
+                hint="legacy_doc_unsupported",
+                message=(
+                    f"「{filename}」无法解析。若为旧版 Word（.doc），请另存为 .docx 或 PDF 后重试；"
+                    "若已是 .docx/.pdf，请检查文件是否损坏。"
+                ),
+            ), 422
+        return jsonify(
+            error="convert_failed",
+            message=f"文档解析失败（{filename} 格式未识别或文件损坏）",
+        ), 422
 
     if not markdown or not markdown.strip():
+        refund_consumption(user_id, RESOURCE_RESUME_PARSE, quota_result.get("source", "daily"))
         return jsonify(error="convert_failed", message="文档内容为空，无法提取文字"), 422
 
     # Step 2: LLM structured extraction
     try:
-        from src.agents.document_agents import run_document_analysis
+        from src.agents.document_agents import DocumentAnalysisError, run_document_analysis
+
         extracted = run_document_analysis("resume", markdown)
+    except DocumentAnalysisError as e:
+        logger.error(f"Resume extraction {e.code}: {e.message}")
+        return jsonify(
+            extracted=None,
+            markdown=markdown,
+            filename=filename,
+            error=e.message,
+            hint=e.code,
+        ), 200
     except Exception as e:
         logger.error(f"LLM extraction failed: {e}")
         # Return markdown only if extraction fails
@@ -179,9 +247,28 @@ def upload_resume():
             error=f"结构化提取失败: {e}",
         ), 200
 
+    if not extracted:
+        logger.warning(f"LLM returned empty result for resume upload, filename={filename}, markdown_len={len(markdown)}")
+        return jsonify(
+            extracted=None,
+            markdown=markdown,
+            filename=filename,
+            error="简历结构化解析失败: AI 未能返回有效的解析结果，请检查简历文件是否清晰可读，或尝试粘贴简历文本。",
+            hint="parse_failed",
+        ), 200
+
     # ── Trust Bridge: record upload resume trust ──
-    if extracted:
-        _record_resume_trust(user_id, extracted)
+    _record_resume_trust(user_id, extracted)
+    ext = ""
+    if filename and "." in filename:
+        ext = filename.rsplit(".", 1)[-1].lower()[:10]
+    _record_resume_timeline(
+        user_id,
+        extracted,
+        channel="upload",
+        file_ext=ext,
+        raw_chars=len(markdown or ""),
+    )
 
     # Step 3: Persist to DB
     resume_id = None
@@ -217,7 +304,7 @@ def upload_resume():
 
 @resume_bp.route("/improve", methods=["POST"])
 @optional_auth
-@require_consent("resume_parse")
+@require_consent("jobseeker_core")
 def improve_resume():
     """Generate AI-powered improvement suggestions for a resume.
 

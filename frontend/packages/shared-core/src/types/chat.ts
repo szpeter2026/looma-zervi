@@ -14,8 +14,13 @@ export interface ChatMessage {
   timestamp?: string;
 }
 
+/** SaaS 智能问答 RAG 模式：对话=多轮 / 深度=更多检索+长推理 / 快速=少检索+低温度 */
+export type AskMode = "chat" | "deepseek" | "fast";
+
 export interface AskRequest {
   query: string;
+  /** RAG mode — chat | deepseek | fast (default chat) */
+  mode?: AskMode;
   navigator_mode?: boolean;
   navigator_system_prompt?: string;
   session_history?: ChatMessage[];
@@ -29,6 +34,8 @@ export interface AskResponse {
   sources?: DocSource[];
   tokens_used?: number;
   extracted?: Record<string, any>;
+  /** Echo of resolved AskMode from backend */
+  mode?: AskMode;
 }
 
 export interface StreamCallbacks {
