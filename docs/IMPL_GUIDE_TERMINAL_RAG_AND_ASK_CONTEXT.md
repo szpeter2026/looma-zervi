@@ -19,6 +19,16 @@
 
 ---
 
+## 分仓实施计划（2026-08-08）
+
+| 侧 | 计划 | 顺序 |
+|----|------|------|
+| Looma 薄改 | [IMPL_PLAN_LOOMA_THIN_INGEST.md](./IMPL_PLAN_LOOMA_THIN_INGEST.md) | **先做** → Agent 验收开 PR |
+| DemoPeter 本地解析 | [IMPL_PLAN_DEMOPETER_LOCAL_PARSE.md](./IMPL_PLAN_DEMOPETER_LOCAL_PARSE.md) | **后做**（依赖 Looma ingest）→ Agent 验收开 PR |
+| 对照版 | `.../xiajason/zervi-rust` | 不整仓上线 |
+
+---
+
 ## 阶段 A — 云端最小修复（looma-zervi，约 1–2 天）
 
 ### A1. 修 `resume_id` 契约

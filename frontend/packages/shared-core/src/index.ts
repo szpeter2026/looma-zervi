@@ -169,6 +169,8 @@ export type {
   ResumeEducation,
   ResumeProject,
   ResumeUploadResult,
+  ResumeIngestRequest,
+  ResumeIngestResponse,
   Job,
   JobMatchItem,
   JobMatchResult,
