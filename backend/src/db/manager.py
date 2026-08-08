@@ -1023,6 +1023,16 @@ class DatabaseManager:
                     logger.warning(
                         "Migration ALTER TABLE trust_attestations ADD COLUMN expires_at failed: %s", e
                     )
+            # Migration: trust_attestations UNIQUE(candidate_id, claim_type) for upsert ON CONFLICT
+            try:
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_trust_attestations_claim "
+                    "ON trust_attestations(candidate_id, claim_type)"
+                )
+            except sqlite3.OperationalError as e:
+                logger.warning(
+                    "Migration UNIQUE INDEX trust_attestations_claim failed: %s", e
+                )
 
     # ============================================
     # User operations (joint)
