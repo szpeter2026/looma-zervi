@@ -188,12 +188,13 @@ def upload_resume():
 
     # Step 1: MarkItDown conversion (PDF/DOCX → Markdown)
     try:
-        from src.ingest.markitdown_convert import stream_to_markdown
+        from src.ingest.markitdown_convert import UnsupportedDocumentFormat, bytes_to_markdown
 
-        markdown = stream_to_markdown(
-            io.BytesIO(content),
-            filename=filename,
-        )
+        markdown = bytes_to_markdown(content, filename=filename)
+    except UnsupportedDocumentFormat as e:
+        logger.warning("Resume upload rejected (%s): %s", e.code, e)
+        refund_consumption(user_id, RESOURCE_RESUME_PARSE, quota_result.get("source", "daily"))
+        return jsonify(error="convert_failed", hint=e.code, message=str(e)), 422
     except Exception as e:
         logger.error(f"MarkItDown conversion failed for {filename}: {e}")
         refund_consumption(user_id, RESOURCE_RESUME_PARSE, quota_result.get("source", "daily"))
@@ -203,6 +204,16 @@ def upload_resume():
                 error="convert_failed",
                 message="服务端缺少文档解析依赖，请联系管理员（PDF/DOCX 转换组件未安装）",
             ), 503
+        # MarkItDown: legacy .doc often surfaces as "No converter attempted"
+        if "No converter attempted" in err_text or "not supported" in err_text.lower():
+            return jsonify(
+                error="convert_failed",
+                hint="legacy_doc_unsupported",
+                message=(
+                    f"「{filename}」无法解析。若为旧版 Word（.doc），请另存为 .docx 或 PDF 后重试；"
+                    "若已是 .docx/.pdf，请检查文件是否损坏。"
+                ),
+            ), 422
         return jsonify(
             error="convert_failed",
             message=f"文档解析失败（{filename} 格式未识别或文件损坏）",

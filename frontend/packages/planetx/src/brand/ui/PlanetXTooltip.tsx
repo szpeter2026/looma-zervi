@@ -1,20 +1,18 @@
 /**
- * SaaS Tooltip — pure UI component.
- * Features: positioning (top/bottom/left/right), delay, arrow, rich content.
- *
- * No store, no API — all data via props.
+ * PlanetX Tooltip — pure UI component.
+ * Positioning + arrow; deep-space theme via --px-tooltip-* tokens.
  */
 import { useState, useRef, useEffect } from "react";
-import type { SaasTooltipProps } from "./types";
+import type { PlanetXTooltipProps } from "./types";
 
-export default function SaasTooltip({
+export default function PlanetXTooltip({
   children,
   content,
   position = "top",
   delay = 200,
   maxWidth = "240px",
   disabled = false,
-}: SaasTooltipProps) {
+}: PlanetXTooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [timeoutId, setTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -43,25 +41,25 @@ export default function SaasTooltip({
       bottom: "100%",
       left: "50%",
       transform: "translateX(-50%)",
-      marginBottom: "var(--spacing-sm)",
+      marginBottom: "var(--px-spacing-sm)",
     },
     bottom: {
       top: "100%",
       left: "50%",
       transform: "translateX(-50%)",
-      marginTop: "var(--spacing-sm)",
+      marginTop: "var(--px-spacing-sm)",
     },
     left: {
       right: "100%",
       top: "50%",
       transform: "translateY(-50%)",
-      marginRight: "var(--spacing-sm)",
+      marginRight: "var(--px-spacing-sm)",
     },
     right: {
       left: "100%",
       top: "50%",
       transform: "translateY(-50%)",
-      marginLeft: "var(--spacing-sm)",
+      marginLeft: "var(--px-spacing-sm)",
     },
   };
 
@@ -70,25 +68,25 @@ export default function SaasTooltip({
       top: "100%",
       left: "50%",
       transform: "translateX(-50%)",
-      borderTopColor: "var(--tooltip-bg)",
+      borderTopColor: "var(--px-tooltip-bg)",
     },
     bottom: {
       bottom: "100%",
       left: "50%",
       transform: "translateX(-50%)",
-      borderBottomColor: "var(--tooltip-bg)",
+      borderBottomColor: "var(--px-tooltip-bg)",
     },
     left: {
       left: "100%",
       top: "50%",
       transform: "translateY(-50%)",
-      borderLeftColor: "var(--tooltip-bg)",
+      borderLeftColor: "var(--px-tooltip-bg)",
     },
     right: {
       right: "100%",
       top: "50%",
       transform: "translateY(-50%)",
-      borderRightColor: "var(--tooltip-bg)",
+      borderRightColor: "var(--px-tooltip-bg)",
     },
   };
 
@@ -110,16 +108,16 @@ export default function SaasTooltip({
           ref={tooltipRef}
           style={{
             position: "absolute",
-            zIndex: "var(--z-tooltip)",
+            zIndex: "var(--px-z-tooltip)",
             maxWidth,
-            background: "var(--tooltip-bg)",
-            color: "var(--tooltip-color)",
-            borderRadius: "var(--tooltip-radius)",
-            padding: "var(--tooltip-padding)",
-            fontSize: "var(--tooltip-font-size)",
-            lineHeight: "var(--tooltip-line-height)",
-            boxShadow: "var(--tooltip-shadow)",
-            animation: "fadeIn 150ms ease-out",
+            background: "var(--px-tooltip-bg)",
+            color: "var(--px-tooltip-color)",
+            borderRadius: "var(--px-tooltip-radius)",
+            padding: "var(--px-tooltip-padding)",
+            fontSize: "var(--px-tooltip-font-size)",
+            lineHeight: "var(--px-tooltip-line-height)",
+            boxShadow: "var(--px-tooltip-shadow)",
+            animation: "pxTooltipFadeIn 150ms ease-out",
             ...positionStyles[position],
           }}
         >
@@ -129,14 +127,13 @@ export default function SaasTooltip({
             content
           )}
 
-          {/* Arrow */}
           <div
             style={{
               position: "absolute",
               width: 0,
               height: 0,
               borderStyle: "solid",
-              borderWidth: "var(--tooltip-arrow-size)",
+              borderWidth: "var(--px-tooltip-arrow-size)",
               borderColor: "transparent",
               ...arrowStyles[position],
             }}
@@ -145,9 +142,9 @@ export default function SaasTooltip({
       )}
 
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: ${position === "top" || position === "bottom" ? "translateX(-50%) translateY(4px)" : "translateY(-50%) translateX(4px)"}; }
-          to { opacity: 1; transform: ${position === "top" || position === "bottom" ? "translateX(-50%) translateY(0)" : "translateY(-50%) translateX(0)"}; }
+        @keyframes pxTooltipFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
       `}</style>
     </div>

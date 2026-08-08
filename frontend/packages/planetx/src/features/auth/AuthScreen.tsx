@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { usePlanetXStore } from './planetxAuthStore'
 import PlanetXButton from '../../brand/ui/PlanetXButton'
 import PlanetXInput from '../../brand/ui/PlanetXInput'
+import PlanetXIcon from '../../brand/ui/PlanetXIcon'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
 
@@ -159,7 +160,7 @@ export default function AuthScreen() {
             onClick={handleLogin}
             disabled={loading}
             loading={loading}
-            leftIcon="🚀"
+            leftIcon={<PlanetXIcon name="rocket" size={16} color="currentColor" />}
           >
             登录
           </PlanetXButton>
@@ -170,7 +171,7 @@ export default function AuthScreen() {
             onClick={handleRegister}
             disabled={loading}
             loading={loading}
-            leftIcon="✨"
+            leftIcon={<PlanetXIcon name="spark" size={16} color="currentColor" />}
           >
             注册
           </PlanetXButton>
@@ -180,7 +181,7 @@ export default function AuthScreen() {
           variant="ghost"
           fullWidth
           onClick={() => setScreen('onboarding')}
-          leftIcon="🌌"
+          leftIcon={<PlanetXIcon name="planet" size={16} color="currentColor" />}
         >
           先逛逛，稍后登录（访客模式）
         </PlanetXButton>

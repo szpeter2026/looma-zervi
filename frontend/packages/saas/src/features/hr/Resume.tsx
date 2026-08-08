@@ -140,7 +140,7 @@ export default function Resume() {
           点击或拖拽上传简历
         </p>
         <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
-          支持 PDF / Word 格式，AI 自动提取关键信息
+          支持 PDF / DOCX；旧版 .doc 请先另存为 .docx 或 PDF
         </p>
       </div>
 
