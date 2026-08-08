@@ -189,6 +189,10 @@ def get_game_profile():
             members = db.get_fleet_members(fleet["id"])
             team_size = len(members)
             fleet_members = [m["user_id"] for m in members]
+        try:
+            empty_spread = db.count_spread_signals(g.user_id)
+        except Exception:
+            empty_spread = 0
         return jsonify(
             id=None,
             user_id=g.user_id,
@@ -204,6 +208,7 @@ def get_game_profile():
             fleet=fleet,
             team_size=team_size,
             fleet_members=fleet_members,
+            spread_count=empty_spread,
         )
 
     # Compute current level from XP (level column may be stale)
@@ -230,6 +235,12 @@ def get_game_profile():
         team_size = len(members)
         fleet_members = [m["user_id"] for m in members]
 
+    spread_count = 0
+    try:
+        spread_count = db.count_spread_signals(g.user_id)
+    except Exception:
+        logger.warning("spread_count failed for %s", g.user_id)
+
     return jsonify(
         id=profile["id"],
         user_id=profile["user_id"],
@@ -245,6 +256,8 @@ def get_game_profile():
         fleet=fleet,
         team_size=team_size,
         fleet_members=fleet_members,
+        # 完成首任务（personality）的被邀请人数；Hub「信号传播」真源
+        spread_count=spread_count,
     )
 
 
@@ -374,6 +387,51 @@ def fleet_match():
     else:
         match_mode = "best_available"
 
+    threshold = 85
+    score = int(best["match_score"])
+    if score >= threshold:
+        consensus_status = "consensus_passed"
+    elif score >= 60:
+        consensus_status = "consensus_weak"
+    else:
+        consensus_status = "consensus_failed"
+
+    pending_consensus_id = None
+    # 阶段二：落库待确认共识（不阻塞 v0 mission-complete）
+    if score >= 60:
+        try:
+            consensus = db.create_match_consensus(
+                fleet_id=fleet["id"],
+                initiator_id=g.user_id,
+                candidate_id=best["user_id"],
+                match_score=score,
+                reason=best.get("reason") or "",
+            )
+            pending_consensus_id = consensus.get("id")
+            if consensus.get("status") == "verified":
+                consensus_status = "consensus_verified"
+        except Exception as e:
+            logger.warning("create_match_consensus failed: %s", e)
+
+    # 若已有 verified 记录，升级状态
+    if db.has_verified_match_consensus(g.user_id):
+        # 当前配对若已 verified，标记可增强凭证
+        for row in db.list_match_consensus_for_user(g.user_id):
+            if (
+                row.get("status") == "verified"
+                and {row.get("initiator_id"), row.get("candidate_id")}
+                == {g.user_id, best["user_id"]}
+            ):
+                consensus_status = "consensus_verified"
+                pending_consensus_id = row.get("id")
+                break
+
+    spread_count = 0
+    try:
+        spread_count = db.count_spread_signals(g.user_id)
+    except Exception:
+        pass
+
     return jsonify({
         "matched": True,
         "match": best,
@@ -386,7 +444,137 @@ def fleet_match():
         "fleet_name": fleet["name"],
         "candidates_considered": len(scored),
         "match_mode": match_mode,
+        # v0：舰队内算出配对 + 用户确认即可完成任务（阶段二共识为增强，不阻塞）
+        "can_complete_mission": True,
+        "consensus_threshold": threshold,
+        "consensus_status": consensus_status,
+        "pending_consensus_id": pending_consensus_id,
+        "spread_hint": {
+            "show_share_cta": consensus_status != "consensus_verified" and score < threshold,
+            "message": (
+                None
+                if score >= threshold
+                else "契合度未达共识阈值，邀请更多舰员扩大验证池"
+            ),
+            "spread_count": spread_count,
+            "spread_target": 3,
+        },
     })
+
+
+@game_bp.route("/match/acknowledge", methods=["POST"])
+@require_auth
+def match_acknowledge():
+    """双向共识确认（阶段二）。v0 mission-complete 不依赖此接口。"""
+    data = request.get_json() or {}
+    consensus_id = (data.get("consensus_id") or "").strip()
+    action = (data.get("action") or "accept").strip().lower()
+    if not consensus_id:
+        return jsonify(error="bad_request", message="consensus_id required"), 400
+    if action not in ("accept", "reject"):
+        return jsonify(error="bad_request", message="action must be accept or reject"), 400
+
+    db = _get_db()
+    row, err = db.acknowledge_match_consensus(consensus_id, g.user_id, action)
+    if err == "not_found":
+        return jsonify(error="not_found", message="共识记录不存在"), 404
+    if err == "forbidden":
+        return jsonify(error="forbidden", message="无权确认该共识"), 403
+    if err == "expired":
+        return jsonify(error="expired", message="共识已过期"), 410
+    if err == "not_pending":
+        return jsonify(error="not_pending", message="共识已结束"), 409
+    if not row:
+        return jsonify(error="server_error", message="确认失败"), 500
+
+    # 写入信任记忆 + 刷新 attestation（协作类声明）
+    if row.get("status") == "verified":
+        try:
+            peer_id = (
+                row["candidate_id"]
+                if row["initiator_id"] == g.user_id
+                else row["initiator_id"]
+            )
+            db.insert_trust_memory(
+                user_id=g.user_id,
+                session_type="match",
+                session_id=consensus_id,
+                memory_content={
+                    "consensus_confirmed": True,
+                    "match_score": row.get("match_score"),
+                    "peer_id": peer_id,
+                    "fleet_id": row.get("fleet_id"),
+                },
+            )
+            db.insert_trust_memory(
+                user_id=peer_id,
+                session_type="match",
+                session_id=consensus_id,
+                memory_content={
+                    "consensus_confirmed": True,
+                    "match_score": row.get("match_score"),
+                    "peer_id": g.user_id,
+                    "fleet_id": row.get("fleet_id"),
+                },
+            )
+            generate_attestations(g.user_id, db)
+            generate_attestations(peer_id, db)
+        except Exception as e:
+            logger.warning("trust memory on acknowledge failed: %s", e)
+
+    return jsonify(
+        consensus_id=row["id"],
+        status=row["status"],
+        consensus_status=(
+            "consensus_verified" if row["status"] == "verified" else row["status"]
+        ),
+        match_score=row["match_score"],
+        initiator_id=row["initiator_id"],
+        candidate_id=row["candidate_id"],
+        verified_at=row.get("verified_at"),
+    )
+
+
+@game_bp.route("/match/consensus", methods=["GET"])
+@require_auth
+def list_match_consensus():
+    """列出当前用户待处理 / 已验证共识。"""
+    db = _get_db()
+    rows = db.list_match_consensus_for_user(g.user_id)
+    pending = []
+    verified = []
+    for r in rows:
+        item = {
+            "id": r["id"],
+            "candidate_name": "",
+            "match_score": r["match_score"],
+            "status": (
+                "consensus_verified"
+                if r["status"] == "verified"
+                else "consensus_passed"
+            ),
+            "is_incoming": r["candidate_id"] == g.user_id,
+        }
+        peer = r["initiator_id"] if item["is_incoming"] else r["candidate_id"]
+        try:
+            profiles = db.get_game_profiles_for_users([peer])
+            if profiles:
+                item["candidate_name"] = (
+                    profiles[0].get("display_name")
+                    or profiles[0].get("personality_type")
+                    or "星际公民"
+                )
+            else:
+                item["candidate_name"] = "星际公民"
+        except Exception:
+            item["candidate_name"] = "星际公民"
+
+        if r["status"] == "pending":
+            pending.append(item)
+        elif r["status"] == "verified":
+            verified.append(item)
+
+    return jsonify(pending=pending, verified=verified)
 
 
 # ── Fleet ──

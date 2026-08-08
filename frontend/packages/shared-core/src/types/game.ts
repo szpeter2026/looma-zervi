@@ -93,9 +93,13 @@ export interface GameProfile {
   personality_detail: string;
   xp: number;
   level: number;
-  missions_completed: number;
+  missions_completed: number | string[];
   total_mission_xp: number;
   updated_at: string;
+  /** 完成首任务的被邀请人数（Hub 信号传播） */
+  spread_count?: number;
+  team_size?: number;
+  fleet_members?: string[];
 }
 
 export interface ProfileSyncRequest {

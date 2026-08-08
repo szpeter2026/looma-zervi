@@ -69,7 +69,8 @@ export type PlanetXGameScreen =
   | "quiz"
   | "result"
   | "match"
-  | "timeline";
+  | "timeline"
+  | "trust";
 
 export interface PlanetXFleet {
   id: string;

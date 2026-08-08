@@ -120,6 +120,9 @@ interface PlanetXState {
   teamSize: number
   fleetMembers: string[]
 
+  /** 完成首任务的被邀请人数（信号传播） */
+  spreadCount: number
+
   // 测评
   quizStep: number
   quizAnswers: number[]
@@ -138,7 +141,7 @@ interface PlanetXState {
   setToast: (msg: string | null) => void
   setAchievement: (a: { title: string; desc: string } | null) => void
   addXP: (amount: number) => void
-  completeMission: (id: MissionId) => void
+  completeMission: (id: MissionId) => Promise<boolean>
   answerQuiz: (trait: TraitKey, idx: number) => void
   finishQuiz: () => PersonalityType
   setIdentity: (identity: Identity) => void
@@ -187,6 +190,7 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
 
   fleet: null,
   teamSize: 0,
+  spreadCount: 0,
   fleetMembers: [],
 
   quizStep: 0,
@@ -223,38 +227,56 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
     get().syncProfile()
   },
 
-  completeMission: (id) => {
+  completeMission: async (id) => {
     const { missionsCompleted } = get()
-    if (missionsCompleted.includes(id)) return
+    if (missionsCompleted.includes(id)) return true
     const previous = missionsCompleted
     set({ missionsCompleted: [...missionsCompleted, id] })
 
     const { token } = get()
-    if (token) {
-      getApiClient()
-        .post<{ total_xp?: number; level?: number; error?: string; message?: string }>(
-          '/v1/game/mission-complete',
-          {
-            mission_id: id,
-            xp_reward: MISSION_XP[id] ?? 10,
-          },
-        )
-        .then((data) => {
-          if (data?.total_xp != null) {
-            set({ xp: data.total_xp, level: data.level ?? get().level })
-          }
-        })
-        .catch((err: { body?: { message?: string }; response?: { data?: { message?: string } }; message?: string }) => {
-          set({ missionsCompleted: previous })
-          const msg =
-            err?.body?.message ||
-            err?.response?.data?.message ||
-            err?.message ||
-            '任务同步失败，请稍后重试'
-          get().setToast(`任务未完成：${msg}`)
-        })
+    if (!token) {
+      get().syncProfile()
+      return true
     }
-    get().syncProfile()
+
+    try {
+      const data = await getApiClient().post<{
+        total_xp?: number
+        level?: number
+        error?: string
+        message?: string
+      }>('/v1/game/mission-complete', {
+        mission_id: id,
+        xp_reward: MISSION_XP[id] ?? 10,
+      })
+      if (data?.total_xp != null) {
+        set({ xp: data.total_xp, level: data.level ?? get().level })
+      }
+      get().syncProfile()
+      return true
+    } catch (err: unknown) {
+      const e = err as {
+        status?: number
+        body?: { error?: string; message?: string }
+        response?: { status?: number; data?: { error?: string; message?: string } }
+        message?: string
+      }
+      const status = e?.status ?? e?.response?.status
+      const code = e?.body?.error || e?.response?.data?.error
+      // 服务端已完成：保持本地完成态，不要回滚
+      if (status === 409 || code === 'already_completed') {
+        get().syncProfile()
+        return true
+      }
+      set({ missionsCompleted: previous })
+      const msg =
+        e?.body?.message ||
+        e?.response?.data?.message ||
+        e?.message ||
+        '任务同步失败，请稍后重试'
+      get().setToast(`任务未完成：${msg}`)
+      return false
+    }
   },
 
   answerQuiz: (trait, idx) => {
@@ -371,7 +393,7 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
     set({
       token: null, user: null, isAuthenticated: false,
       identity: undefined, personalityType: undefined,
-      level: 1, xp: 0, xpToNext: 100, missionsCompleted: [],
+      level: 1, xp: 0, xpToNext: 100, missionsCompleted: [], spreadCount: 0,
       fleet: null, teamSize: 0, fleetMembers: [],
       screen: 'auth',
     })
@@ -438,6 +460,7 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
         fleet?: Fleet
         team_size?: number
         fleet_members?: string[]
+        spread_count?: number
       }>('/v1/game/profile')
 
       if (data) {
@@ -459,6 +482,7 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
           fleet: data.fleet ?? null,
           teamSize: data.team_size ?? 0,
           fleetMembers: data.fleet_members ?? [],
+          spreadCount: data.spread_count ?? 0,
         })
       }
       // 如果 profile 中有舰队，检查任务
@@ -490,14 +514,20 @@ export const usePlanetXStore = create<PlanetXState>((set, get) => ({
 
   // ======= Fleet (Looma API) =======
   createFleet: async () => {
-    const { token } = get()
+    const { token, identity } = get()
     if (!token) return
     try {
       const client = getApiClient()
-      const data = await client.post<Fleet & { invite_code: string; team_size: number }>('/v1/game/fleet/create')
+      const data = await client.post<Fleet & { invite_code: string; team_size: number }>(
+        '/v1/game/fleet/create',
+        {
+          name: identity ? `${IDENTITY_LABELS[identity]}舰队` : '星际舰队',
+          description: 'PlanetX 本地舰队',
+        },
+      )
       if (data) {
         set({ fleet: data, teamSize: data.team_size ?? 1, fleetMembers: [data.captain_id] })
-        get().setToast('舰队创建成功！发送邀请码给好友加入 🚀')
+        get().setToast(`舰队创建成功！邀请码 ${data.invite_code}`)
       }
     } catch (e) {
       get().setToast('创建舰队失败: ' + ((e as { message?: string }).message ?? '未知错误'))

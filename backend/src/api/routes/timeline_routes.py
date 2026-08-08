@@ -146,7 +146,7 @@ def bridge_backfill():
         ok=True,
         written_kinds=written,
         event_count=count,
-        note="phase1 backfill: quiz + share_codes + profile_share + match_reports + resume memories",
+        note="backfill: quiz + account_joined + missions + share/invite + match_reports + resume",
     )
 
 

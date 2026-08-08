@@ -115,4 +115,20 @@ export async function checkCompanyCredit(
   return { status: resp.status, body };
 }
 
+/**
+ * Upgrade a user token to a higher tier via stub payment API.
+ * Returns the new access_token with updated tier claims.
+ */
+export async function upgradeToken(
+  token: string,
+  tier: "supporter" | "pro" = "supporter",
+): Promise<string> {
+  const resp = await apiJson<{ access_token: string }>("/v1/payment/upgrade", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ tier }),
+  });
+  return resp.access_token;
+}
+
 export { TEST_PASS };

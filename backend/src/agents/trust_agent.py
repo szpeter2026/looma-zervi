@@ -135,31 +135,43 @@ def generate_attestations(user_id: str, db) -> list[dict]:
             user_id, status, len(resume_memories), len(match_memories),
         )
 
-    # ── 2. Collaboration (fleet) ──
+    # ── 2. Collaboration (fleet + match consensus) ──
     fleet_memories = [m for m in memories if m["session_type"] == "fleet"]
-    if fleet_memories:
-        consensus_count = _count_consensus(fleet_memories)
-        if len(fleet_memories) >= 3 and consensus_count >= 2:
-            status = "verified"
-            confidence = 0.9
-        elif len(fleet_memories) >= 1:
+    match_consensus_memories = [
+        m for m in memories
+        if m["session_type"] == "match" and _count_consensus([m]) > 0
+    ]
+    collab_memories = fleet_memories + match_consensus_memories
+    if collab_memories:
+        consensus_count = _count_consensus(collab_memories)
+        if (len(fleet_memories) >= 3 and consensus_count >= 2) or consensus_count >= 1:
+            status = "verified" if consensus_count >= 1 else "weak"
+            confidence = 0.9 if consensus_count >= 1 else 0.5
+        elif len(collab_memories) >= 1:
             status = "weak"
             confidence = 0.5
         else:
             status = "unverified"
             confidence = 0.0
 
+        # 有双向 match consensus 时直接 verified
+        if consensus_count >= 1:
+            status, confidence = "verified", 0.9
+
         attestation = db.upsert_trust_attestation(
             candidate_id=user_id,
             claim_type="collaboration",
             claim_statement=_CLAIM_TEMPLATES["collaboration"],
-            evidence_type="fleet_consensus",
+            evidence_type="fleet_consensus" if fleet_memories else "match_consensus",
             verification_status=status,
-            evidence_refs=[m["id"] for m in fleet_memories],
+            evidence_refs=[m["id"] for m in collab_memories],
             confidence_score=confidence,
         )
         results.append(attestation)
-        logger.info("trust_agent: collaboration attestation for %s → %s (fleets=%d, consensus=%d)", user_id, status, len(fleet_memories), consensus_count)
+        logger.info(
+            "trust_agent: collaboration attestation for %s → %s (fleets=%d, match_consensus=%d)",
+            user_id, status, len(fleet_memories), len(match_consensus_memories),
+        )
 
     # ── 3. Communication (ask) ──
     ask_memories = [m for m in memories if m["session_type"] == "ask"]

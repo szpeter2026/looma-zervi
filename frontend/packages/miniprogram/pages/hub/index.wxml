@@ -105,7 +105,7 @@
         <view class="stat-label">舰队成员</view>
       </view>
       <view class="stat-card">
-        <view class="stat-value">0</view>
+        <view class="stat-value">{{spreadCount}}</view>
         <view class="stat-label">信号传播</view>
       </view>
       <view class="stat-card">

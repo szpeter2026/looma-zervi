@@ -599,3 +599,81 @@ def test_match_random_among_multiple_complementary(authed_client, second_authed_
     assert data["match"]["match_score"] == 95
     assert data["match"]["user_id"] in {second_authed_client.user_id, uid4}
     assert data["candidates_considered"] == 2
+
+
+def test_match_creates_consensus_and_acknowledge(authed_client, second_authed_client):
+    """P0-3: match writes match_consensus; candidate can acknowledge."""
+    authed_client.post("/v1/game/profile-sync", json={"personality_type": "星云艺术家"})
+    fleet_id = authed_client.post(
+        "/v1/game/fleet/create", json={"name": "Consensus Fleet"}
+    ).get_json()["id"]
+
+    second_authed_client.post(
+        "/v1/game/profile-sync", json={"personality_type": "黑洞程序员"}
+    )
+    second_authed_client.post("/v1/game/fleet/join", json={"fleet_id": fleet_id})
+
+    match = authed_client.post("/v1/game/match", json={}).get_json()
+    assert match["matched"] is True
+    assert match["can_complete_mission"] is True
+    assert match.get("pending_consensus_id")
+    assert match.get("consensus_status") in (
+        "consensus_passed",
+        "consensus_verified",
+        "consensus_weak",
+    )
+
+    cid = match["pending_consensus_id"]
+    ack = second_authed_client.post(
+        "/v1/game/match/acknowledge",
+        json={"consensus_id": cid, "action": "accept"},
+    )
+    assert ack.status_code == 200
+    body = ack.get_json()
+    assert body["status"] == "verified"
+    assert body["consensus_status"] == "consensus_verified"
+
+    listing = second_authed_client.get("/v1/game/match/consensus")
+    assert listing.status_code == 200
+    verified = listing.get_json()["verified"]
+    assert any(v["id"] == cid for v in verified)
+
+
+def test_profile_includes_spread_count(authed_client, second_authed_client, client):
+    """P0-2: spread_count counts invitees who completed personality."""
+    # Create referral invite (not profile_share)
+    create = authed_client.post("/v1/referral/create", json={"purpose": "referral"})
+    assert create.status_code in (200, 201)
+    code = create.get_json()["code"]
+
+    # Invitee registers separately then uses code + completes personality
+    second_authed_client.post("/v1/referral/use", json={"code": code})
+    second_authed_client.post(
+        "/v1/game/profile-sync", json={"personality_type": "超新星领航员"}
+    )
+    second_authed_client.post(
+        "/v1/game/mission-complete",
+        json={"mission_id": "personality", "xp_reward": 50},
+    )
+
+    profile = authed_client.get("/v1/game/profile").get_json()
+    assert "spread_count" in profile
+    assert profile["spread_count"] >= 1
+
+
+def test_social_degrees_has_no_trust_score(authed_client, second_authed_client):
+    """P0-0: social API must not expose trust_score(degrees)."""
+    # Build a referral edge so degrees can resolve
+    create = authed_client.post("/v1/referral/create", json={"purpose": "referral"})
+    code = create.get_json()["code"]
+    second_authed_client.post("/v1/referral/use", json={"code": code})
+
+    resp = authed_client.get(f"/v1/social/degrees/{second_authed_client.user_id}")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert "degrees" in data
+    assert "trust_score" not in data
+
+    conn = authed_client.get(f"/v1/social/connection/{second_authed_client.user_id}")
+    assert conn.status_code == 200
+    assert "trust_score" not in conn.get_json()

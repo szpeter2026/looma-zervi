@@ -3,6 +3,7 @@ import { usePlanetXStore, IDENTITY_LABELS } from '../auth/planetxAuthStore'
 import type { MissionId } from '../auth/planetxAuthStore'
 import XPBar from '../../brand/components/XPBar'
 import FleetPanel from '../../brand/components/FleetPanel'
+import PlanetXIcon, { type PlanetXIconName } from '../../brand/ui/PlanetXIcon'
 
 /**
  * 主中心屏幕 — XP条 + 任务Tab + 舰队Tab + 我的Tab
@@ -11,17 +12,27 @@ export default function HubScreen() {
   const [tab, setTab] = useState<'missions' | 'team' | 'profile'>('missions')
   const {
     identity, level, xp, xpToNext, missionsCompleted,
-    personalityType, setScreen, logout, teamSize,
+    personalityType, setScreen, logout, teamSize, spreadCount,
   } = usePlanetXStore()
 
   const missions: {
-    id: MissionId; icon: string; name: string; reward: string; xp: number; requires?: MissionId
+    id: MissionId; icon: PlanetXIconName; name: string; reward: string; xp: number; requires?: MissionId
   }[] = [
-    { id: 'personality', icon: '🔮', name: '人格冷启动测评', reward: '+50 XP · 生成初始假设（将随行为更新）', xp: 50 },
-    { id: 'team', icon: '🤝', name: '组建3人舰队', reward: '+80 XP · 解锁隐藏星图', xp: 80, requires: 'personality' },
-    { id: 'match', icon: '🎯', name: '首次星际匹配', reward: '+40 XP · 获得匹配星图', xp: 40, requires: 'team' },
-    { id: 'share', icon: '📡', name: '发送星际信号', reward: '+30 XP · 邀请好友获得额外能量', xp: 30, requires: 'personality' },
+    { id: 'personality', icon: 'crystal', name: '人格冷启动测评', reward: '+50 XP · 生成初始假设（将随行为更新）', xp: 50 },
+    { id: 'team', icon: 'handshake', name: '组建3人舰队', reward: '+80 XP · 解锁隐藏星图', xp: 80, requires: 'personality' },
+    { id: 'match', icon: 'target', name: '首次星际匹配', reward: '+40 XP · 获得匹配星图', xp: 40, requires: 'team' },
+    { id: 'share', icon: 'signal', name: '发送星际信号', reward: '+30 XP · 邀请好友获得额外能量', xp: 30, requires: 'personality' },
   ]
+
+  const allMissionsDone = (['personality', 'team', 'match', 'share'] as MissionId[]).every((id) =>
+    missionsCompleted.includes(id),
+  )
+
+  const tabMeta: Record<typeof tab, { icon: PlanetXIconName; label: string }> = {
+    missions: { icon: 'target', label: '任务' },
+    team: { icon: 'fleet', label: '舰队' },
+    profile: { icon: 'profile', label: '我的' },
+  }
 
   const isMissionUnlocked = (m: typeof missions[number]) => {
     if (!m.requires) return true
@@ -50,28 +61,81 @@ export default function HubScreen() {
       {/* XP Bar */}
       <XPBar level={level} xp={xp} xpToNext={xpToNext} />
 
-      <button
-        type="button"
-        onClick={() => setScreen('timeline')}
-        style={{
-          width: '100%',
-          marginBottom: 12,
-          padding: '12px 14px',
-          borderRadius: 12,
-          border: '1px solid rgba(200,255,80,0.3)',
-          background: 'rgba(200,255,80,0.08)',
-          color: 'var(--px-color-accent)',
-          fontWeight: 700,
-          fontSize: 13,
-          cursor: 'pointer',
-          textAlign: 'left',
-        }}
-      >
-        🌀 职业时间线 · 看见行为在长
-        <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--px-color-text-muted)', marginTop: 4 }}>
-          签到 / 记项目 / 测评假设都会沉淀在这里
-        </span>
-      </button>
+      {allMissionsDone && (
+        <button
+          type="button"
+          onClick={() => setScreen('trust')}
+          style={{
+            width: '100%',
+            marginBottom: 12,
+            padding: '14px 14px',
+            borderRadius: 12,
+            border: '1px solid rgba(255,215,0,0.45)',
+            background: 'linear-gradient(135deg, rgba(255,215,0,0.12), rgba(200,255,80,0.1))',
+            color: '#FFD700',
+            fontWeight: 800,
+            fontSize: 13,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          通关大奖已解锁 · 打开信任档案
+          <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--px-color-text-muted)', marginTop: 4 }}>
+            行为开始被看见 — 去查看声明，或继续在时间线沉淀
+          </span>
+        </button>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <button
+          type="button"
+          onClick={() => setScreen('timeline')}
+          style={{
+            flex: 1,
+            padding: '12px 12px',
+            borderRadius: 12,
+            border: '1px solid rgba(200,255,80,0.3)',
+            background: 'rgba(200,255,80,0.08)',
+            color: 'var(--px-color-accent)',
+            fontWeight: 700,
+            fontSize: 12,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <PlanetXIcon name="timeline" size={16} color="currentColor" />
+            时间线
+          </span>
+          <span style={{ display: 'block', fontSize: 10, fontWeight: 500, color: 'var(--px-color-text-muted)', marginTop: 4 }}>
+            看见行为在长
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setScreen('trust')}
+          style={{
+            flex: 1,
+            padding: '12px 12px',
+            borderRadius: 12,
+            border: '1px solid rgba(135,93,239,0.4)',
+            background: 'rgba(135,93,239,0.12)',
+            color: '#C4B5FD',
+            fontWeight: 700,
+            fontSize: 12,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <PlanetXIcon name="shield" size={16} color="currentColor" />
+            信任档案
+          </span>
+          <span style={{ display: 'block', fontSize: 10, fontWeight: 500, color: 'var(--px-color-text-muted)', marginTop: 4 }}>
+            凭证被看见
+          </span>
+        </button>
+      </div>
 
       {/* Nav Tabs */}
       <div style={{ display: 'flex', gap: '4px', background: 'var(--px-color-bg-card)', borderRadius: '12px', padding: '4px', marginBottom: '16px' }}>
@@ -90,9 +154,14 @@ export default function HubScreen() {
               color: tab === t ? 'var(--px-color-accent)' : 'var(--px-color-text-muted)',
               cursor: 'pointer',
               transition: 'all 0.2s',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
             }}
           >
-            {{ missions: '🎯 任务', team: '👥 舰队', profile: '🪪 我的' }[t]}
+            <PlanetXIcon name={tabMeta[t].icon} size={14} color="currentColor" />
+            {tabMeta[t].label}
           </button>
         ))}
       </div>
@@ -128,12 +197,24 @@ export default function HubScreen() {
                   width: '100%',
                 }}
               >
-                <span style={{ fontSize: '24px', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {m.icon}
+                <span
+                  style={{
+                    width: 44,
+                    height: 44,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    borderRadius: 12,
+                    background: 'rgba(200,255,80,0.08)',
+                    color: done ? 'var(--px-color-accent)' : 'var(--px-color-primary)',
+                  }}
+                >
+                  <PlanetXIcon name={m.icon} size={22} color="currentColor" />
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{m.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--px-color-accent)', marginTop: '2px' }}>🎁 {m.reward}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--px-color-accent)', marginTop: '2px' }}>{m.reward}</div>
                 </div>
                 <span
                   style={{
@@ -149,8 +230,8 @@ export default function HubScreen() {
                     ? '已完成'
                     : locked
                       ? m.id === 'match'
-                        ? '🔒 需舰队≥2人'
-                        : `🔒 需先完成${m.requires === 'personality' ? '人格测试' : '组队'}`
+                        ? '需舰队≥2人'
+                        : `需先完成${m.requires === 'personality' ? '人格测试' : '组队'}`
                       : '待完成'}
                 </span>
               </button>
@@ -164,7 +245,11 @@ export default function HubScreen() {
       {tab === 'profile' && (
         <div>
           <div style={{ textAlign: 'center', padding: '16px 0' }}>
-            <div style={{ fontSize: '48px' }}>{personalityType?.emoji ?? '🌌'}</div>
+            <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--px-color-primary)' }}>
+              {personalityType?.emoji
+                ? <span style={{ fontSize: 48 }}>{personalityType.emoji}</span>
+                : <PlanetXIcon name="planet" size={48} color="currentColor" />}
+            </div>
             <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--px-color-accent)', marginTop: '8px' }}>
               {personalityType?.name ?? '未测试'}
             </div>
@@ -174,29 +259,53 @@ export default function HubScreen() {
                 : '完成人格冷启动测评，生成初始假设'}
             </div>
             {personalityType && (
-              <button
-                type="button"
-                onClick={() => setScreen('timeline')}
-                style={{
-                  marginTop: 10,
-                  padding: '6px 12px',
-                  borderRadius: 999,
-                  border: '1px solid rgba(200,255,80,0.25)',
-                  background: 'transparent',
-                  color: 'var(--px-color-accent)',
-                  fontSize: 12,
-                  cursor: 'pointer',
-                }}
-              >
-                查看时间线 →
-              </button>
+              <div style={{ marginTop: 10, display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setScreen('timeline')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 999,
+                    border: '1px solid rgba(200,255,80,0.25)',
+                    background: 'transparent',
+                    color: 'var(--px-color-accent)',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  查看时间线
+                  <PlanetXIcon name="chevron-right" size={14} color="currentColor" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScreen('trust')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 999,
+                    border: '1px solid rgba(135,93,239,0.35)',
+                    background: 'transparent',
+                    color: '#C4B5FD',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  信任档案
+                  <PlanetXIcon name="chevron-right" size={14} color="currentColor" />
+                </button>
+              </div>
             )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             {[
               { v: missionsCompleted.length, l: '完成任务' },
               { v: teamSize, l: '舰队成员' },
-              { v: 0, l: '信号传播' },
+              { v: spreadCount, l: '信号传播' },
               { v: xp, l: '总能量' },
             ].map((s, i) => (
               <div
@@ -227,9 +336,14 @@ export default function HubScreen() {
               background: 'transparent',
               cursor: 'pointer',
               transition: 'all 0.2s',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
             }}
           >
-            🚪 退出登录
+            <PlanetXIcon name="logout" size={14} color="currentColor" />
+            退出登录
           </button>
         </div>
       )}

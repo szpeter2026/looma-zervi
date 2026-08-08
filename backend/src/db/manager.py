@@ -892,6 +892,30 @@ CREATE INDEX IF NOT EXISTS idx_timeline_user_kind
 CREATE INDEX IF NOT EXISTS idx_timeline_source
     ON timeline_events(source_system, source_ref);
 
+-- ============================================
+-- Match consensus (PlanetX phase-2 gate)
+-- See 首次星际匹配_子项目接口契约.md · ENGINEERING_CLOSED_LOOP_P0
+-- ============================================
+CREATE TABLE IF NOT EXISTS match_consensus (
+    id              TEXT PRIMARY KEY,
+    fleet_id        TEXT NOT NULL,
+    initiator_id    TEXT NOT NULL,
+    candidate_id    TEXT NOT NULL,
+    match_score     INTEGER NOT NULL,
+    status          TEXT DEFAULT 'pending',
+    reason          TEXT DEFAULT '',
+    created_at      TEXT DEFAULT (datetime('now')),
+    verified_at     TEXT,
+    expires_at      TEXT NOT NULL,
+    FOREIGN KEY (initiator_id) REFERENCES users(id),
+    FOREIGN KEY (candidate_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_match_consensus_initiator
+    ON match_consensus(initiator_id, status);
+CREATE INDEX IF NOT EXISTS idx_match_consensus_candidate
+    ON match_consensus(candidate_id, status);
+
 """
 
 
@@ -1379,6 +1403,166 @@ class DatabaseManager:
                 (user_id,)
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def count_spread_signals(self, user_id: str) -> int:
+        """Count invitees who used this user's referral code AND completed personality.
+
+        Design (ENGINEERING_CLOSED_LOOP_P0): count only after first mission to reduce spam.
+        Excludes profile_share codes.
+        """
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT COUNT(DISTINCT ic.used_by) AS cnt
+                   FROM invite_codes ic
+                   INNER JOIN mission_completions mc
+                     ON mc.user_id = ic.used_by AND mc.mission_id = 'personality'
+                   WHERE ic.created_by = ?
+                     AND ic.used_by IS NOT NULL
+                     AND IFNULL(ic.tier_grant, '') != 'profile_share'""",
+                (user_id,),
+            ).fetchone()
+        return int(row["cnt"]) if row else 0
+
+    # ============================================
+    # Match consensus (PlanetX phase-2)
+    # ============================================
+    def create_match_consensus(
+        self,
+        *,
+        fleet_id: str,
+        initiator_id: str,
+        candidate_id: str,
+        match_score: int,
+        reason: str = "",
+        expires_hours: int = 72,
+    ) -> dict:
+        """Create or refresh a pending consensus between initiator and candidate."""
+        import uuid as _uuid
+        from datetime import datetime, timedelta, timezone
+
+        consensus_id = str(_uuid.uuid4())
+        now = datetime.now(timezone.utc)
+        expires_at = (now + timedelta(hours=expires_hours)).strftime("%Y-%m-%d %H:%M:%S")
+
+        with self.get_conn() as conn:
+            # Reuse open pending pair if still valid
+            existing = conn.execute(
+                """SELECT * FROM match_consensus
+                   WHERE initiator_id = ? AND candidate_id = ? AND status = 'pending'
+                     AND expires_at > datetime('now')
+                   ORDER BY created_at DESC LIMIT 1""",
+                (initiator_id, candidate_id),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    """UPDATE match_consensus
+                       SET match_score = ?, reason = ?, fleet_id = ?, expires_at = ?
+                       WHERE id = ?""",
+                    (match_score, reason, fleet_id, expires_at, existing["id"]),
+                )
+                row = conn.execute(
+                    "SELECT * FROM match_consensus WHERE id = ?", (existing["id"],)
+                ).fetchone()
+                return dict(row)
+
+            conn.execute(
+                """INSERT INTO match_consensus
+                   (id, fleet_id, initiator_id, candidate_id, match_score, status, reason, expires_at)
+                   VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)""",
+                (
+                    consensus_id,
+                    fleet_id,
+                    initiator_id,
+                    candidate_id,
+                    match_score,
+                    reason,
+                    expires_at,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM match_consensus WHERE id = ?", (consensus_id,)
+            ).fetchone()
+        return dict(row)
+
+    def get_match_consensus(self, consensus_id: str) -> dict | None:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM match_consensus WHERE id = ?", (consensus_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def acknowledge_match_consensus(
+        self, consensus_id: str, actor_id: str, action: str = "accept"
+    ) -> tuple[dict | None, str | None]:
+        """Candidate (or either party) accepts/rejects. Returns (row, error_code)."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM match_consensus WHERE id = ?", (consensus_id,)
+            ).fetchone()
+            if not row:
+                return None, "not_found"
+            rec = dict(row)
+            if rec["status"] == "verified":
+                return rec, None
+            if rec["status"] in ("rejected", "expired"):
+                return None, "not_pending"
+            # Expire stale
+            expired = conn.execute(
+                """SELECT 1 FROM match_consensus
+                   WHERE id = ? AND expires_at <= datetime('now')""",
+                (consensus_id,),
+            ).fetchone()
+            if expired:
+                conn.execute(
+                    "UPDATE match_consensus SET status = 'expired' WHERE id = ?",
+                    (consensus_id,),
+                )
+                return None, "expired"
+            if actor_id not in (rec["initiator_id"], rec["candidate_id"]):
+                return None, "forbidden"
+            # Prefer candidate acknowledgement; initiator may also accept for demo
+            if action == "reject":
+                conn.execute(
+                    "UPDATE match_consensus SET status = 'rejected' WHERE id = ?",
+                    (consensus_id,),
+                )
+            else:
+                conn.execute(
+                    """UPDATE match_consensus
+                       SET status = 'verified', verified_at = datetime('now')
+                       WHERE id = ?""",
+                    (consensus_id,),
+                )
+            updated = conn.execute(
+                "SELECT * FROM match_consensus WHERE id = ?", (consensus_id,)
+            ).fetchone()
+        return (dict(updated) if updated else None), None
+
+    def list_match_consensus_for_user(self, user_id: str) -> list[dict]:
+        with self.get_conn() as conn:
+            # Auto-expire
+            conn.execute(
+                """UPDATE match_consensus SET status = 'expired'
+                   WHERE status = 'pending' AND expires_at <= datetime('now')"""
+            )
+            rows = conn.execute(
+                """SELECT * FROM match_consensus
+                   WHERE initiator_id = ? OR candidate_id = ?
+                   ORDER BY created_at DESC LIMIT 50""",
+                (user_id, user_id),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def has_verified_match_consensus(self, user_id: str) -> bool:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT 1 FROM match_consensus
+                   WHERE status = 'verified'
+                     AND (initiator_id = ? OR candidate_id = ?)
+                   LIMIT 1""",
+                (user_id, user_id),
+            ).fetchone()
+        return row is not None
 
     def is_mission_completed(self, user_id: str, mission_id: str) -> bool:
         """Check if a user has already completed a specific mission."""

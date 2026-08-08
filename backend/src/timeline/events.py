@@ -425,7 +425,7 @@ def record_interaction_log(
 
 
 def backfill_user_timeline(db, user_id: str) -> list[str]:
-    """Idempotent backfill from quiz / share / match / resume sources."""
+    """Idempotent backfill: quiz / share / login / missions / match / resume."""
     written: list[str] = []
     profile = db.get_game_profile(user_id) or {}
     personality_type = (profile.get("personality_type") or "").strip()
@@ -438,6 +438,49 @@ def backfill_user_timeline(db, user_id: str) -> list[str]:
             source_ref=f"profile_sync_{user_id}",
         )
         written.extend(["quiz_completed", "initial_hypothesis"])
+
+    # Account join (login/冷启动白名单) — one node per user
+    try:
+        with db.get_conn() as conn:
+            user_row = conn.execute(
+                "SELECT created_at FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+        if user_row:
+            record_timeline_event(
+                db,
+                user_id,
+                "learning_activity",
+                "system",
+                source_ref=f"account_{user_id}",
+                title="加入星际航线",
+                summary="账号冷启动 · 航迹从此刻起算",
+                payload={"activity_type": "account_joined"},
+                signal_quality="observed",
+                confidence=0.95,
+                weight_role="evidence",
+                visibility="private",
+                occurred_at=user_row["created_at"],
+            )
+            written.append("learning_activity")
+    except Exception as e:
+        logger.warning("backfill account_joined failed: %s", e)
+
+    # Mission completions → timeline thickness
+    try:
+        for m in db.get_user_missions(user_id):
+            mid = m.get("mission_id") or ""
+            if not mid:
+                continue
+            record_mission_completed(
+                db,
+                user_id,
+                mission_id=mid,
+                xp_reward=int(m.get("xp_reward") or 0),
+                occurred_at=m.get("completed_at"),
+            )
+            written.append("mission_completed")
+    except Exception as e:
+        logger.warning("backfill missions failed: %s", e)
 
     # Trust share_codes
     try:
@@ -467,21 +510,23 @@ def backfill_user_timeline(db, user_id: str) -> list[str]:
     except Exception as e:
         logger.warning("backfill share_codes failed: %s", e)
 
-    # Referral profile_share invite codes
+    # Referral invite codes (growth + profile_share)
     try:
         with db.get_conn() as conn:
             rows = conn.execute(
-                """SELECT id, created_at FROM invite_codes
-                   WHERE created_by = ? AND tier_grant = 'profile_share'""",
+                """SELECT id, tier_grant, created_at FROM invite_codes
+                   WHERE created_by = ?""",
                 (user_id,),
             ).fetchall()
         for r in rows:
+            grant = r["tier_grant"] or "free"
+            channel = "profile_share" if grant == "profile_share" else "referral_invite"
             record_share_authorized(
                 db,
                 user_id,
                 source_ref=r["id"],
-                channel="profile_share",
-                scope=["profile_share"],
+                channel=channel,
+                scope=[channel],
                 occurred_at=r["created_at"],
             )
             written.append("share_authorized")

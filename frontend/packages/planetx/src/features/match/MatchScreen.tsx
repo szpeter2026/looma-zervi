@@ -87,10 +87,10 @@ export default function MatchScreen() {
   async function onConfirm() {
     if (completing || !result) return
     const ui = deriveMatchUiState(result)
-    // Web+PWA 主路径：后端 can_complete_mission 优先；避免阶段二共识门控误伤演示
+    // v0：后端 can_complete_mission 优先；缺省时匹配成功即可确认
     const canComplete =
       result.can_complete_mission === true ||
-      (result.can_complete_mission !== false && ui.canComplete)
+      (result.can_complete_mission !== false && (ui.canComplete || result.matched === true))
     if (!canComplete) {
       setToast('契合度未达解锁阈值，可邀请更多舰员后再试')
       return
@@ -98,13 +98,22 @@ export default function MatchScreen() {
     setCompleting(true)
     try {
       if (!missionsCompleted.includes('match')) {
-        completeMission('match')
+        const ok = await completeMission('match')
+        if (!ok) return
         setAchievement({
           title: '🎯 首次星际匹配！',
           desc: '你已与另一位星际公民完成匹配 · 匹配星图已解锁',
         })
       }
-      setTimeout(() => setScreen('hub'), 600)
+      // 闭环下一动机：凭证出口（信任档案）优先于空 Hub
+      const done = usePlanetXStore.getState().missionsCompleted
+      if (
+        (['personality', 'team', 'match', 'share'] as const).every((id) => done.includes(id))
+      ) {
+        setScreen('trust')
+      } else {
+        setScreen('hub')
+      }
     } finally {
       setCompleting(false)
     }
@@ -149,7 +158,8 @@ export default function MatchScreen() {
   const canComplete =
     !!result &&
     (result.can_complete_mission === true ||
-      (result.can_complete_mission !== false && !!uiState?.canComplete))
+      (result.can_complete_mission !== false &&
+        (!!uiState?.canComplete || result.matched === true)))
 
   return (
     <div>
