@@ -1,0 +1,127 @@
+/**
+ * 信任档案页 — 小程序端 PlanetX 信任呈现。
+ * 复用 @looma/shared-core 的 createTrustApi 与翻译表，
+ * 与 Web features/trust/TrustScreen.tsx 同源。
+ *
+ * 禁止画 social 信用分，信任呈现走 attestation 卡片。
+ */
+import type { TrustAttestation } from "@looma/shared-core";
+import { trustApi } from "../../utils/api";
+
+// ============================================================
+// 翻译表 — 同 Web TrustScreen.tsx
+// ============================================================
+const CLAIM_LABEL: Record<string, string> = {
+  identity: "身份声明",
+  collaboration: "协作声明",
+  communication: "沟通声明",
+  influence: "影响力声明",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  verified: "已验证",
+  verified_by_authority: "权威验证",
+  weak: "低置信度",
+  unverified: "未验证",
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  verified: "#4ade80",
+  verified_by_authority: "#22d3ee",
+  weak: "#fbbf24",
+  unverified: "#94a3b8",
+};
+
+const EVIDENCE_LABEL: Record<string, string> = {
+  quiz: "知识测验",
+  fleet_consensus: "舰队共识",
+  dialogue_analysis: "对话分析",
+  share_signal: "信号传播",
+  credential: "凭证验证",
+  match_scan: "匹配扫描",
+  resume: "简历解析",
+  fleet: "舰队成就",
+};
+
+interface AttestationCard {
+  attestation_id: string;
+  claimLabel: string;
+  claimStatement: string;
+  evidenceLabel: string;
+  statusLabel: string;
+  statusColor: string;
+  issuedAt: string;
+  confidenceScore: string;
+}
+
+Page({
+  data: {
+    attestations: [] as AttestationCard[],
+    total: 0,
+    loading: true,
+    error: "",
+  },
+
+  onLoad() {
+    this.loadAttestations();
+  },
+
+  onPullDownRefresh() {
+    this.loadAttestations().finally(() => wx.stopPullDownRefresh());
+  },
+
+  async loadAttestations() {
+    try {
+      this.setData({ loading: true, error: "" });
+
+      const result = await trustApi.listAttestations();
+
+      const attestations: AttestationCard[] = (result.attestations || []).map(
+        (a: TrustAttestation) => ({
+          attestation_id: a.attestation_id,
+          claimLabel: CLAIM_LABEL[a.claim_type] || a.claim_type || "声明",
+          claimStatement: a.claim_statement || "—",
+          evidenceLabel:
+            EVIDENCE_LABEL[a.evidence_type] || a.evidence_type || "行为凭证",
+          statusLabel:
+            STATUS_LABEL[a.verification_status] || a.verification_status || "未验证",
+          statusColor:
+            STATUS_COLOR[a.verification_status] || STATUS_COLOR.unverified,
+          issuedAt: this.formatDate(a.issued_at),
+          confidenceScore: a.confidence_score
+            ? (a.confidence_score * 100).toFixed(0) + "%"
+            : "—",
+        })
+      );
+
+      this.setData({
+        attestations,
+        total: result.total ?? attestations.length,
+        loading: false,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "加载失败";
+      this.setData({ error: msg, loading: false });
+    }
+  },
+
+  formatDate(iso: string): string {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    } catch {
+      return iso.slice(0, 10);
+    }
+  },
+
+  onShareAppMessage() {
+    return {
+      title: "我的信任档案 — PlanetX",
+      path: "/pages/trust/index",
+    };
+  },
+});
