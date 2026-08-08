@@ -270,5 +270,7 @@ export interface ResumeAnalysisResponse {
   resume_id: string;
   title: string;
   extracted: ParsedResume;
+  /** Stored markdown snippet (powers analysis when extracted is empty) */
+  markdown?: string;
   analysis: ResumeAnalysisResult | null;
 }
