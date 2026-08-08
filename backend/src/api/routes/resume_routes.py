@@ -270,27 +270,44 @@ def upload_resume():
         raw_chars=len(markdown or ""),
     )
 
-    # Step 3: Persist to DB
+    # Step 3: Persist to DB — resume_id MUST be documents.id (AUTOINCREMENT)
     resume_id = None
     try:
         from src.db.manager import DatabaseManager
+        from werkzeug.utils import secure_filename
+
         db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
         db = DatabaseManager(db_path)
-        doc_id = str(uuid.uuid4())
+        owner = str(user_id or "anon")
+        safe_name = secure_filename(filename) or "resume.bin"
+        # Provisional unique path (file_path is UNIQUE); rewrite with lastrowid after INSERT
+        provisional_path = f"resume/{owner}/{uuid.uuid4().hex}_{safe_name}"
+        meta_json = json.dumps(
+            {"extracted": extracted, "markdown": markdown, "user_id": owner},
+            ensure_ascii=False,
+        )
         with db.get_conn() as conn:
-            conn.execute(
+            cur = conn.execute(
                 """INSERT INTO documents (title, file_path, doc_type, file_size, metadata, status, created_at)
                    VALUES (?, ?, ?, ?, ?, 'processed', ?)""",
                 (
                     filename,
-                    filename,
+                    provisional_path,
                     "resume",
                     len(content),
-                    json.dumps({"extracted": extracted, "markdown": markdown, "user_id": user_id}, ensure_ascii=False),
+                    meta_json,
                     _now_iso(),
                 ),
             )
-        resume_id = doc_id
+            row_id = cur.lastrowid
+            if not row_id:
+                raise RuntimeError("documents insert returned no lastrowid")
+            final_path = f"resume/{owner}/{row_id}_{safe_name}"
+            conn.execute(
+                "UPDATE documents SET file_path = ? WHERE id = ?",
+                (final_path, row_id),
+            )
+            resume_id = str(row_id)
     except Exception as e:
         logger.warning(f"Failed to persist resume: {e}")
 
@@ -386,6 +403,7 @@ def list_resumes():
     db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
     from src.db.manager import DatabaseManager
     db = DatabaseManager(db_path)
+    user_id = str(g.get("user_id") or "")
 
     try:
         with db.get_conn() as conn:
@@ -393,7 +411,9 @@ def list_resumes():
                 """SELECT id, title, file_path, file_size, metadata, created_at
                    FROM documents
                    WHERE doc_type = 'resume'
-                   ORDER BY created_at DESC LIMIT 50"""
+                     AND json_extract(metadata, '$.user_id') = ?
+                   ORDER BY created_at DESC LIMIT 50""",
+                (user_id,),
             ).fetchall()
     except Exception as e:
         logger.error(f"Failed to list resumes: {e}")
@@ -406,7 +426,7 @@ def list_resumes():
         resumes.append({
             "id": str(r["id"]),
             "title": r["title"] or "未命名简历",
-            "filename": r["file_path"],
+            "filename": r["title"] or r["file_path"],
             "file_size": r["file_size"],
             "uploaded_at": r["created_at"],
             "extracted": extracted,
@@ -429,14 +449,16 @@ def analysis_resume():
     db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
     from src.db.manager import DatabaseManager
     db = DatabaseManager(db_path)
+    user_id = str(g.get("user_id") or "")
 
     try:
         with db.get_conn() as conn:
             row = conn.execute(
                 """SELECT id, title, file_path, metadata, created_at
                    FROM documents
-                   WHERE id = ? AND doc_type = 'resume'""",
-                (resume_id,)
+                   WHERE id = ? AND doc_type = 'resume'
+                     AND json_extract(metadata, '$.user_id') = ?""",
+                (resume_id, user_id),
             ).fetchone()
     except Exception as e:
         logger.error(f"Failed to load resume for analysis: {e}")
@@ -493,16 +515,19 @@ def analysis_resume():
 @resume_bp.route("/<resume_id>", methods=["DELETE"])
 @require_auth
 def delete_resume(resume_id: str):
-    """Delete a resume by ID."""
+    """Delete a resume by ID (owner-scoped)."""
     db_path = current_app.config.get("DATABASE_PATH", "data/looma.db")
     from src.db.manager import DatabaseManager
     db = DatabaseManager(db_path)
+    user_id = str(g.get("user_id") or "")
 
     try:
         with db.get_conn() as conn:
             cur = conn.execute(
-                "DELETE FROM documents WHERE id = ? AND doc_type = 'resume'",
-                (resume_id,)
+                """DELETE FROM documents
+                   WHERE id = ? AND doc_type = 'resume'
+                     AND json_extract(metadata, '$.user_id') = ?""",
+                (resume_id, user_id),
             )
             if cur.rowcount == 0:
                 return jsonify(error="not_found", message="简历不存在"), 404

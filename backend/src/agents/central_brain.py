@@ -100,6 +100,34 @@ def _format_session_history(session_history: list | None, turns: int) -> str:
     return "[对话历史]\n" + "\n".join(lines) + "\n\n"
 
 
+def _format_match_report_block(context: dict[str, Any] | None) -> str:
+    """Optional match-report summary for Ask (not navigator)."""
+    report = (context or {}).get("match_report")
+    if not isinstance(report, dict) or not report:
+        return ""
+    lines = [
+        "[当前匹配报告上下文]",
+        "以下为用户已保存的匹配报告摘要（非全文简历）。回答涉及匹配/缺口/技能时优先依据本段；",
+        "若问题与报告无关，可忽略。不要编造报告中未出现的岗位或分数。",
+        f"报告标题：{report.get('title') or '（无标题）'}",
+        f"报告ID：{report.get('report_id') or ''}",
+    ]
+    resume_summary = str(report.get("resume_summary") or "").strip()
+    if resume_summary:
+        lines.append(f"简历摘要：{resume_summary}")
+    for i, item in enumerate(report.get("top_items") or [], 1):
+        if not isinstance(item, dict):
+            continue
+        matched = "、".join(str(x) for x in (item.get("matched_skills") or [])[:8])
+        missing = "、".join(str(x) for x in (item.get("missing_skills") or [])[:8])
+        lines.append(
+            f"{i}. {item.get('job_title') or '职位'} · 综合分 {item.get('overall_score') or 0}"
+            f" · 已匹配[{matched or '—'}] · 缺口[{missing or '—'}]"
+            f" · 差距：{item.get('gap_analysis') or '—'}"
+        )
+    return "\n".join(lines) + "\n\n"
+
+
 def _poetry_is_recommendation_query(text: str) -> bool:
     """Check if query is a short 'recommend a poem' type (no poem content)."""
     if not (text and text.strip()) or len(text.strip()) > 80:
@@ -272,6 +300,7 @@ def dispatch(
             history_block = _format_session_history(
                 context.get("session_history"), history_turns
             )
+            report_block = _format_match_report_block(context)
             style = (
                 "请分步骤深入推理与分析，给出较完整、有层次的回答；必要时先列要点再展开。"
                 if reasoning
@@ -293,6 +322,7 @@ def dispatch(
                     "用第一人称「我」或「我们」回答，营造陪伴感。\n"
                     f"{style}\n\n"
                     f"{history_block}"
+                    f"{report_block}"
                     f"参考资料：\n{context_text}\n\n"
                     f"用户问题：{query}\n\n"
                     f"回答："
@@ -307,6 +337,7 @@ def dispatch(
                     "如果用户的问题与这些域相关，请邀请他们进一步体验对应功能。\n"
                     f"{style}\n\n"
                     f"{history_block}"
+                    f"{report_block}"
                     f"用户问题：{query}\n\n"
                     f"回答："
                 )
@@ -638,6 +669,7 @@ def dispatch(
         history_block = _format_session_history(
             context.get("session_history"), int(preset["history_turns"])
         )
+        report_block = _format_match_report_block(context)
         style = (
             "请分步骤深入分析后再回答。"
             if preset["reasoning"]
@@ -655,6 +687,7 @@ def dispatch(
             "语气要有陪伴感，让用户感受到这是一个可以长期成长的地方。\n"
             f"{style}\n\n"
             f"{history_block}"
+            f"{report_block}"
             f"用户：{query}\n\n"
             "回答："
         )
