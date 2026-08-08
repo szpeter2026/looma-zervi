@@ -44,3 +44,16 @@ export const EVIDENCE_LABEL: Record<string, string> = {
   resume: "简历解析",
   fleet: "舰队成就",
 };
+
+// ============================================================
+// 兜底默认值 — 映射表查不到时的 fallback，禁止各自硬编码
+// ============================================================
+
+/** evidence_type 查无映射时的默认标签 */
+export const EVIDENCE_FALLBACK = "行为凭证";
+
+/** claim_type 查无映射时的默认标签 */
+export const CLAIM_FALLBACK = "信任声明";
+
+/** status 查无映射时的默认标签（兜底按英文原值显示） */
+export const STATUS_FALLBACK_KEY = true; // truthy → 显示原始 key 而非静默 fallback

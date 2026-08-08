@@ -11,6 +11,8 @@ import {
   STATUS_LABEL,
   STATUS_COLOR,
   EVIDENCE_LABEL,
+  EVIDENCE_FALLBACK,
+  CLAIM_FALLBACK,
 } from "@looma/shared-core";
 import { trustApi } from "../../utils/api";
 
@@ -50,10 +52,10 @@ Page({
       const attestations: AttestationCard[] = (result.attestations || []).map(
         (a: TrustAttestation) => ({
           attestation_id: a.attestation_id,
-          claimLabel: CLAIM_LABEL[a.claim_type] || a.claim_type || "声明",
+          claimLabel: CLAIM_LABEL[a.claim_type] || a.claim_type || CLAIM_FALLBACK,
           claimStatement: a.claim_statement || "—",
           evidenceLabel:
-            EVIDENCE_LABEL[a.evidence_type] || a.evidence_type || "行为凭证",
+            EVIDENCE_LABEL[a.evidence_type] || a.evidence_type || EVIDENCE_FALLBACK,
           statusLabel:
             STATUS_LABEL[a.verification_status] || a.verification_status || "未验证",
           statusColor:

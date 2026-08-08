@@ -5,6 +5,8 @@ import {
   CLAIM_LABEL,
   STATUS_LABEL,
   EVIDENCE_LABEL,
+  EVIDENCE_FALLBACK,
+  CLAIM_FALLBACK,
 } from '@looma/shared-core'
 import { getApiClient, usePlanetXStore } from '../auth/planetxAuthStore'
 import PlanetXIcon from '../../brand/ui/PlanetXIcon'
@@ -183,7 +185,7 @@ export default function TrustScreen() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                 <span style={{ fontWeight: 800, fontSize: 14 }}>
-                  {CLAIM_LABEL[att.claim_type] || att.claim_type}
+                  {CLAIM_LABEL[att.claim_type] || att.claim_type || CLAIM_FALLBACK}
                 </span>
                 <span
                   style={{
@@ -202,7 +204,7 @@ export default function TrustScreen() {
                 {att.claim_statement}
               </p>
               <div style={{ marginTop: 10, fontSize: 11, color: 'var(--px-color-text-muted)' }}>
-                证据：{EVIDENCE_LABEL[att.evidence_type] || att.evidence_type || '行为数据'}
+                证据：{EVIDENCE_LABEL[att.evidence_type] || att.evidence_type || EVIDENCE_FALLBACK}
                 {att.issued_at
                   ? ` · ${new Date(att.issued_at).toLocaleDateString()}`
                   : ''}

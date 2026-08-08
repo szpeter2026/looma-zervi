@@ -349,6 +349,9 @@ export {
   STATUS_LABEL,
   STATUS_COLOR,
   EVIDENCE_LABEL,
+  EVIDENCE_FALLBACK,
+  CLAIM_FALLBACK,
+  STATUS_FALLBACK_KEY,
 } from "./constants/trustLabels";
 
 // Utils

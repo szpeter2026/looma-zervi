@@ -77,6 +77,8 @@ web/
 # Playwright
 frontend/playwright-report/
 frontend/test-results/
+.cursor/
+.playwright-cli/
 
 # Local agent memory (do not commit)
 frontend/.workbuddy/

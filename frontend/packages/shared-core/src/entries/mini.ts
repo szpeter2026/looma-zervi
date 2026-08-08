@@ -249,7 +249,15 @@ export {
 } from "../constants/quota";
 export { CLOSED_LOOP_EVENTS, MICRO_FEEDBACK_CONTEXT, ANALYTICS_SESSION_KEY } from "../constants/analytics";
 export { CONSENT_SCOPE_LABELS, CONSENT_SCOPE_DESCRIPTIONS } from "../constants/compliance";
-export { CLAIM_LABEL, STATUS_LABEL, STATUS_COLOR, EVIDENCE_LABEL } from "../constants/trustLabels";
+export {
+  CLAIM_LABEL,
+  STATUS_LABEL,
+  STATUS_COLOR,
+  EVIDENCE_LABEL,
+  EVIDENCE_FALLBACK,
+  CLAIM_FALLBACK,
+  STATUS_FALLBACK_KEY,
+} from "../constants/trustLabels";
 export { BRAND, BRAND_PLANETX, BRAND_SAAS } from "../types/brand";
 
 // Utils
