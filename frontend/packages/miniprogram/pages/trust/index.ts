@@ -6,42 +6,13 @@
  * 禁止画 social 信用分，信任呈现走 attestation 卡片。
  */
 import type { TrustAttestation } from "@looma/shared-core";
+import {
+  CLAIM_LABEL,
+  STATUS_LABEL,
+  STATUS_COLOR,
+  EVIDENCE_LABEL,
+} from "@looma/shared-core";
 import { trustApi } from "../../utils/api";
-
-// ============================================================
-// 翻译表 — 同 Web TrustScreen.tsx
-// ============================================================
-const CLAIM_LABEL: Record<string, string> = {
-  identity: "身份声明",
-  collaboration: "协作声明",
-  communication: "沟通声明",
-  influence: "影响力声明",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  verified: "已验证",
-  verified_by_authority: "权威验证",
-  weak: "低置信度",
-  unverified: "未验证",
-};
-
-const STATUS_COLOR: Record<string, string> = {
-  verified: "#4ade80",
-  verified_by_authority: "#22d3ee",
-  weak: "#fbbf24",
-  unverified: "#94a3b8",
-};
-
-const EVIDENCE_LABEL: Record<string, string> = {
-  quiz: "知识测验",
-  fleet_consensus: "舰队共识",
-  dialogue_analysis: "对话分析",
-  share_signal: "信号传播",
-  credential: "凭证验证",
-  match_scan: "匹配扫描",
-  resume: "简历解析",
-  fleet: "舰队成就",
-};
 
 interface AttestationCard {
   attestation_id: string;

@@ -2,24 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   createTrustApi,
   type TrustAttestation,
+  CLAIM_LABEL,
+  STATUS_LABEL,
+  EVIDENCE_LABEL,
 } from '@looma/shared-core'
 import { getApiClient, usePlanetXStore } from '../auth/planetxAuthStore'
 import PlanetXIcon from '../../brand/ui/PlanetXIcon'
-
-const CLAIM_LABEL: Record<string, string> = {
-  identity: '身份声明',
-  collaboration: '协作声明',
-  communication: '沟通声明',
-  influence: '影响声明',
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  verified: '已验证',
-  verified_by_authority: '权威验证',
-  weak: '弱证据',
-  unverified: '待沉淀',
-  disputed: '有争议',
-}
 
 /**
  * PlanetX C 端信任档案 — 行为证据 + 验证链（禁止画 social 信用分）
@@ -214,7 +202,7 @@ export default function TrustScreen() {
                 {att.claim_statement}
               </p>
               <div style={{ marginTop: 10, fontSize: 11, color: 'var(--px-color-text-muted)' }}>
-                证据：{att.evidence_type || 'behavior'}
+                证据：{EVIDENCE_LABEL[att.evidence_type] || att.evidence_type || '行为数据'}
                 {att.issued_at
                   ? ` · ${new Date(att.issued_at).toLocaleDateString()}`
                   : ''}

@@ -344,6 +344,13 @@ export {
 
 export { API_ROUTES } from "./constants/routes";
 
+export {
+  CLAIM_LABEL,
+  STATUS_LABEL,
+  STATUS_COLOR,
+  EVIDENCE_LABEL,
+} from "./constants/trustLabels";
+
 // Utils
 export {
   formatDate,
