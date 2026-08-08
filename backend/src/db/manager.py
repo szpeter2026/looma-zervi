@@ -236,6 +236,30 @@ CREATE INDEX IF NOT EXISTS idx_job_posts_user ON job_posts(user_id);
 CREATE INDEX IF NOT EXISTS idx_job_posts_status ON job_posts(user_id, status);
 
 -- ============================================
+-- Job applications (DemoPeter thin-ingest → HR 可见投递)
+-- ============================================
+CREATE TABLE IF NOT EXISTS applications (
+    id                TEXT PRIMARY KEY,
+    seeker_user_id    TEXT NOT NULL,
+    resume_id         TEXT NOT NULL,           -- documents.id (resume)
+    job_id            TEXT NOT NULL,           -- documents.metadata.job_id or job_posts.id
+    enterprise_id     TEXT DEFAULT '',
+    status            TEXT DEFAULT 'submitted', -- submitted | withdrawn
+    metadata          TEXT DEFAULT '{}',       -- JSON, no vector payloads
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    withdrawn_at      TEXT DEFAULT NULL,
+    FOREIGN KEY (seeker_user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_applications_seeker ON applications(seeker_user_id);
+CREATE INDEX IF NOT EXISTS idx_applications_job ON applications(job_id);
+CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
+-- One active application per (seeker, resume, job)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_applications_active_unique
+    ON applications(seeker_user_id, resume_id, job_id) WHERE status = 'submitted';
+
+-- ============================================
 -- Enterprise: sales_inquiries (szbenyx — 企业版联系销售)
 -- ============================================
 CREATE TABLE IF NOT EXISTS sales_inquiries (

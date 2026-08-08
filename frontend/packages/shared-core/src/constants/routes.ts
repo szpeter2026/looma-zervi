@@ -70,6 +70,12 @@ export const API_ROUTES = {
   JOBS_SEARCH: "/v1/jobs/search",      // GET — 关键字搜索
   JOBS_RECOMMEND: "/v1/jobs/recommend",// GET — AI 推荐
   JOBS_DETAIL: "/v1/jobs",             // GET /:id — 拼接方式: `${JOBS_DETAIL}/${jobId}`
+  JOBS_SEED_DEMO: "/v1/jobs/seed-demo", // POST — 持久化演示职位（HR owner）
+  JOBS_APPLICATIONS: "/v1/jobs",       // GET `${JOBS_APPLICATIONS}/${jobId}/applications`
+
+  // Applications (seeker apply → HR visible)
+  APPLICATION: "/v1/application",      // POST create / GET list mine
+  // DELETE/GET one: `${APPLICATION}/${applicationId}`
 
   // Resume
   RESUME_PARSE: "/v1/resume/parse",

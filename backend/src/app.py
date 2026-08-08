@@ -25,6 +25,7 @@ def create_app(env="development"):
     from src.api.routes.job_post_routes import job_post_bp
     from src.api.routes.ask_routes import ask_bp
     from src.api.routes.jobs_routes import jobs_bp
+    from src.api.routes.application_routes import application_bp
     from src.api.routes.resume_routes import resume_bp
     from src.api.routes.reports_routes import reports_bp
     from src.api.routes.match_report_routes import match_report_bp
@@ -50,6 +51,7 @@ def create_app(env="development"):
     app.register_blueprint(job_post_bp, url_prefix="/v1")
     app.register_blueprint(ask_bp, url_prefix="/v1")
     app.register_blueprint(jobs_bp, url_prefix="/v1/jobs")
+    app.register_blueprint(application_bp, url_prefix="/v1")
     app.register_blueprint(resume_bp, url_prefix="/v1/resume")
     app.register_blueprint(reports_bp, url_prefix="/v1/reports")
     app.register_blueprint(match_report_bp, url_prefix="/v1/match-reports")
