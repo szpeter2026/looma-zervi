@@ -1029,7 +1029,7 @@ class DatabaseManager:
                     "CREATE UNIQUE INDEX IF NOT EXISTS idx_trust_attestations_claim "
                     "ON trust_attestations(candidate_id, claim_type)"
                 )
-            except sqlite3.OperationalError as e:
+            except (sqlite3.OperationalError, sqlite3.IntegrityError) as e:
                 logger.warning(
                     "Migration UNIQUE INDEX trust_attestations_claim failed: %s", e
                 )
