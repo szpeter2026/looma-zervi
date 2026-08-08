@@ -18,11 +18,14 @@ Tables:
 """
 from __future__ import annotations
 import json
+import logging
 import os
 import sqlite3
 import uuid
 from contextlib import contextmanager
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 def _dt_now():
@@ -979,30 +982,47 @@ class DatabaseManager:
             conn.executescript(SCHEMA_SQL)
             # Migration: add invite_code to existing fleets tables
             try:
-                conn.execute("ALTER TABLE fleets ADD COLUMN invite_code TEXT UNIQUE")
-            except sqlite3.OperationalError:
-                pass  # Column already exists
+                conn.execute("ALTER TABLE fleets ADD COLUMN invite_code TEXT")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e):
+                    logger.warning(
+                        "Migration ALTER TABLE fleets ADD COLUMN invite_code failed: %s", e
+                    )
             try:
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_fleets_invite_code ON fleets(invite_code)")
-            except sqlite3.OperationalError:
-                pass
+                conn.execute("DROP INDEX IF EXISTS idx_fleets_invite_code")
+                conn.execute(
+                    "CREATE UNIQUE INDEX idx_fleets_invite_code ON fleets(invite_code)"
+                )
+            except sqlite3.OperationalError as e:
+                logger.warning(
+                    "Migration UNIQUE INDEX idx_fleets_invite_code failed: %s", e
+                )
             try:
                 conn.execute("ALTER TABLE game_profiles ADD COLUMN identity TEXT")
-            except sqlite3.OperationalError:
-                pass
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e):
+                    logger.warning(
+                        "Migration ALTER TABLE game_profiles ADD COLUMN identity failed: %s", e
+                    )
             # Migration: trust protocol columns on existing trust_attestations
             try:
                 conn.execute(
                     "ALTER TABLE trust_attestations ADD COLUMN signature TEXT DEFAULT ''"
                 )
-            except sqlite3.OperationalError:
-                pass
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e):
+                    logger.warning(
+                        "Migration ALTER TABLE trust_attestations ADD COLUMN signature failed: %s", e
+                    )
             try:
                 conn.execute(
                     "ALTER TABLE trust_attestations ADD COLUMN expires_at TEXT DEFAULT NULL"
                 )
-            except sqlite3.OperationalError:
-                pass
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e):
+                    logger.warning(
+                        "Migration ALTER TABLE trust_attestations ADD COLUMN expires_at failed: %s", e
+                    )
 
     # ============================================
     # User operations (joint)
