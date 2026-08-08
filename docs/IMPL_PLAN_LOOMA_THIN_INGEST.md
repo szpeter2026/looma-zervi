@@ -162,9 +162,24 @@ DemoPeter → Looma 最小载荷：
 
 ---
 
-## 6. 修订
+## 6. P2 · Application（投递关联 · HR 可见）
+
+| 端点 | 说明 |
+|------|------|
+| `POST /v1/application` | `{resume_id, job_id, enterprise_id?}` → 投递记录（需 `application_submit` / `jobseeker_core`） |
+| `GET /v1/application` | 求职者自己的投递列表 |
+| `DELETE /v1/application/<id>` | 撤回；HR 列表不再返回简历正文 |
+| `GET /v1/jobs/<job_id>/applications` | HR（职位 owner）查看活跃投递 + 简历摘要 |
+| `POST /v1/jobs/seed-demo` | 将演示职位持久化并归属当前用户（解决 jobs:[] / mock 无 owner） |
+
+撤回后：`status=withdrawn`，HR 侧 `resume.markdown/extracted` 置空并标 `redacted`。
+
+---
+
+## 7. 修订
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 0.1 | 2026-08-08 | 首版：薄改 Looma，先于 DemoPeter |
 | 0.2 | 2026-08-08 | L-P0-1~L-P0-5 全部落地；上传 persist 解耦 + ingest 端点 + 测试 |
+| 0.3 | 2026-08-08 | P2：applications 表 + API + seed-demo + 撤回对 HR 正文脱敏 |
