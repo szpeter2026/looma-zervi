@@ -11,7 +11,12 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors
     sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+# 内测机构建常因阿里云 PyPI 瞬断超时；加长超时 + 重试，失败再回退官方源
+RUN pip install --upgrade pip && \
+    (pip install --no-cache-dir --default-timeout=120 --retries=5 \
+        -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ \
+     || pip install --no-cache-dir --default-timeout=120 --retries=5 \
+        -r requirements.txt -i https://pypi.org/simple/)
 
 EXPOSE 5200
 
