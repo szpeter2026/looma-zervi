@@ -74,6 +74,7 @@ export const API_ROUTES = {
   // Resume
   RESUME_PARSE: "/v1/resume/parse",
   RESUME_UPLOAD: "/v1/resume/upload",
+  RESUME_INGEST: "/v1/resume/ingest",
   RESUME_IMPROVE: "/v1/resume/improve",
   // Resume — HarmonyOS 简历管理
   RESUME_LIST: "/v1/resume/list",        // GET — 用户简历列表
