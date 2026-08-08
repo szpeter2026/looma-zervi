@@ -76,6 +76,7 @@ export const API_ROUTES = {
   // Applications (seeker apply → HR visible)
   APPLICATION: "/v1/application",      // POST create / GET list mine
   // DELETE/GET one: `${APPLICATION}/${applicationId}`
+  // GET report: `${APPLICATION}/${applicationId}/report` — CONTRACT_APPLICATION_REPORT.md
 
   // Resume
   RESUME_PARSE: "/v1/resume/parse",

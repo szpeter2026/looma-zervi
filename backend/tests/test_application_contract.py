@@ -148,3 +148,74 @@ def test_application_requires_consent_and_ownership(client, app):
         json={"resume_id": rid, "job_id": "j1"},
     )
     assert bad.status_code == 404
+
+
+def test_application_report_lazy_cache_and_auth(client, app, monkeypatch):
+    """GET /v1/application/<id>/report — auth + lazy compute + cache hit."""
+    hr_id, hr_headers, _ = _register(client, "hr-report@test.com", name="HR")
+    seeker_id, seeker_headers, _ = _register(client, "seeker-report@test.com", name="Seeker")
+    stranger_id, stranger_headers, _ = _register(client, "stranger-report@test.com")
+    _grant_jobseeker(client, seeker_headers)
+
+    seed = client.post(
+        "/v1/jobs/seed-demo",
+        headers=hr_headers,
+        json={
+            "jobs": [{
+                "id": "JOB-REPORT-1",
+                "title": "Python 后端工程师",
+                "company": "Looma",
+                "description": "需要 Python FastAPI Docker Redis 经验",
+            }],
+        },
+    )
+    assert seed.status_code == 200, seed.get_json()
+
+    resume_id = _ingest_resume(
+        client,
+        seeker_headers,
+        "资深 Python 工程师，熟悉 FastAPI 与 PostgreSQL，做过微服务。",
+    )
+    create = client.post(
+        "/v1/application",
+        headers=seeker_headers,
+        json={"resume_id": resume_id, "job_id": "JOB-REPORT-1"},
+    )
+    assert create.status_code == 201, create.get_json()
+    app_id = create.get_json()["application"]["id"]
+
+    # Force heuristic path (no LLM in unit tests)
+    def _boom(*_a, **_k):
+        raise RuntimeError("llm unavailable")
+
+    monkeypatch.setattr(
+        "src.pipeline.job_match_pipeline.run_job_match_pipeline",
+        _boom,
+    )
+
+    # Stranger forbidden
+    forbidden = client.get(f"/v1/application/{app_id}/report", headers=stranger_headers)
+    assert forbidden.status_code == 403
+
+    # Seeker gets report
+    r1 = client.get(f"/v1/application/{app_id}/report", headers=seeker_headers)
+    assert r1.status_code == 200, r1.get_json()
+    body = r1.get_json()
+    assert body["application_id"] == app_id
+    assert body["job_id"] == "JOB-REPORT-1"
+    mr = body["match_report"]
+    assert mr["cached"] is False
+    assert "overall_score" in mr
+    assert isinstance(mr["skill_match"]["matched"], list)
+    report_id = mr["report_id"]
+
+    # Second call hits cache
+    r2 = client.get(f"/v1/application/{app_id}/report", headers=seeker_headers)
+    assert r2.status_code == 200
+    assert r2.get_json()["match_report"]["cached"] is True
+    assert r2.get_json()["match_report"]["report_id"] == report_id
+
+    # HR can read
+    hr_r = client.get(f"/v1/application/{app_id}/report", headers=hr_headers)
+    assert hr_r.status_code == 200
+    assert hr_r.get_json()["match_report"]["cached"] is True
