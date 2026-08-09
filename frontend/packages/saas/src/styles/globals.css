@@ -71,24 +71,26 @@
   }
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/*
+ * IMPORTANT (Tailwind v4): do NOT put unlayered `* { margin/padding: 0 }` here.
+ * Unlayered rules beat `@layer utilities`, which would kill mx-auto / p-* / px-* etc.
+ * Preflight already resets box model; keep app chrome in `@layer base`.
+ */
+@layer base {
+  html,
+  body {
+    background: var(--color-bg-page);
+    color: var(--color-text-primary);
+    font-family: var(--font-family);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 14px;
+    line-height: 1.571;
+  }
 
-html, body {
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
-  font-family: var(--font-family);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  font-size: 14px;
-  line-height: 1.571;
-}
-
-#root {
-  min-height: 100vh;
+  #root {
+    min-height: 100vh;
+  }
 }
 
 /* Typography scale */
