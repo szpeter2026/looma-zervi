@@ -2,14 +2,74 @@
  * SaaS global styles.
  * Imports brand tokens and markdown styles.
  * Does NOT import PlanetX styles.
+ *
+ * Tailwind v4: @import "tailwindcss" + @theme (CSS var bridge, no hex copy)
  */
 
 @import "../brand/tokens.css";
 @import "../brand/markdown.css";
+@import "tailwindcss";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Keep brand color utilities available even before Phase 3 className migration */
+@source inline("bg-t-primary text-t-primary border-t-primary bg-t-bg text-t-text text-t-text-muted border-t-border");
+
+/* ========================================================
+ * Tailwind v4 theme — bridges brand CSS vars (from tokens.css)
+ * Utility names match former tailwind.config.js (t-primary, etc.)
+ * ======================================================== */
+@theme inline {
+  /* Colors → bg-t-primary / text-t-text / border-t-border … */
+  --color-t-primary: var(--color-primary);
+  --color-t-primary-hover: var(--color-primary-hover);
+  --color-t-primary-light: var(--color-primary-light);
+  --color-t-bg: var(--color-bg-page);
+  --color-t-bg-secondary: var(--color-bg-surface);
+  --color-t-text: var(--color-text-primary);
+  --color-t-text-secondary: var(--color-text-secondary);
+  --color-t-text-muted: var(--color-text-muted);
+  --color-t-border: var(--color-border);
+  --color-t-accent: var(--color-primary);
+  --color-t-orange: var(--color-orange);
+  --color-t-green: var(--color-green);
+  --color-t-yellow: var(--color-yellow);
+  --color-t-purple: var(--color-purple);
+}
+
+@theme {
+  /* Fonts */
+  --font-sans: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+
+  /* Radius — parity with former tailwind.config.js */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows — concrete values (avoid circular var(--shadow-*) with tokens.css) */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.06);
+  --shadow-xl: 0 20px 25px rgba(15, 23, 42, 0.08);
+  --shadow-focus: 0 0 0 3px rgba(20, 94, 255, 0.15);
+
+  /* Animations */
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slide-up {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+}
 
 * {
   margin: 0;
@@ -77,7 +137,7 @@ html, body {
   overflow: hidden;
 }
 
-/* Transitions */
+/* Transitions — keep legacy class (slightly different motion than --animate-fade-in) */
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
 }
