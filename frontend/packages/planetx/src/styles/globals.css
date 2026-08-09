@@ -2,34 +2,75 @@
  * PlanetX global styles.
  * Imports brand tokens and animations.
  * Does NOT import SaaS styles.
+ *
+ * Tailwind v4: @import "tailwindcss" + @theme (CSS var bridge, no hex copy)
  */
 
-@import '../brand/tokens.css';
-@import '../brand/animations.css';
+@import "../brand/tokens.css";
+@import "../brand/animations.css";
+@import "tailwindcss";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Seed a few brand utilities so the @theme bridges stay live */
+@source inline("bg-px-primary text-px-primary text-px-accent bg-px-page text-px-text");
+
+/* ========================================================
+ * Tailwind v4 theme — bridges PlanetX CSS vars (from tokens.css)
+ * ======================================================== */
+@theme inline {
+  --color-px-primary: var(--px-color-primary);
+  --color-px-primary-hover: var(--px-color-primary-hover);
+  --color-px-primary-light: var(--px-color-primary-light);
+  --color-px-accent: var(--px-color-accent);
+  --color-px-page: var(--px-color-bg-page);
+  --color-px-text: var(--px-color-text-bright);
+  --color-px-text-muted: var(--px-color-text-muted);
+  --color-px-success: var(--px-color-success);
+  --color-px-danger: var(--px-color-danger);
+  --color-px-warning: var(--px-color-warning);
+
+  --shadow-px-glow: var(--px-shadow-glow);
+  --shadow-px-card: var(--px-shadow-card);
+  --shadow-px-accent: var(--px-shadow-accent);
+
+  --radius-xs: var(--px-radius-xs);
+  --radius-sm: var(--px-radius-sm);
+  --radius-md: var(--px-radius-md);
+  --radius-lg: var(--px-radius-lg);
+  --radius-xl: var(--px-radius-xl);
+  --radius-2xl: var(--px-radius-2xl);
 }
 
-html {
-  font-size: 16px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme {
+  /* Space Grotesk + PingFang SC fallback stack (Phase 2) */
+  --font-sans: "Space Grotesk", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+  --font-display: Orbitron, "Space Grotesk", "PingFang SC", sans-serif;
 }
 
-body {
-  background: var(--px-color-bg-page);
-  color: var(--px-color-text-bright);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  min-height: 100vh;
-}
+/*
+ * IMPORTANT (Tailwind v4): never put unlayered `* { margin/padding: 0 }` here —
+ * it beats @layer utilities and breaks mx-auto / p-* / px-* (see saas Phase 1 fix).
+ */
+@layer base {
+  html {
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-#root {
-  min-height: 100vh;
+  body {
+    background: var(--px-color-bg-page);
+    color: var(--px-color-text-bright);
+    font-family: "Space Grotesk", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+      system-ui, sans-serif;
+    min-height: 100vh;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
 }
 
 /* Scrollbar */
