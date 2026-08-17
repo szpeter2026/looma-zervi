@@ -66,6 +66,8 @@ export interface TimelineGrowthDimension {
   id: string;
   label: string;
   level: number;
+  max?: number;
+  hint?: string;
 }
 
 export interface TimelineGrowthResponse {

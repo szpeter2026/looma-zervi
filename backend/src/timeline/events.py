@@ -80,8 +80,12 @@ def record_quiz_hypothesis(
         "quiz_completed",
         "quiz",
         source_ref=ref,
-        title="完成星际人格测评",
-        summary=f"测评结果：{personality_type}" if personality_type else "完成测评",
+        title="完成职业画像初测",
+        summary=(
+            f"当前方向：{personality_type}。这是起始判断，会随经历调整。"
+            if personality_type
+            else "你完成了职业画像初测。"
+        ),
         payload={
             "personality_type": personality_type,
             "detail_chars": detail_chars,
@@ -97,8 +101,12 @@ def record_quiz_hypothesis(
         "initial_hypothesis",
         "quiz",
         source_ref=ref,
-        title="初始假设（人格冷启动）",
-        summary="测评结果仅为初始假设，将随行为沉淀被修正",
+        title="起始画像",
+        summary=(
+            f"当前方向：{personality_type}。这是起始画像，后续会根据实际经历持续调整。"
+            if personality_type
+            else "这是起始画像，后续会根据实际经历持续调整。"
+        ),
         payload={
             "personality_type": personality_type,
             "personality_detail_ref": "game_profiles",
@@ -160,13 +168,22 @@ def compute_growth_stub(db, user_id: str) -> dict:
 
     if n < 3:
         confidence = "low"
-        message = "行为沉淀不足，成长曲线仅供参考；完成每周签到或记录项目后会更准"
+        message = (
+            "职业画像正在建立。先完成本周记录或添加一个项目，"
+            "画像会随着实际经历逐渐准确。"
+        )
     elif n < 8:
         confidence = "medium"
-        message = "已有初步行为节点，画像仍在浮现中"
+        message = (
+            "你的职业画像正在完善中。初步判断已建立。"
+            "继续记录实际行动和项目经历，可以进一步完善职业画像。"
+        )
     else:
         confidence = "building"
-        message = "行为时间线正在变厚"
+        message = (
+            "职业画像已有较完整的行为记录。"
+            "持续记录每周行动和项目，画像会继续调整。"
+        )
 
     # Rule-of-thumb dimensions (0-5) — not a real model yet
     action_density = min(5, evidence_n)
@@ -192,9 +209,27 @@ def compute_growth_stub(db, user_id: str) -> dict:
         "hypothesis_present": has_hypothesis,
         "hypothesis_weight_cap": hypothesis_weight_cap(active_months or 0.5),
         "dimensions": [
-            {"id": "action_density", "label": "行动密度", "level": action_density},
-            {"id": "exploration", "label": "探索广度", "level": exploration},
-            {"id": "expression", "label": "表达沉淀", "level": expression},
+            {
+                "id": "action_density",
+                "label": "行动密度",
+                "level": action_density,
+                "max": 5,
+                "hint": "已留下的有效行为条数，满分 5",
+            },
+            {
+                "id": "exploration",
+                "label": "探索广度",
+                "level": exploration,
+                "max": 5,
+                "hint": "尝试过的记录类型数，满分 5",
+            },
+            {
+                "id": "expression",
+                "label": "表达沉淀",
+                "level": expression,
+                "max": 5,
+                "hint": "签到、项目、对话等主动记录，满分 5",
+            },
         ],
         "version": "growth_stub_v0",
     }
@@ -360,7 +395,7 @@ def record_mission_completed(
 ) -> dict | None:
     """Timeline node when a user completes a mission."""
     mission_labels: dict[str, str] = {
-        "personality": "完成人格冷启动测评",
+        "personality": "完成职业画像初测",
         "team": "组建舰队",
         "match": "完成星际匹配",
         "share": "发送星际信号",
@@ -602,10 +637,10 @@ def backfill_user_timeline(db, user_id: str) -> list[str]:
 
 # Kinds safe to surface as L1 aggregate labels (no private payloads)
 _L1_KIND_LABELS = {
-    "initial_hypothesis": "初始假设",
-    "quiz_completed": "完成测评",
-    "project_record": "项目记录",
-    "check_in": "每周签到",
+    "initial_hypothesis": "起始画像",
+    "quiz_completed": "职业画像初测",
+    "project_record": "项目经历",
+    "check_in": "本周记录",
     "share_authorized": "授权分享",
     "match_scan": "匹配扫描",
     "resume_ingest": "简历沉淀",
