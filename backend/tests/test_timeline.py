@@ -58,6 +58,9 @@ def test_profile_sync_writes_timeline_hypothesis(client):
     hypo = next(i for i in body["items"] if i["event_kind"] == "initial_hypothesis")
     assert hypo["weight_role"] == "hypothesis"
     assert hypo["payload"].get("label") == "initial_hypothesis"
+    assert "冷启动" not in hypo["title"]
+    quiz = next(i for i in body["items"] if i["event_kind"] == "quiz_completed")
+    assert quiz["title"] == "完成职业画像初测"
 
 
 def test_timeline_idempotent_on_resync_and_backfill(client):
@@ -109,6 +112,12 @@ def test_manual_check_in_and_growth_low_confidence(client):
     gbody = growth.get_json()
     assert gbody["confidence"] == "low"
     assert gbody["event_count"] >= 1
+    assert "本周记录" in gbody["message"] or "项目" in gbody["message"]
+    dims = {d["id"]: d for d in gbody["dimensions"]}
+    assert dims["action_density"]["max"] == 5
+    assert "满分" in dims["action_density"]["hint"]
+    assert dims["exploration"]["max"] == 5
+    assert dims["expression"]["max"] == 5
 
 
 def test_soft_delete_hides_from_list(client):
